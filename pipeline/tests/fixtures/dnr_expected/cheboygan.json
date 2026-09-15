@@ -1,0 +1,185 @@
+[
+  {
+    "match": {
+      "lake_name_raw": "Silver Lake",
+      "rule_id": "R 281.716.1",
+      "clause": null
+    },
+    "expect": {
+      "restriction_type": "no_towing",
+      "scope": "lakewide",
+      "scope_description": null,
+      "hours": {
+        "text": "6:30 p.m. to 10:00 a.m. of the following day",
+        "start": "18:30",
+        "end": "10:00",
+        "days": null
+      },
+      "season": null,
+      "speed_mph": null,
+      "township": "Wilmot Township",
+      "plss": [],
+      "status": "active",
+      "signage_required": false,
+      "related_rule_ids": [],
+      "needs_review": false,
+      "parser": "regex",
+      "lake_name_norm": "silver"
+    }
+  },
+  {
+    "match": {
+      "lake_name_raw": "Indian River",
+      "rule_id": "WC-16-09-001",
+      "clause": null
+    },
+    "expect": {
+      "restriction_type": "no_towing",
+      "scope": "zone",
+      "scope_description": "On that portion of the waters of the Indian River between west of the I-75 Bridge and Burt Lake, within Tuscarora township, section 24, county of Cheboygan, state of Michigan",
+      "hours": {
+        "text": "10:00 a.m. to 7:00 p.m.",
+        "start": "10:00",
+        "end": "19:00",
+        "days": "Saturdays and Holidays"
+      },
+      "season": {
+        "text": "during the months of June, July and August",
+        "start": "06-01",
+        "end": "08-31"
+      },
+      "speed_mph": null,
+      "township": "Tuscarora Township",
+      "plss": [
+        {
+          "township": "35N",
+          "range": "3W",
+          "sections": [
+            24
+          ]
+        }
+      ],
+      "status": "active",
+      "signage_required": true,
+      "related_rule_ids": [],
+      "needs_review": false,
+      "parser": "regex",
+      "lake_name_norm": "indian river"
+    }
+  },
+  {
+    "match": {
+      "lake_name_raw": "Cornwall Creek Flooding",
+      "rule_id": "R 281.716.5",
+      "clause": null
+    },
+    "expect": {
+      "restriction_type": "no_motorboats",
+      "scope": "lakewide",
+      "scope_description": null,
+      "hours": null,
+      "season": null,
+      "speed_mph": null,
+      "township": "Nunda Township",
+      "plss": [
+        {
+          "township": "33N",
+          "range": "1W",
+          "sections": [
+            22,
+            26,
+            27
+          ]
+        }
+      ],
+      "status": "active",
+      "signage_required": false,
+      "related_rule_ids": [],
+      "needs_review": false,
+      "parser": "regex",
+      "lake_name_norm": "cornwall creek flooding"
+    }
+  },
+  {
+    "match": {
+      "lake_name_raw": "Twin Lake",
+      "rule_id": "R 281.716.7",
+      "clause": null
+    },
+    "expect": {
+      "restriction_type": "no_high_speed",
+      "scope": "lakewide",
+      "scope_description": null,
+      "hours": null,
+      "season": null,
+      "speed_mph": null,
+      "township": "Grant Township",
+      "plss": [
+        {
+          "township": "36N",
+          "range": "1E",
+          "sections": [
+            2,
+            3,
+            34,
+            35
+          ]
+        }
+      ],
+      "status": "active",
+      "signage_required": false,
+      "related_rule_ids": [],
+      "needs_review": false,
+      "parser": "regex",
+      "lake_name_norm": "twin"
+    }
+  },
+  {
+    "match": {
+      "lake_name_raw": "Indian River",
+      "rule_id": "R 281.716.2",
+      "clause": "(b)"
+    },
+    "expect": {
+      "restriction_type": "slow_no_wake",
+      "scope": "zone",
+      "scope_description": "Between day beacons 40 and 57 and between day beacons 63 and 69",
+      "hours": null,
+      "season": null,
+      "speed_mph": null,
+      "township": "Koehler Township, Tuscarora Township",
+      "plss": [
+        {
+          "township": "35N",
+          "range": "2W",
+          "sections": [
+            8
+          ]
+        },
+        {
+          "township": "35N",
+          "range": "2W",
+          "sections": [
+            5,
+            7,
+            18,
+            19
+          ]
+        },
+        {
+          "township": "35N",
+          "range": "3W",
+          "sections": [
+            24
+          ]
+        }
+      ],
+      "status": "active",
+      "signage_required": false,
+      "related_rule_ids": [],
+      "needs_review": false,
+      "parser": "regex",
+      "lake_name_norm": "indian river"
+    }
+  }
+]

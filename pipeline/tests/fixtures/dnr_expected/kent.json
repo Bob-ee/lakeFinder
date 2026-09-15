@@ -1,0 +1,102 @@
+[
+  {
+    "match": {
+      "lake_name_raw": "Big Wabasis Lake",
+      "rule_id": "R 281.741.1",
+      "clause": "(a)"
+    },
+    "expect": {
+      "restriction_type": "high_speed_hours",
+      "scope": "lakewide",
+      "scope_description": null,
+      "hours": {
+        "text": "6:30 p.m. to 10:00 a.m. of the following day",
+        "start": "18:30",
+        "end": "10:00",
+        "days": null
+      },
+      "season": null,
+      "speed_mph": null,
+      "township": "Oakfield Township",
+      "plss": [
+        {
+          "township": "9N",
+          "range": "9W",
+          "sections": []
+        }
+      ],
+      "status": "active",
+      "signage_required": false,
+      "related_rule_ids": [],
+      "needs_review": false,
+      "parser": "regex",
+      "lake_name_norm": "big wabasis"
+    }
+  },
+  {
+    "match": {
+      "lake_name_raw": "Big Wabasis Lake",
+      "rule_id": "R 281.741.1",
+      "clause": "(b)"
+    },
+    "expect": {
+      "restriction_type": "speed_limit",
+      "scope": "lakewide",
+      "scope_description": null,
+      "hours": null,
+      "season": null,
+      "speed_mph": 35.0,
+      "township": "Oakfield Township",
+      "plss": [
+        {
+          "township": "9N",
+          "range": "9W",
+          "sections": []
+        }
+      ],
+      "status": "active",
+      "signage_required": false,
+      "related_rule_ids": [],
+      "needs_review": false,
+      "parser": "regex",
+      "lake_name_norm": "big wabasis"
+    }
+  },
+  {
+    "match": {
+      "lake_name_raw": "Olin Lake",
+      "rule_id": "WC-41-95-002",
+      "clause": null
+    },
+    "expect": {
+      "restriction_type": "high_speed_hours",
+      "scope": "lakewide",
+      "scope_description": null,
+      "hours": {
+        "text": "6:30 p.m. to 10:00 a.m. of the following day (The hours should be 7:30 p.m. to 11:00 a.m. of the following day when Eastern Daylight Savings Time is in effect.)",
+        "start": "18:30",
+        "end": "10:00",
+        "days": null
+      },
+      "season": null,
+      "speed_mph": null,
+      "township": "Solon Township",
+      "plss": [
+        {
+          "township": "10N",
+          "range": "11W",
+          "sections": [
+            31,
+            32
+          ]
+        }
+      ],
+      "status": "active",
+      "signage_required": false,
+      "related_rule_ids": [],
+      "needs_review": false,
+      "parser": "regex",
+      "lake_name_norm": "olin"
+    }
+  }
+]

@@ -12,7 +12,9 @@ All output files are written to `data/out/` and served at `/data/` (dev server a
   `"{name_norm}|{lat:.4f}|{lon:.4f}"` if the source has none). The pipeline checks for collisions and bumps by 1.
   The same value is the GeoJSON feature `id` (top level) and the `id` property, so MapLibre `promoteId: "id"` works.
 - **`restriction_id`**: 12 hex chars, `sha1(f"{county}|{lake_name_raw}|{township}|{raw_text}")[:12]`. Stable across runs
-  as long as the source text does not change.
+  as long as the source text does not change. When one entry decomposes into several records (clauses), the clause
+  label, or the restriction type when clauses are unlabelled, is appended to the hashed key so siblings get distinct
+  ids (`restriction.compute_restriction_id`).
 - **`rule_id`**: the Michigan Administrative Code number when present (`"R 281.763.3"`), else `null`.
 
 ## Name normalization (`name_norm`)

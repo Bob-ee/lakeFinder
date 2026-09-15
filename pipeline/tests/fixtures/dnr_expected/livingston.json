@@ -1,0 +1,118 @@
+[
+  {
+    "match": {
+      "lake_name_raw": "Appleton Lake",
+      "rule_id": "WC-47-01-001",
+      "clause": null
+    },
+    "expect": {
+      "restriction_type": "high_speed_hours",
+      "scope": "lakewide",
+      "scope_description": null,
+      "hours": {
+        "text": "6:30 p.m. to 10:00 a.m. of the following day (The hours should be 7:30 p.m. to 11:00 a.m. of the following day when Eastern Daylight Savings Time is in effect.)",
+        "start": "18:30",
+        "end": "10:00",
+        "days": null
+      },
+      "season": null,
+      "speed_mph": null,
+      "township": "Hamburg Township",
+      "plss": [
+        {
+          "township": "1N",
+          "range": "5E",
+          "sections": [
+            2,
+            3
+          ]
+        }
+      ],
+      "status": "active",
+      "signage_required": true,
+      "related_rule_ids": [],
+      "needs_review": false,
+      "parser": "regex",
+      "lake_name_norm": "appleton"
+    }
+  },
+  {
+    "match": {
+      "lake_name_raw": "Chilson Creek",
+      "rule_id": "R 281.747.18",
+      "clause": null
+    },
+    "expect": {
+      "restriction_type": "other",
+      "scope": "lakewide",
+      "scope_description": null,
+      "hours": null,
+      "season": null,
+      "speed_mph": null,
+      "township": null,
+      "plss": [],
+      "status": "rescinded",
+      "signage_required": false,
+      "related_rule_ids": [],
+      "needs_review": false,
+      "parser": "regex",
+      "lake_name_norm": "chilson creek"
+    }
+  },
+  {
+    "match": {
+      "lake_name_raw": "Kent Lake",
+      "rule_id": "R 281.747.1",
+      "clause": "(b)"
+    },
+    "expect": {
+      "restriction_type": "no_towing",
+      "scope": "lakewide",
+      "scope_description": null,
+      "hours": null,
+      "season": null,
+      "speed_mph": null,
+      "township": "Green Oak Township",
+      "plss": [],
+      "status": "active",
+      "signage_required": false,
+      "related_rule_ids": [
+        "R 281.763.1"
+      ],
+      "needs_review": false,
+      "parser": "regex",
+      "lake_name_norm": "kent"
+    }
+  },
+  {
+    "match": {
+      "lake_name_raw": "Osborne Lake",
+      "rule_id": "R 281.747.10",
+      "clause": null
+    },
+    "expect": {
+      "restriction_type": "no_motorboats",
+      "scope": "lakewide",
+      "scope_description": null,
+      "hours": null,
+      "season": null,
+      "speed_mph": null,
+      "township": "Brighton Township",
+      "plss": [
+        {
+          "township": "2N",
+          "range": "6E",
+          "sections": [
+            8
+          ]
+        }
+      ],
+      "status": "active",
+      "signage_required": false,
+      "related_rule_ids": [],
+      "needs_review": false,
+      "parser": "regex",
+      "lake_name_norm": "osborne"
+    }
+  }
+]

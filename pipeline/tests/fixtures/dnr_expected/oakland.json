@@ -1,0 +1,580 @@
+[
+  {
+    "match": {
+      "lake_name_raw": "Big School Lot Lake",
+      "rule_id": "R 281.763.3",
+      "clause": null
+    },
+    "expect": {
+      "restriction_type": "no_high_speed",
+      "scope": "lakewide",
+      "scope_description": null,
+      "hours": null,
+      "season": null,
+      "speed_mph": null,
+      "township": "Rose Township",
+      "plss": [
+        {
+          "township": "4N",
+          "range": "7E",
+          "sections": [
+            16
+          ]
+        }
+      ],
+      "status": "active",
+      "signage_required": false,
+      "related_rule_ids": [],
+      "needs_review": false,
+      "parser": "regex",
+      "lake_name_norm": "big school lot"
+    }
+  },
+  {
+    "match": {
+      "lake_name_raw": "Little School Lot Lake",
+      "rule_id": "R 281.763.3",
+      "clause": null
+    },
+    "expect": {
+      "restriction_type": "no_high_speed",
+      "scope": "lakewide",
+      "scope_description": null,
+      "hours": null,
+      "season": null,
+      "speed_mph": null,
+      "township": "Rose Township",
+      "plss": [
+        {
+          "township": "4N",
+          "range": "7E",
+          "sections": [
+            16
+          ]
+        }
+      ],
+      "status": "active",
+      "signage_required": false,
+      "related_rule_ids": [],
+      "needs_review": false,
+      "parser": "regex",
+      "lake_name_norm": "little school lot"
+    }
+  },
+  {
+    "match": {
+      "lake_name_raw": "Deer Lake",
+      "rule_id": "R 281.763.25",
+      "clause": null
+    },
+    "expect": {
+      "restriction_type": "high_speed_hours",
+      "scope": "lakewide",
+      "scope_description": null,
+      "hours": {
+        "text": "6:30 p.m. to 10:00 a.m. of the following day",
+        "start": "18:30",
+        "end": "10:00",
+        "days": null
+      },
+      "season": null,
+      "speed_mph": null,
+      "township": "Independence Township",
+      "plss": [
+        {
+          "township": "4N",
+          "range": "9E",
+          "sections": [
+            19,
+            30
+          ]
+        }
+      ],
+      "status": "active",
+      "signage_required": false,
+      "related_rule_ids": [],
+      "needs_review": false,
+      "parser": "regex",
+      "lake_name_norm": "deer"
+    }
+  },
+  {
+    "match": {
+      "lake_name_raw": "Orchard Lake",
+      "rule_id": "R 281.763.57",
+      "clause": null
+    },
+    "expect": {
+      "restriction_type": "speed_limit",
+      "scope": "lakewide",
+      "scope_description": null,
+      "hours": null,
+      "season": null,
+      "speed_mph": 40.0,
+      "township": "City of Orchard Lake Village",
+      "plss": [
+        {
+          "township": "2N",
+          "range": "9E",
+          "sections": [
+            9,
+            10,
+            11,
+            14,
+            15
+          ]
+        }
+      ],
+      "status": "active",
+      "signage_required": false,
+      "related_rule_ids": [],
+      "needs_review": false,
+      "parser": "regex",
+      "lake_name_norm": "orchard"
+    }
+  },
+  {
+    "match": {
+      "lake_name_raw": "Moon Lake",
+      "rule_id": "R 281.763.23",
+      "clause": null
+    },
+    "expect": {
+      "restriction_type": "no_motorboats",
+      "scope": "lakewide",
+      "scope_description": null,
+      "hours": null,
+      "season": null,
+      "speed_mph": null,
+      "township": "West Bloomfield Township",
+      "plss": [
+        {
+          "township": "2N",
+          "range": "9E",
+          "sections": [
+            13,
+            14
+          ]
+        }
+      ],
+      "status": "active",
+      "signage_required": false,
+      "related_rule_ids": [],
+      "needs_review": false,
+      "parser": "regex",
+      "lake_name_norm": "moon"
+    }
+  },
+  {
+    "match": {
+      "lake_name_raw": "Bass Lake",
+      "rule_id": "R 281.763.62",
+      "clause": null
+    },
+    "expect": {
+      "restriction_type": "no_motorboats",
+      "scope": "lakewide",
+      "scope_description": null,
+      "hours": null,
+      "season": null,
+      "speed_mph": null,
+      "township": "Commerce Township",
+      "plss": [
+        {
+          "township": "2N",
+          "range": "8E",
+          "sections": [
+            16
+          ]
+        }
+      ],
+      "status": "active",
+      "signage_required": false,
+      "related_rule_ids": [],
+      "needs_review": false,
+      "parser": "regex",
+      "lake_name_norm": "bass"
+    }
+  },
+  {
+    "match": {
+      "lake_name_raw": "Cass Lake",
+      "rule_id": "R 281.763.36",
+      "clause": "(b)"
+    },
+    "expect": {
+      "restriction_type": "speed_limit",
+      "scope": "lakewide",
+      "scope_description": null,
+      "hours": null,
+      "season": null,
+      "speed_mph": 50.0,
+      "township": "Waterford Township",
+      "plss": [
+        {
+          "township": "3N",
+          "range": "9E",
+          "sections": [
+            35
+          ]
+        }
+      ],
+      "status": "active",
+      "signage_required": false,
+      "related_rule_ids": [],
+      "needs_review": false,
+      "parser": "regex",
+      "lake_name_norm": "cass"
+    }
+  },
+  {
+    "match": {
+      "lake_name_raw": "Cass Lake",
+      "rule_id": "R 281.763.36",
+      "clause": "(c)"
+    },
+    "expect": {
+      "restriction_type": "slow_no_wake",
+      "scope": "zone",
+      "scope_description": "in the northerly tip of Coles bay, Waterford township, within the north 1/2 of the northwest 1/4 of the southwest 1/4 of section 35",
+      "hours": null,
+      "season": null,
+      "speed_mph": null,
+      "township": "Waterford Township",
+      "plss": [
+        {
+          "township": "3N",
+          "range": "9E",
+          "sections": [
+            35
+          ]
+        }
+      ],
+      "status": "active",
+      "signage_required": false,
+      "related_rule_ids": [],
+      "needs_review": false,
+      "parser": "regex",
+      "lake_name_norm": "cass"
+    }
+  },
+  {
+    "match": {
+      "lake_name_raw": "Cedar Island Lake",
+      "rule_id": "R 281.763.18",
+      "clause": "(a)"
+    },
+    "expect": {
+      "restriction_type": "slow_no_wake",
+      "scope": "zone",
+      "scope_description": "Southerly and westerly of a line beginning where the east line of lot 42, Golden Shores subdivision no. 1, intersects the water's edge and thence to the point where the north line of lot 54, Cedar View subdivision, as extended, intersects the water's edge",
+      "hours": null,
+      "season": null,
+      "speed_mph": null,
+      "township": "White Lake Township",
+      "plss": [
+        {
+          "township": "3N",
+          "range": "8E",
+          "sections": []
+        }
+      ],
+      "status": "active",
+      "signage_required": false,
+      "related_rule_ids": [],
+      "needs_review": false,
+      "parser": "regex",
+      "lake_name_norm": "cedar island"
+    }
+  },
+  {
+    "match": {
+      "lake_name_raw": "Middle Straits Lake",
+      "rule_id": "R 281.763.39",
+      "clause": "(2)"
+    },
+    "expect": {
+      "restriction_type": "high_speed_hours",
+      "scope": "zone",
+      "scope_description": "On that part of the waters of Middle Straits lake located in sections 17 and 18, West Bloomfield township, Oakland county",
+      "hours": {
+        "text": "except 10:00 a.m. to 6:30 p.m.",
+        "start": "10:00",
+        "end": "18:30",
+        "days": "Sundays, Memorial Day, Independence Day, and Labor Day"
+      },
+      "season": null,
+      "speed_mph": null,
+      "township": "West Bloomfield Township",
+      "plss": [
+        {
+          "township": "2N",
+          "range": "9E",
+          "sections": [
+            7
+          ]
+        },
+        {
+          "township": "2N",
+          "range": "9E",
+          "sections": [
+            17,
+            18
+          ]
+        }
+      ],
+      "status": "active",
+      "signage_required": false,
+      "related_rule_ids": [],
+      "needs_review": false,
+      "parser": "regex",
+      "lake_name_norm": "middle straits"
+    }
+  },
+  {
+    "match": {
+      "lake_name_raw": "Lake Orion",
+      "rule_id": "R 281.763.9",
+      "clause": "(1)"
+    },
+    "expect": {
+      "restriction_type": "shore_buffer",
+      "scope": "lakewide",
+      "scope_description": null,
+      "hours": null,
+      "season": null,
+      "speed_mph": null,
+      "township": "Village of Lake Orion, Orion Township",
+      "plss": [
+        {
+          "township": "4N",
+          "range": "10E",
+          "sections": [
+            2,
+            3,
+            10,
+            11
+          ]
+        }
+      ],
+      "status": "active",
+      "signage_required": false,
+      "related_rule_ids": [],
+      "needs_review": false,
+      "parser": "regex",
+      "lake_name_norm": "orion"
+    }
+  },
+  {
+    "match": {
+      "lake_name_raw": "Wolverine Lake",
+      "rule_id": "R 281.763.31",
+      "clause": null
+    },
+    "expect": {
+      "restriction_type": "not_applicable",
+      "scope": "lakewide",
+      "scope_description": null,
+      "hours": null,
+      "season": null,
+      "speed_mph": null,
+      "township": "Village of Wolverine Lake",
+      "plss": [
+        {
+          "township": "2N",
+          "range": "8E",
+          "sections": [
+            22,
+            23,
+            27,
+            28
+          ]
+        }
+      ],
+      "status": "active",
+      "signage_required": false,
+      "related_rule_ids": [],
+      "needs_review": false,
+      "parser": "regex",
+      "lake_name_norm": "wolverine"
+    }
+  },
+  {
+    "match": {
+      "lake_name_raw": "Tan Lake",
+      "rule_id": "R 281.763.58",
+      "clause": null
+    },
+    "expect": {
+      "restriction_type": "speed_limit",
+      "scope": "lakewide",
+      "scope_description": null,
+      "hours": null,
+      "season": null,
+      "speed_mph": 40.0,
+      "township": "Oxford Township",
+      "plss": [
+        {
+          "township": "5N",
+          "range": "10E",
+          "sections": [
+            28,
+            29
+          ]
+        }
+      ],
+      "status": "active",
+      "signage_required": false,
+      "related_rule_ids": [],
+      "needs_review": false,
+      "parser": "regex",
+      "lake_name_norm": "tan"
+    }
+  },
+  {
+    "match": {
+      "lake_name_raw": "Long Lake",
+      "rule_id": "R 281.763.58",
+      "clause": null
+    },
+    "expect": {
+      "restriction_type": "speed_limit",
+      "scope": "lakewide",
+      "scope_description": null,
+      "hours": null,
+      "season": null,
+      "speed_mph": 40.0,
+      "township": "Oxford Township",
+      "plss": [
+        {
+          "township": "5N",
+          "range": "10E",
+          "sections": [
+            28,
+            29
+          ]
+        }
+      ],
+      "status": "active",
+      "signage_required": false,
+      "related_rule_ids": [],
+      "needs_review": false,
+      "parser": "regex",
+      "lake_name_norm": "long"
+    }
+  },
+  {
+    "match": {
+      "lake_name_raw": "Kent Lake",
+      "rule_id": "R 281.763.1",
+      "clause": "(a)"
+    },
+    "expect": {
+      "restriction_type": "speed_limit",
+      "scope": "lakewide",
+      "scope_description": null,
+      "hours": null,
+      "season": null,
+      "speed_mph": 10.0,
+      "township": "Milford Township, Lyon Township",
+      "plss": [],
+      "status": "active",
+      "signage_required": false,
+      "related_rule_ids": [
+        "R 281.747.1"
+      ],
+      "needs_review": false,
+      "parser": "regex",
+      "lake_name_norm": "kent"
+    }
+  },
+  {
+    "match": {
+      "lake_name_raw": "Marl Lake",
+      "rule_id": "WC-63-99-001",
+      "clause": null
+    },
+    "expect": {
+      "restriction_type": "other",
+      "scope": "lakewide",
+      "scope_description": null,
+      "hours": null,
+      "season": null,
+      "speed_mph": null,
+      "township": "Holly Township",
+      "plss": [],
+      "status": "rescinded",
+      "signage_required": false,
+      "related_rule_ids": [],
+      "needs_review": false,
+      "parser": "regex",
+      "lake_name_norm": "marl"
+    }
+  },
+  {
+    "match": {
+      "lake_name_raw": "Green Lake",
+      "rule_id": "WC-63-13-001",
+      "clause": null,
+      "restriction_type": "no_motorboats"
+    },
+    "expect": {
+      "restriction_type": "no_motorboats",
+      "scope": "lakewide",
+      "scope_description": null,
+      "hours": null,
+      "season": null,
+      "speed_mph": null,
+      "township": null,
+      "plss": [
+        {
+          "township": "2N",
+          "range": "9E",
+          "sections": [
+            7,
+            8
+          ]
+        }
+      ],
+      "status": "active",
+      "signage_required": false,
+      "related_rule_ids": [],
+      "needs_review": false,
+      "parser": "regex",
+      "lake_name_norm": "green"
+    }
+  },
+  {
+    "match": {
+      "lake_name_raw": "Green Lake",
+      "rule_id": "WC-63-13-001",
+      "clause": null,
+      "restriction_type": "speed_limit"
+    },
+    "expect": {
+      "restriction_type": "speed_limit",
+      "scope": "lakewide",
+      "scope_description": null,
+      "hours": null,
+      "season": null,
+      "speed_mph": 10.0,
+      "township": null,
+      "plss": [
+        {
+          "township": "2N",
+          "range": "9E",
+          "sections": [
+            7,
+            8
+          ]
+        }
+      ],
+      "status": "active",
+      "signage_required": false,
+      "related_rule_ids": [],
+      "needs_review": false,
+      "parser": "regex",
+      "lake_name_norm": "green"
+    }
+  }
+]
