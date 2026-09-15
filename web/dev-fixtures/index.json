@@ -1,0 +1,247 @@
+[
+  {
+    "id": 461406506,
+    "name": "Lake Angelus",
+    "name_norm": "angelus",
+    "county": "Oakland",
+    "township": "City of Lake Angelus",
+    "lat": 42.7095,
+    "lon": -83.3281,
+    "bbox": [
+      -83.338,
+      42.7032,
+      -83.3187,
+      42.7156
+    ],
+    "area_acres": 331.1,
+    "chord_ft": 5787,
+    "chord_bearing_deg": 119,
+    "verdict": "conditional",
+    "flags": [
+      "no_public_access"
+    ],
+    "restriction_ids": [
+      "5d6cc6b8d74c"
+    ],
+    "access": null
+  },
+  {
+    "id": 1191379730,
+    "name": "Big School Lot Lake",
+    "name_norm": "big school lot",
+    "county": "Oakland",
+    "township": "Rose Township",
+    "lat": 42.7712,
+    "lon": -83.5902,
+    "bbox": [
+      -83.5943,
+      42.7673,
+      -83.5854,
+      42.7745
+    ],
+    "area_acres": 93.1,
+    "chord_ft": 2868,
+    "chord_bearing_deg": 25,
+    "verdict": "restricted",
+    "flags": [
+      "no_public_access"
+    ],
+    "restriction_ids": [
+      "6b2c3f3efcc0"
+    ],
+    "access": null
+  },
+  {
+    "id": 460478574,
+    "name": "Cass Lake",
+    "name_norm": "cass",
+    "county": "Oakland",
+    "township": "West Bloomfield Township",
+    "lat": 42.6091,
+    "lon": -83.3415,
+    "bbox": [
+      -83.3621,
+      42.5983,
+      -83.3177,
+      42.6178
+    ],
+    "area_acres": 1282.9,
+    "chord_ft": 12352,
+    "chord_bearing_deg": 74,
+    "verdict": "clear",
+    "flags": [],
+    "restriction_ids": [],
+    "access": "Dodge Brothers #4 BAS"
+  },
+  {
+    "id": 22736109,
+    "name": "Little School Lot Lake",
+    "name_norm": "little school lot",
+    "county": "Oakland",
+    "township": "Rose Township",
+    "lat": 42.7791,
+    "lon": -83.5737,
+    "bbox": [
+      -83.5771,
+      42.7774,
+      -83.5704,
+      42.781
+    ],
+    "area_acres": 34.3,
+    "chord_ft": 1795,
+    "chord_bearing_deg": 79,
+    "verdict": "restricted",
+    "flags": [
+      "no_public_access",
+      "chord_below_minimum"
+    ],
+    "restriction_ids": [
+      "2e0debf12097"
+    ],
+    "access": null
+  },
+  {
+    "id": 223057208,
+    "name": "Loon Lake",
+    "name_norm": "loon",
+    "county": "Oakland",
+    "township": "Wixom",
+    "lat": 42.5451,
+    "lon": -83.5335,
+    "bbox": [
+      -83.5419,
+      42.5412,
+      -83.5264,
+      42.5483
+    ],
+    "area_acres": 176.7,
+    "chord_ft": 4311,
+    "chord_bearing_deg": 106,
+    "verdict": "clear",
+    "flags": [],
+    "restriction_ids": [],
+    "access": "Loon Lake BAS"
+  },
+  {
+    "id": 1663026972,
+    "name": "Mud Lake",
+    "name_norm": "mud",
+    "county": "Oakland",
+    "township": "Rose Township",
+    "lat": 42.7398,
+    "lon": -83.6122,
+    "bbox": [
+      -83.614,
+      42.7372,
+      -83.6105,
+      42.7421
+    ],
+    "area_acres": 25.6,
+    "chord_ft": 1766,
+    "chord_bearing_deg": 178,
+    "verdict": "restricted",
+    "flags": [
+      "no_public_access",
+      "chord_below_minimum"
+    ],
+    "restriction_ids": [
+      "b830dfb46c6e"
+    ],
+    "access": null
+  },
+  {
+    "id": 368858589,
+    "name": "Pontiac Lake",
+    "name_norm": "pontiac",
+    "county": "Oakland",
+    "township": "Waterford Township",
+    "lat": 42.684,
+    "lon": -83.4488,
+    "bbox": [
+      -83.4592,
+      42.6689,
+      -83.4387,
+      42.6968
+    ],
+    "area_acres": 748.3,
+    "chord_ft": 10635,
+    "chord_bearing_deg": 17,
+    "verdict": "conditional",
+    "flags": [],
+    "restriction_ids": [
+      "08a2ea59fa90"
+    ],
+    "access": "Pontiac Lake State Recreation Area BAS"
+  },
+  {
+    "id": 260200585,
+    "name": "Round Lake",
+    "name_norm": "round",
+    "county": "Oakland",
+    "township": "Springfield Township",
+    "lat": 42.7541,
+    "lon": -83.4995,
+    "bbox": [
+      -83.5059,
+      42.7502,
+      -83.4923,
+      42.7578
+    ],
+    "area_acres": 172.4,
+    "chord_ft": 3696,
+    "chord_bearing_deg": 100,
+    "verdict": "clear",
+    "flags": [],
+    "restriction_ids": [],
+    "access": "Round Lake BAS"
+  },
+  {
+    "id": 314179109,
+    "name": "Union Lake",
+    "name_norm": "union",
+    "county": "Oakland",
+    "township": "Commerce Township",
+    "lat": 42.6123,
+    "lon": -83.4191,
+    "bbox": [
+      -83.431,
+      42.6053,
+      -83.4092,
+      42.6189
+    ],
+    "area_acres": 467.7,
+    "chord_ft": 6317,
+    "chord_bearing_deg": 66,
+    "verdict": "clear",
+    "flags": [],
+    "restriction_ids": [
+      "9ed996a837b6"
+    ],
+    "access": "Union Lake BAS"
+  },
+  {
+    "id": 1487578877,
+    "name": null,
+    "name_norm": "",
+    "county": "Oakland",
+    "township": "Highland Township",
+    "lat": 42.6512,
+    "lon": -83.6205,
+    "bbox": [
+      -83.6237,
+      42.6484,
+      -83.6167,
+      42.6543
+    ],
+    "area_acres": 63.5,
+    "chord_ft": 2363,
+    "chord_bearing_deg": 27,
+    "verdict": "unknown",
+    "flags": [
+      "no_public_access",
+      "needs_review"
+    ],
+    "restriction_ids": [],
+    "access": null
+  }
+]

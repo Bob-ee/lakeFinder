@@ -1,0 +1,96 @@
+.map {
+  position: absolute;
+  inset: 0;
+}
+
+.maplibregl-ctrl-bottom-right,
+.maplibregl-ctrl-bottom-left {
+  /* Keep attribution above the sheet's peek row. */
+  margin-bottom: calc(var(--safe-bottom) + 4px);
+}
+
+.maplibregl-ctrl-attrib {
+  font-size: 11px;
+}
+
+/* Fallback marker for a selected lake whose polygon is not rendered at this zoom. */
+.lake-marker {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--marker-color, var(--verdict-unknown));
+  border: 3px solid var(--surface);
+  box-shadow: var(--shadow-float);
+}
+
+/* -- right-edge control stack ------------------------------------------- */
+
+.map-controls {
+  position: absolute;
+  top: calc(var(--safe-top) + 84px);
+  right: 12px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.map-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-float);
+}
+
+.map-btn.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.layers-panel {
+  width: 250px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--tap);
+  padding: 0 8px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.toggle-row:hover {
+  background: var(--surface-2);
+}
+
+.toggle-row.is-disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.toggle-row input {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--accent);
+}
+
+.toggle-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+@media (min-width: 840px) {
+  .map-controls {
+    /* Stay clear of the docked detail panel. */
+    right: calc(380px + 12px);
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "seaplane-map-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Michigan seaplane lake map - PWA client (phase 1: static map)",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "fixtures": "node scripts/make-dev-fixtures.mjs"
+  },
+  "dependencies": {
+    "@protomaps/basemaps": "^5.7.2",
+    "idb": "^8.0.3",
+    "maplibre-gl": "^6.9.1",
+    "pmtiles": "^4.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0"
+  }
+}

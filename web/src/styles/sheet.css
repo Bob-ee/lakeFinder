@@ -1,0 +1,321 @@
+/* Bottom sheet on phones, right-side panel from the --panel breakpoint (840px).
+   Same element, same markup; only the geometry changes. */
+
+.sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  display: none;
+  grid-template-rows: auto auto auto 1fr;
+  height: var(--sheet-height, 0px);
+  max-height: 95dvh;
+  padding-bottom: var(--safe-bottom);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  border-radius: var(--radius) var(--radius) 0 0;
+  box-shadow: var(--shadow);
+  transition: height 220ms cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+.sheet.is-open {
+  display: grid;
+}
+
+.sheet.is-dragging {
+  transition: none;
+}
+
+.sheet-handle {
+  display: grid;
+  place-items: center;
+  height: 22px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.sheet-grip {
+  width: 44px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--border);
+}
+
+/* -- peek --------------------------------------------------------------- */
+
+.sheet-peek {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 8px 0 0;
+  min-height: 64px;
+}
+
+.verdict-bar {
+  width: 8px;
+  align-self: stretch;
+  margin: 4px 0;
+  border-radius: 0 6px 6px 0;
+  background: var(--verdict, var(--verdict-unknown));
+}
+
+.peek-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.peek-title {
+  font-size: 19px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.peek-sub {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.peek-county {
+  color: var(--text-muted);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.peek-verdict {
+  flex: 0 0 auto;
+  color: var(--verdict, var(--verdict-unknown));
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.star-btn {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+}
+
+/* -- tabs --------------------------------------------------------------- */
+
+.sheet-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.sheet[data-snap="peek"] .sheet-tabs,
+.sheet[data-snap="peek"] .sheet-body {
+  display: none;
+}
+
+.tab {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tab.is-active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.sheet-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 12px 16px calc(20px + var(--safe-bottom));
+}
+
+/* -- detail ------------------------------------------------------------- */
+
+.detail-section {
+  margin-top: 18px;
+}
+
+/* The full-only block appears at the full snap point (and always in panel mode). */
+.sheet[data-snap="half"] .detail-section--full {
+  display: none;
+}
+
+.detail-h {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.fact-grid {
+  display: grid;
+  grid-template-columns: minmax(96px, auto) 1fr;
+  gap: 6px 16px;
+  margin: 0;
+}
+
+.fact-grid dt {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.fact-grid dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.restriction-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.restriction {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--verdict, var(--border));
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.restriction-type {
+  font-weight: 650;
+}
+
+.restriction-scope {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.restriction-when {
+  margin-top: 4px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.restriction-note {
+  margin-top: 6px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.notice {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  font-size: 14px;
+}
+
+.notice--warn {
+  border-color: var(--verdict-conditional);
+  color: var(--verdict-conditional);
+  font-weight: 600;
+}
+
+.source-block {
+  margin: 10px 0 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.source-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.rule-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.source-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.source-link svg {
+  width: 16px;
+  height: 16px;
+}
+
+.raw-text {
+  margin: 0 0 6px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.placeholder-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.placeholder-head .detail-h {
+  margin-bottom: 0;
+}
+
+/* -- panel mode --------------------------------------------------------- */
+
+@media (min-width: 840px) {
+  .sheet {
+    left: auto;
+    top: 0;
+    bottom: 0;
+    width: 380px;
+    height: auto !important;
+    max-height: none;
+    border-top: 0;
+    border-left: 1px solid var(--border);
+    border-radius: 0;
+    padding-top: var(--safe-top);
+    box-shadow: -2px 0 20px rgba(16, 22, 26, 0.16);
+  }
+
+  .sheet-handle {
+    display: none;
+  }
+
+  /* No snap points in panel mode: everything is always visible. */
+  .sheet[data-snap="peek"] .sheet-tabs,
+  .sheet[data-snap="peek"] .sheet-body,
+  .sheet[data-snap="half"] .detail-section--full {
+    display: revert;
+  }
+
+  .sheet[data-snap="half"] .detail-section--full {
+    display: block;
+  }
+
+  .sheet-peek {
+    min-height: 76px;
+  }
+}

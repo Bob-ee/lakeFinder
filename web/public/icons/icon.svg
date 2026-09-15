@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Michigan seaplane lakes">
+  <title>Michigan Seaplane Lakes</title>
+  <rect width="512" height="512" rx="112" fill="#0b6bcb"/>
+  <!-- lake outline: the app draws verdict as a thick outline, not a fill -->
+  <path d="M256 104c62 0 118 26 140 68 20 39 6 86-26 118-34 34-86 62-142 62-52 0-96-22-114-58-19-39-8-88 26-122 32-33 76-68 116-68z"
+        fill="none" stroke="#ffffff" stroke-width="34" stroke-linejoin="round"/>
+  <!-- longest chord, the number a seaplane pilot actually needs -->
+  <path d="M158 330 L354 182" stroke="#ffd166" stroke-width="26" stroke-linecap="round"/>
+  <circle cx="158" cy="330" r="22" fill="#ffd166"/>
+  <circle cx="354" cy="182" r="22" fill="#ffd166"/>
+</svg>

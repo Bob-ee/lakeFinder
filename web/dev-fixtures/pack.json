@@ -1,0 +1,48 @@
+{
+  "version": "2026-09-15",
+  "built_at": "2026-09-15T18:30:00Z",
+  "rules_version": "2026-09-15",
+  "files": [
+    {
+      "name": "index.json",
+      "bytes": 4827,
+      "sha256": "f64fae859edd5511942a0878191ecb35d0a1e1b68859002e15a85eedeac52384"
+    },
+    {
+      "name": "restrictions.json",
+      "bytes": 7382,
+      "sha256": "8e50d9659bcafd302127e2ab1312f4119df89a02b0bdb6b728309f66fc60ffbe"
+    },
+    {
+      "name": "rules.json",
+      "bytes": 6274,
+      "sha256": "8feffcd7498dadf71a14c74a1e591e55f3c5a89ab39fdc8ba68970bd1b0a27ba"
+    },
+    {
+      "name": "lakes.pmtiles",
+      "bytes": 23446,
+      "sha256": "b7520dfa01ba87109e0afe01e9f88f9af9b7698f07d8a428b712c466cde6f162"
+    },
+    {
+      "name": "usable_water.pmtiles",
+      "bytes": 10872,
+      "sha256": "fd0963a4279f42497dc2e9f934b48a8caca2878c87817357c3276013091144d8"
+    },
+    {
+      "name": "overlays.pmtiles",
+      "bytes": 24377,
+      "sha256": "788d510f8e0a8625504d54196690e8b3416fa1c8a0204b528cf4ecde04b9c82e"
+    },
+    {
+      "name": "basemap.pmtiles",
+      "bytes": 25331357,
+      "sha256": "6313d69bb4c1f75d9855d54e4c12091fe6bdaeb4738f7ba1b00c2d275e108968"
+    }
+  ],
+  "counts": {
+    "lakes": 10,
+    "restrictions": 6,
+    "needs_review": 1
+  },
+  "mac_record_loaded": false
+}

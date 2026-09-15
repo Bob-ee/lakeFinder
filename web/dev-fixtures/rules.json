@@ -1,0 +1,151 @@
+{
+  "version": "2026-09-15",
+  "aircraft": { "name": "SeaRey", "min_chord_ft": 2000, "min_takeoff_mph": 40 },
+  "aggregate": "worst_of",
+  "rules": [
+    {
+      "id": "no-vessels",
+      "when": { "restriction_type": "no_vessels" },
+      "verdict": "restricted",
+      "note": "All vessels are prohibited here; a seaplane on the water counts as a vessel."
+    },
+    {
+      "id": "no-motorboats",
+      "when": { "restriction_type": "no_motorboats" },
+      "verdict": "restricted",
+      "note": "Motorboats are prohibited (the electric-only exception does not help a seaplane)."
+    },
+    {
+      "id": "slow-no-wake-zone",
+      "when": { "restriction_type": "slow_no_wake", "scope": "zone" },
+      "verdict": "conditional",
+      "note": "Slow/no-wake only in {scope_description}; the rest of the lake may allow planing."
+    },
+    {
+      "id": "slow-no-wake-hours",
+      "when": { "restriction_type": "slow_no_wake", "scope": "lakewide", "hours": "*" },
+      "verdict": "conditional",
+      "note": "Slow/no-wake applies {hours.text}; planing may be possible outside that window."
+    },
+    {
+      "id": "slow-no-wake-season",
+      "when": { "restriction_type": "slow_no_wake", "scope": "lakewide", "season": "*" },
+      "verdict": "conditional",
+      "note": "Slow/no-wake applies {season.text}; check the season before planning a landing."
+    },
+    {
+      "id": "slow-no-wake-lakewide",
+      "when": { "restriction_type": "slow_no_wake", "scope": "lakewide", "hours": null, "season": null },
+      "verdict": "restricted",
+      "note": "Slow/no-wake speed lakewide, all the time. No planing for takeoff or landing."
+    },
+    {
+      "id": "no-high-speed-zone",
+      "when": { "restriction_type": "no_high_speed", "scope": "zone" },
+      "verdict": "conditional",
+      "note": "High-speed/planing prohibited in {scope_description}; use the rest of the lake."
+    },
+    {
+      "id": "no-high-speed-hours",
+      "when": { "restriction_type": "no_high_speed", "scope": "lakewide", "hours": "*" },
+      "verdict": "conditional",
+      "note": "High-speed/planing prohibited except {hours.text}; plan takeoff and landing in that window."
+    },
+    {
+      "id": "no-high-speed-season",
+      "when": { "restriction_type": "no_high_speed", "scope": "lakewide", "season": "*" },
+      "verdict": "conditional",
+      "note": "High-speed/planing prohibited except {season.text}; check the season before planning a landing."
+    },
+    {
+      "id": "no-high-speed-lakewide",
+      "when": { "restriction_type": "no_high_speed", "scope": "lakewide", "hours": null, "season": null },
+      "verdict": "restricted",
+      "note": "High-speed/planing prohibited lakewide. Takeoff and landing require planing."
+    },
+    {
+      "id": "high-speed-hours-window",
+      "when": { "restriction_type": "high_speed_hours", "hours": "*" },
+      "verdict": "conditional",
+      "note": "High speed allowed only {hours.text}; land or take off in that window."
+    },
+    {
+      "id": "high-speed-hours-season",
+      "when": { "restriction_type": "high_speed_hours", "season": "*" },
+      "verdict": "conditional",
+      "note": "High speed allowed only {season.text}; land or take off in that window."
+    },
+    {
+      "id": "speed-limit-zone",
+      "when": { "restriction_type": "speed_limit", "scope": "zone" },
+      "verdict": "conditional",
+      "note": "A {speed_mph} mph limit applies in {scope_description}; the rest of the lake may be usable."
+    },
+    {
+      "id": "speed-limit-lakewide-below-threshold",
+      "when": { "restriction_type": "speed_limit", "scope": "lakewide", "speed_mph_lt": "$aircraft.min_takeoff_mph" },
+      "verdict": "restricted",
+      "note": "Lakewide speed limit of {speed_mph} mph is below what the SeaRey needs to get on the step. Takeoff and landing are not practical here."
+    },
+    {
+      "id": "speed-limit-lakewide-clear",
+      "when": { "restriction_type": "speed_limit", "scope": "lakewide", "speed_mph_gte": "$aircraft.min_takeoff_mph" },
+      "verdict": "clear",
+      "note": "Lakewide speed limit of {speed_mph} mph is at or above the SeaRey's takeoff speed; no known restriction on landing or takeoff."
+    },
+    {
+      "id": "no-towing",
+      "when": { "restriction_type": "no_towing" },
+      "verdict": "clear",
+      "note": "Towing/water-skiing ban only; does not restrict landing or takeoff."
+    },
+    {
+      "id": "no-pwc",
+      "when": { "restriction_type": "no_pwc" },
+      "verdict": "clear",
+      "note": "Personal watercraft rule only; does not apply to a seaplane."
+    },
+    {
+      "id": "no-wake-zone-marked",
+      "when": { "restriction_type": "no_wake_zone_marked" },
+      "verdict": "conditional",
+      "note": "Marked no-wake zone on part of the lake; plan takeoff and landing outside the buoys."
+    },
+    {
+      "id": "shore-buffer",
+      "when": { "restriction_type": "shore_buffer" },
+      "verdict": "clear",
+      "note": "Statewide shore/dock/swimmer slow-no-wake buffer only; not a separate restriction beyond the usual near-shore caution."
+    },
+    {
+      "id": "not-applicable",
+      "when": { "restriction_type": "not_applicable" },
+      "verdict": "clear",
+      "note": "Restriction does not touch landing or takeoff (mooring, rafts, headcount limits, or a swimming area)."
+    },
+    {
+      "id": "mac-ordinance",
+      "when": { "restriction_type": "mac_ordinance" },
+      "verdict": "restricted",
+      "note": "MAC-approved seaplane ordinance or interim order is in effect; landing here is barred by local ordinance."
+    },
+    {
+      "id": "mac-conditional",
+      "when": { "restriction_type": "mac_conditional" },
+      "verdict": "conditional",
+      "note": "MAC record lists conditions for this lake; check the ordinance before planning a landing."
+    },
+    {
+      "id": "federal-no-landing",
+      "when": { "restriction_type": "federal_no_landing" },
+      "verdict": "restricted",
+      "note": "Federal unit prohibits aircraft landing except in a designated area; none is on file for this lake."
+    },
+    {
+      "id": "other-unclassified",
+      "when": { "restriction_type": "other" },
+      "verdict": "unknown",
+      "note": "Restriction text could not be classified; flagged for manual review."
+    }
+  ]
+}

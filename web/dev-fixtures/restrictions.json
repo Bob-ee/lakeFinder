@@ -1,0 +1,235 @@
+{
+  "6b2c3f3efcc0": {
+    "restriction_id": "6b2c3f3efcc0",
+    "rule_id": "R 281.763.3",
+    "county": "Oakland",
+    "township": "Rose Township",
+    "lake_name_raw": "Big School Lot Lake",
+    "lake_name_norm": "big school lot",
+    "plss": [
+      {
+        "township": "4N",
+        "range": "7E",
+        "sections": [
+          16,
+          21
+        ]
+      }
+    ],
+    "restriction_type": "no_high_speed",
+    "scope": "lakewide",
+    "scope_description": null,
+    "hours": null,
+    "season": null,
+    "speed_mph": null,
+    "status": "active",
+    "clause": null,
+    "signage_required": false,
+    "related_rule_ids": [],
+    "raw_text": "It is unlawful for the operator of a vessel to exceed a slow, no wake speed or to operate at a high speed or on plane upon the waters of Big School Lot Lake, section 16 and 21, T4N, R7E, Rose Township, Oakland County.",
+    "source_url": "https://www.michigan.gov/dnr/managing-resources/laws/controls/localcontrols/oakland/local-watercraft-controls",
+    "fetched_at": "2026-09-15T18:30:00Z",
+    "parser": "regex",
+    "needs_review": false,
+    "lake_ids": [
+      1191379730
+    ]
+  },
+  "2e0debf12097": {
+    "restriction_id": "2e0debf12097",
+    "rule_id": "R 281.763.3",
+    "county": "Oakland",
+    "township": "Rose Township",
+    "lake_name_raw": "Little School Lot Lake",
+    "lake_name_norm": "little school lot",
+    "plss": [
+      {
+        "township": "4N",
+        "range": "7E",
+        "sections": [
+          16
+        ]
+      }
+    ],
+    "restriction_type": "no_high_speed",
+    "scope": "lakewide",
+    "scope_description": null,
+    "hours": null,
+    "season": null,
+    "speed_mph": null,
+    "status": "active",
+    "clause": null,
+    "signage_required": false,
+    "related_rule_ids": [
+      "R 281.747.1"
+    ],
+    "raw_text": "It is unlawful for the operator of a vessel to exceed a slow, no wake speed or to operate at a high speed or on plane upon the waters of Little School Lot Lake, section 16, T4N, R7E, Rose Township, Oakland County. (See R 281.747.1 for the Livingston county portion.)",
+    "source_url": "https://www.michigan.gov/dnr/managing-resources/laws/controls/localcontrols/oakland/local-watercraft-controls",
+    "fetched_at": "2026-09-15T18:30:00Z",
+    "parser": "regex",
+    "needs_review": false,
+    "lake_ids": [
+      22736109
+    ]
+  },
+  "08a2ea59fa90": {
+    "restriction_id": "08a2ea59fa90",
+    "rule_id": "R 281.763.8",
+    "county": "Oakland",
+    "township": "Waterford Township",
+    "lake_name_raw": "Pontiac Lake",
+    "lake_name_norm": "pontiac",
+    "plss": [
+      {
+        "township": "3N",
+        "range": "8E",
+        "sections": [
+          11,
+          12
+        ]
+      }
+    ],
+    "restriction_type": "slow_no_wake",
+    "scope": "zone",
+    "scope_description": "within 200 feet of the north shore and the marked swimming area",
+    "hours": {
+      "text": "6:30 p.m. to 10:00 a.m.",
+      "start": "18:30",
+      "end": "10:00",
+      "days": null
+    },
+    "season": null,
+    "speed_mph": null,
+    "status": "active",
+    "clause": "(a)",
+    "signage_required": true,
+    "related_rule_ids": [],
+    "raw_text": "It is unlawful for the operator of a vessel to exceed a slow, no wake speed upon the waters of Pontiac Lake within 200 feet of the north shore and the marked swimming area, between the hours of 6:30 p.m. and 10:00 a.m., sections 11 and 12, T3N, R8E, Waterford Township, Oakland County.",
+    "source_url": "https://www.michigan.gov/dnr/managing-resources/laws/controls/localcontrols/oakland/local-watercraft-controls",
+    "fetched_at": "2026-09-15T18:30:00Z",
+    "parser": "regex",
+    "needs_review": false,
+    "lake_ids": [
+      368858589
+    ]
+  },
+  "9ed996a837b6": {
+    "restriction_id": "9ed996a837b6",
+    "rule_id": "R 281.763.11",
+    "county": "Oakland",
+    "township": "Commerce Township",
+    "lake_name_raw": "Union Lake",
+    "lake_name_norm": "union",
+    "plss": [
+      {
+        "township": "2N",
+        "range": "8E",
+        "sections": [
+          4,
+          5
+        ]
+      }
+    ],
+    "restriction_type": "no_towing",
+    "scope": "lakewide",
+    "scope_description": null,
+    "hours": {
+      "text": "sunset to 11:00 a.m.",
+      "start": "20:30",
+      "end": "11:00",
+      "days": "Saturdays, Sundays and holidays"
+    },
+    "season": null,
+    "speed_mph": null,
+    "status": "active",
+    "clause": "(b)",
+    "signage_required": false,
+    "related_rule_ids": [],
+    "raw_text": "It is unlawful for a person to water ski or to tow a person on water skis, an aquaplane, or a similar contrivance upon the waters of Union Lake between the hours of sunset and 11:00 a.m., sections 4 and 5, T2N, R8E, Commerce Township, Oakland County.",
+    "source_url": "https://www.michigan.gov/dnr/managing-resources/laws/controls/localcontrols/oakland/local-watercraft-controls",
+    "fetched_at": "2026-09-15T18:30:00Z",
+    "parser": "regex",
+    "needs_review": false,
+    "lake_ids": [
+      314179109
+    ]
+  },
+  "5d6cc6b8d74c": {
+    "restriction_id": "5d6cc6b8d74c",
+    "rule_id": "R 281.763.5",
+    "county": "Oakland",
+    "township": "City of Lake Angelus",
+    "lake_name_raw": "Lake Angelus",
+    "lake_name_norm": "angelus",
+    "plss": [
+      {
+        "township": "4N",
+        "range": "10E",
+        "sections": [
+          30
+        ]
+      }
+    ],
+    "restriction_type": "high_speed_hours",
+    "scope": "lakewide",
+    "scope_description": null,
+    "hours": {
+      "text": "11:00 a.m. to 6:30 p.m.",
+      "start": "11:00",
+      "end": "18:30"
+    },
+    "season": {
+      "text": "Memorial Day through Labor Day",
+      "start": "05-25",
+      "end": "09-07"
+    },
+    "speed_mph": null,
+    "status": "active",
+    "clause": null,
+    "signage_required": false,
+    "related_rule_ids": [],
+    "raw_text": "High speed boating is permitted upon the waters of Lake Angelus only between the hours of 11:00 a.m. and 6:30 p.m. from Memorial Day through Labor Day, section 30, T4N, R10E, City of Lake Angelus, Oakland County.",
+    "source_url": "https://www.michigan.gov/dnr/managing-resources/laws/controls/localcontrols/oakland/local-watercraft-controls",
+    "fetched_at": "2026-09-15T18:30:00Z",
+    "parser": "regex",
+    "needs_review": false,
+    "lake_ids": [
+      461406506
+    ]
+  },
+  "b830dfb46c6e": {
+    "restriction_id": "b830dfb46c6e",
+    "rule_id": "R 281.763.14",
+    "county": "Oakland",
+    "township": "Rose Township",
+    "lake_name_raw": "Mud Lake",
+    "lake_name_norm": "mud",
+    "plss": [
+      {
+        "township": "4N",
+        "range": "7E",
+        "sections": [
+          28
+        ]
+      }
+    ],
+    "restriction_type": "no_motorboats",
+    "scope": "lakewide",
+    "scope_description": null,
+    "hours": null,
+    "season": null,
+    "speed_mph": null,
+    "status": "active",
+    "clause": null,
+    "signage_required": false,
+    "related_rule_ids": [],
+    "raw_text": "It is unlawful for a person to operate a motorboat propelled by an internal combustion engine upon the waters of Mud Lake, section 28, T4N, R7E, Rose Township, Oakland County.",
+    "source_url": "https://www.michigan.gov/dnr/managing-resources/laws/controls/localcontrols/oakland/local-watercraft-controls",
+    "fetched_at": "2026-09-15T18:30:00Z",
+    "parser": "regex",
+    "needs_review": false,
+    "lake_ids": [
+      1663026972
+    ]
+  }
+}

@@ -1,0 +1,146 @@
+.searchbar {
+  position: absolute;
+  top: calc(var(--safe-top) + 12px);
+  left: 12px;
+  right: 12px;
+  z-index: 30;
+  max-width: 620px;
+}
+
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: 12px;
+  min-height: var(--tap);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
+}
+
+.search-icon {
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+}
+
+.search-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 17px; /* 16px+ so iOS Safari does not zoom on focus */
+}
+
+.search-input:focus {
+  outline: none;
+}
+
+.search-input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.search-clear {
+  display: none;
+}
+
+.searchbar.has-query .search-clear {
+  display: grid;
+}
+
+.search-results {
+  margin-top: 8px;
+  max-height: min(58vh, 520px);
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
+  overscroll-behavior: contain;
+}
+
+.search-heading,
+.search-empty {
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.search-empty {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+  font-size: 15px;
+}
+
+/* -- list row (shared with Nearest and Saved from phase 2) -------------- */
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 10px 16px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.search-results .row:first-of-type {
+  border-top: 0;
+}
+
+.row:hover,
+.row.is-cursor {
+  background: var(--surface-2);
+}
+
+.row-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.row-name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.row-place {
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.row-trailing {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+@media (min-width: 840px) {
+  .searchbar {
+    right: auto;
+    width: 420px;
+  }
+}

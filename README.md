@@ -14,7 +14,7 @@ Spec: [`docs/design.md`](docs/design.md). Schemas: [`docs/data-contract.md`](doc
 |---|---|
 | `pipeline/` | Python (uv) pipeline: fetch DNR pages and GIS, parse restrictions, match to lakes, geometry, classify, build tiles |
 | `rules/` | Data-driven rules engine (JS, zero deps) shared by the pipeline and the client, plus `rules.json` and fixtures |
-| `web/` | Vite + TypeScript + MapLibre GL PWA |
+| `web/` | Vite + TypeScript + MapLibre GL PWA. Run instructions and module layout: [`web/README.md`](web/README.md) |
 | `data/manual/` | Hand-maintained `overrides.yaml` and `mac_record.yaml` |
 | `data/raw/`, `data/out/` | Pipeline inputs and outputs (gitignored; `data/out/` is what gets served at `/data/`) |
 | `Caddyfile`, `docker-compose.yml` | Hosting |
