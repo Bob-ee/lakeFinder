@@ -1,0 +1,28 @@
+# data
+data/raw/
+data/out/
+data/cache/
+
+# python
+__pycache__/
+*.pyc
+.venv/
+pipeline/.venv/
+.pytest_cache/
+.ruff_cache/
+
+# node
+node_modules/
+web/dist/
+web/dev-dist/
+*.log
+
+# os / editor
+.DS_Store
+.idea/
+.vscode/
+
+# secrets
+.env
+.env.*
+!.env.example
