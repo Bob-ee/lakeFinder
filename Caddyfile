@@ -1,0 +1,31 @@
+# Serves the built PWA and the data pack. TLS is terminated by Tailscale
+# (`tailscale serve` in front) so this listens on plain HTTP inside the tailnet.
+:8080 {
+	encode zstd gzip
+
+	# Data pack: range requests are required for .pmtiles.
+	handle_path /data/* {
+		root * /srv/data
+		file_server {
+			precompressed
+		}
+		@pmtiles path *.pmtiles
+		header @pmtiles Content-Type application/octet-stream
+		header @pmtiles Accept-Ranges bytes
+		header Cache-Control "public, max-age=300"
+	}
+
+	# API (wind proxy in v2, saved-lake sync in v4).
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+
+	# App shell.
+	handle {
+		root * /srv/web
+		try_files {path} /index.html
+		file_server
+		@sw path /sw.js /manifest.webmanifest
+		header @sw Cache-Control "no-cache"
+	}
+}

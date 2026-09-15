@@ -1,0 +1,5 @@
+# Hand-reviewed fixes. This file wins over automatic matching.
+# See docs/data-contract.md "Manual files" for the schema.
+matches: []
+unmatch: []
+verdicts: []

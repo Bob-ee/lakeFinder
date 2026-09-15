@@ -1,0 +1,13 @@
+# Michigan Aeronautics Commission seaplane record (R 259.401(13)).
+# Not online; obtain from MDOT Aeronautics by email/FOIA. Until `loaded: true`,
+# the app states that MAC-approved ordinances are not yet loaded.
+loaded: false
+entries:
+  - lake_name: Lake Angelus
+    county: Oakland
+    lake_id: null
+    kind: ordinance
+    status: approved
+    citation: "City of Lake Angelus v. Aeronautics Commission, 260 Mich App 371 (2004)"
+    note: "City ordinance banning seaplanes; MAC approval history disputed. Treat as restricted."
+    source_url: "https://www.courtlistener.com/opinion/1925799/city-of-lake-angelus-v-aeronautics-commission/"

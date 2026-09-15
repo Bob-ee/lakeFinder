@@ -1,0 +1,37 @@
+# Homelab deployment (design doc section 8). Three services share one data volume.
+# Put `tailscale serve --bg 8080` (or a tailscale sidecar) in front for TLS.
+services:
+  web:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./web/dist:/srv/web:ro
+      - lake_data:/srv/data:ro
+
+  api:
+    build: ./api
+    restart: unless-stopped
+    environment:
+      - SYNOPTIC_TOKEN=${SYNOPTIC_TOKEN:-}
+    volumes:
+      - lake_data:/srv/data:ro
+    profiles: ["v2"]
+
+  pipeline:
+    build: ./pipeline
+    restart: unless-stopped
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - PIPELINE_SCHEDULE=${PIPELINE_SCHEDULE:-weekly}
+    volumes:
+      - ./data/manual:/app/data/manual:ro
+      - ./data/raw:/app/data/raw
+      - ./rules:/app/rules:ro
+      - lake_data:/app/data/out
+    profiles: ["pipeline"]
+
+volumes:
+  lake_data:
