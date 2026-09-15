@@ -1,0 +1,48 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "NAME": "lshape",
+    "TYPE": "lake",
+    "_description": "L-shape; the hull diameter tip-to-tip is NOT inside the polygon"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -83.59,
+       42.77
+      ],
+      [
+       -83.59,
+       42.77900184
+      ],
+      [
+       -83.58755599,
+       42.77900182
+      ],
+      [
+       -83.58755627,
+       42.77180034
+      ],
+      [
+       -83.57778135,
+       42.77179972
+      ],
+      [
+       -83.5777817,
+       42.76999935
+      ],
+      [
+       -83.59,
+       42.77
+      ]
+     ]
+    ]
+   }
+  }
+ ]
+}

@@ -2,6 +2,7 @@
 data/raw/
 data/out/
 data/cache/
+data/work/
 
 # python
 __pycache__/

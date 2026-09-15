@@ -11,8 +11,9 @@ from .config import Config
 STAGES = [
     ("fetch", "Download hydrography, PLSS, BAS, federal, FAA, and crawl DNR county pages"),
     ("parse-dnr", "Extract structured restrictions from DNR county pages"),
-    ("match", "Join restrictions to lake polygons"),
+    # geometry runs before match: match joins restrictions onto the polygons geometry writes.
     ("geometry", "Compute area, longest chord, shore buffer, centroid, bbox, id"),
+    ("match", "Join restrictions to lake polygons"),
     ("overlay", "Public access, federal unit, airspace flags"),
     ("classify", "Run the shared rules engine"),
     ("build", "Emit tiles, index.json, restrictions.json, pack.json"),
@@ -30,20 +31,31 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="stage", required=True)
     for name, help_text in STAGES:
         sp = sub.add_parser(name, help=help_text)
-        mod = _module_for(name)
+        mod = _module_for(name, quiet=True)
         add_args = getattr(mod, "add_args", None) if mod else None
         if add_args:
             add_args(sp)
     return p
 
 
-def _module_for(stage: str):
+def _module_for(stage: str, quiet: bool = False):
+    """Import a stage module. `quiet` tolerates a sibling stage that is broken or half-written,
+    so building the parser (which imports every stage for its `add_args`) never takes the CLI down;
+    the stage actually being run still raises."""
     if stage == "all":
         return None
     try:
         return importlib.import_module(f".{stage.replace('-', '_')}", __package__)
     except ModuleNotFoundError as e:  # stage not built yet
         if e.name and e.name.endswith(stage.replace("-", "_")):
+            return None
+        if quiet:
+            logging.getLogger(__name__).warning("stage %r is not importable: %s", stage, e)
+            return None
+        raise
+    except ImportError as e:
+        if quiet:
+            logging.getLogger(__name__).warning("stage %r is not importable: %s", stage, e)
             return None
         raise
 

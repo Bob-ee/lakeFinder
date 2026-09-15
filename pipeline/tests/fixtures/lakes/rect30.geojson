@@ -1,0 +1,40 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "NAME": "rect30",
+    "TYPE": "lake",
+    "_description": "6000 x 40 m rectangle, long axis on a 030 bearing"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -83.57145397,
+       42.79329593
+      ],
+      [
+       -83.57187733,
+       42.79347603
+      ],
+      [
+       -83.60853213,
+       42.74670097
+      ],
+      [
+       -83.60810898,
+       42.746521
+      ],
+      [
+       -83.57145397,
+       42.79329593
+      ]
+     ]
+    ]
+   }
+  }
+ ]
+}

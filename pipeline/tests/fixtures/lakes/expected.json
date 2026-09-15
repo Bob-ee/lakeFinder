@@ -1,0 +1,27 @@
+[
+ {
+  "name": "circle",
+  "description": "128-gon, radius 1000 m; chord is the diameter, bearing arbitrary",
+  "area_acres": 775.993,
+  "chord_ft": 6561.7,
+  "chord_bearing_deg": null,
+  "hull_diameter_ft": 6561.7
+ },
+ {
+  "name": "rect30",
+  "description": "6000 x 40 m rectangle, long axis on a 030 bearing",
+  "area_acres": 59.305,
+  "chord_ft": 19685.5,
+  "chord_bearing_deg": 30.39,
+  "hull_diameter_ft": 19685.5
+ },
+ {
+  "name": "lshape",
+  "description": "L-shape; the hull diameter tip-to-tip is NOT inside the polygon",
+  "area_acres": 88.958,
+  "chord_ft": 3345.8,
+  "chord_bearing_deg": null,
+  "hull_diameter_ft": 4639.8,
+  "bearing_note": "four interior chords tie at this length, so the bearing is not determinate"
+ }
+]
