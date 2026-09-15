@@ -29,6 +29,15 @@ Identical in Python (`seaplane_pipeline/names.py`) and JS (`web/src/search/norma
 4. Strip punctuation except spaces. `"St. Clair"`→`"saint clair"`.
 5. Qualifiers `big little north south east west upper lower middle` stay in the string (they disambiguate).
 
+**Implementation decision (rules engine, `rules/engine/index.js`):** a parenthetical qualifier in the raw
+name is treated as a separate segment, not inline text. The parentheses are stripped, and the main name and
+the parenthetical content are each run through the full pipeline above independently (lowercase, expand
+abbreviations, strip leading/trailing generic words, strip punctuation), then joined with a space. This
+matters because a generic word like "Lake" that ends up in the middle of the raw text (main name followed
+by a trailing parenthetical) must still be stripped as if it were trailing on the main name alone.
+Example: `"Crooked Lake (Big)"` → main `"Crooked Lake"` → `"crooked"`, parenthetical `"Big"` → `"big"` →
+joined `"crooked big"`. See `rules/fixtures/names.json` for more parenthetical cases.
+
 ## `restrictions.jsonl` (pipeline stage `parse-dnr`) and `restrictions.json` (stage `build`)
 
 One record per (lake mention, rule). `restrictions.json` is `{ "<restriction_id>": record }` with `lake_ids` filled in.
@@ -45,9 +54,14 @@ One record per (lake mention, rule). `restrictions.json` is `{ "<restriction_id>
   "restriction_type": "no_high_speed",  // see enum
   "scope": "lakewide",                   // "lakewide" | "zone"
   "scope_description": null,             // text for zones: "within 200 ft of the north shore"
-  "hours": null,                         // or {"text": "6:30 p.m. to 10:00 a.m.", "start": "18:30", "end": "10:00"}
+  "hours": null,                         // or {"text": "6:30 p.m. to 10:00 a.m.", "start": "18:30", "end": "10:00", "days": null}
+                                         //    days: null (every day) or text like "Sundays and holidays"
   "season": null,                        // or {"text": "Memorial Day through Labor Day", "start": "05-25", "end": "09-07"}
   "speed_mph": null,                     // number for speed_limit
+  "status": "active",                    // "active" | "rescinded" (rescinded rows stay in jsonl, are dropped at build)
+  "clause": null,                        // "(a)", "(b)"… when one rule number decomposes into several records
+  "signage_required": false,             // true when the order says it is only enforceable when marked with signs/buoys
+  "related_rule_ids": [],                // cross-county continuation references, e.g. ["R 281.747.1"]
   "raw_text": "…verbatim paragraph from the DNR page…",
   "source_url": "https://www.michigan.gov/dnr/…/oakland/local-watercraft-controls",
   "fetched_at": "2026-09-15T18:00:00Z",
@@ -70,10 +84,32 @@ One record per (lake mention, rule). `restrictions.json` is `{ "<restriction_id>
 | `no_towing` | water skiing / towing prohibited or hour-limited | clear |
 | `no_pwc` | personal watercraft prohibited or hour-limited | clear |
 | `no_wake_zone_marked` | buoyed no-wake zone (statewide-type marker rule) | conditional |
+| `shore_buffer` | local echo of the statewide slow-no-wake within 100 ft of shore/docks/swimmers rule | clear |
+| `not_applicable` | parsed confidently as not touching landing/takeoff: airboat bans, mooring/anchoring, rafts and flotation devices, towed-person headcount limits, swimming areas | clear |
 | `mac_ordinance` | MAC-approved seaplane ordinance or interim order | restricted |
 | `mac_conditional` | MAC record entry with conditions | conditional |
 | `federal_no_landing` | NPS / USFWS unit without designated seaplane area | restricted |
 | `other` | could not classify; `needs_review` true | unknown |
+
+### Parsing rules learned from the corpus (see `docs/dnr-pages.md`)
+
+- One DNR entry (one rule number) that bundles several clauses `(a)`, `(b)`, `(c)` becomes several records sharing
+  `rule_id`, each with its own `restriction_type`, `scope`, `hours`, and `clause`. `raw_text` is the whole entry on
+  every record.
+- "Motorboats prohibited except electric motors" is `no_motorboats`. If the same clause also caps speed, emit a second
+  `speed_limit` record.
+- "High speed" clauses that also ban towing are one `no_high_speed` (or `high_speed_hours`) record, not two.
+- A towing/skiing-only clause with no speed clause is `no_towing`.
+- Entries whose header or body starts with "Rescinded" get `status: "rescinded"` and `restriction_type: "other"`
+  with `needs_review: false`.
+- A lake that straddles a county line appears once per county; both records keep their own `county` and the matcher
+  attaches both to the same polygon. Parenthetical "(See R 281.747.1 for … Livingston county)" fills `related_rule_ids`.
+- The "boundaries … marked with signs and/or buoys … only enforceable when properly marked" boilerplate sets
+  `signage_required: true` and is otherwise ignored.
+- Hours like "6:30 p.m. to 10:00 a.m. of the following day" → `start: "18:30", end: "10:00"`. A DST variant sentence
+  is kept in `hours.text` only. Day qualifiers ("Sundays, Memorial Day, Independence Day, and Labor Day",
+  "Saturdays and holidays") go in `hours.days`.
+- Month-name seasons ("during September, October and November") → `season: {text, start: "09-01", end: "11-30"}`.
 
 Synthetic restrictions (`mac_*`, `federal_*`) are produced by the pipeline from `data/manual/mac_record.yaml` and
 the federal overlay, with `parser: "manual"` and `source_url` pointing at the record.

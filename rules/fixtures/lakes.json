@@ -1,0 +1,119 @@
+[
+  {
+    "name": "no restrictions, named lake is clear",
+    "lake": {"id": 101, "name": "Example Lake", "chord_ft": 3000, "area_acres": 120, "public_access": true, "federal_unit": null},
+    "restrictions": [],
+    "options": {},
+    "expect": {"verdict": "clear", "flags": []}
+  },
+  {
+    "name": "unnamed lake with no restrictions is unknown",
+    "lake": {"id": 102, "name": null, "chord_ft": 2500, "area_acres": 5, "public_access": true, "federal_unit": null},
+    "restrictions": [],
+    "options": {},
+    "expect": {"verdict": "unknown", "flags": []}
+  },
+  {
+    "name": "worst-of aggregation: restricted beats clear",
+    "lake": {"id": 103, "name": "Mixed Lake", "chord_ft": 2500, "area_acres": 80, "public_access": true, "federal_unit": null},
+    "restrictions": [
+      {"restriction_id": "b1", "rule_id": null, "restriction_type": "no_towing", "scope": "lakewide", "scope_description": null, "hours": null, "season": null, "speed_mph": null, "needs_review": false},
+      {"restriction_id": "b2", "rule_id": "R 281.701.1", "restriction_type": "no_motorboats", "scope": "lakewide", "scope_description": null, "hours": null, "season": null, "speed_mph": null, "needs_review": false}
+    ],
+    "options": {},
+    "expect": {"verdict": "restricted", "flags": []}
+  },
+  {
+    "name": "worst-of aggregation: conditional beats clear",
+    "lake": {"id": 104, "name": "Amber Lake", "chord_ft": 2500, "area_acres": 80, "public_access": true, "federal_unit": null},
+    "restrictions": [
+      {"restriction_id": "b3", "rule_id": null, "restriction_type": "no_pwc", "scope": "lakewide", "scope_description": null, "hours": null, "season": null, "speed_mph": null, "needs_review": false},
+      {"restriction_id": "b4", "rule_id": "R 281.763.4", "restriction_type": "slow_no_wake", "scope": "zone", "scope_description": "within 200 ft of the north shore", "hours": null, "season": null, "speed_mph": null, "needs_review": false}
+    ],
+    "options": {},
+    "expect": {"verdict": "conditional", "flags": []}
+  },
+  {
+    "name": "worst-of aggregation across three restrictions picks the worst",
+    "lake": {"id": 105, "name": "Triple Lake", "chord_ft": 2500, "area_acres": 80, "public_access": true, "federal_unit": null},
+    "restrictions": [
+      {"restriction_id": "b5", "rule_id": null, "restriction_type": "no_towing", "scope": "lakewide", "scope_description": null, "hours": null, "season": null, "speed_mph": null, "needs_review": false},
+      {"restriction_id": "b6", "rule_id": "R 281.720.2", "restriction_type": "no_high_speed", "scope": "zone", "scope_description": "the channel", "hours": null, "season": null, "speed_mph": null, "needs_review": false},
+      {"restriction_id": "b7", "rule_id": null, "restriction_type": "no_vessels", "scope": "lakewide", "scope_description": null, "hours": null, "season": null, "speed_mph": null, "needs_review": false}
+    ],
+    "options": {},
+    "expect": {"verdict": "restricted", "flags": []}
+  },
+  {
+    "name": "chord_below_minimum flag when chord_ft is a number under the minimum",
+    "lake": {"id": 106, "name": "Small Chord Lake", "chord_ft": 1500, "area_acres": 40, "public_access": true, "federal_unit": null},
+    "restrictions": [],
+    "options": {},
+    "expect": {"verdict": "clear", "flags": ["chord_below_minimum"]}
+  },
+  {
+    "name": "chord_ft null is not flagged (unmeasured, not undersized)",
+    "lake": {"id": 107, "name": "Unmeasured Lake", "chord_ft": null, "area_acres": 40, "public_access": true, "federal_unit": null},
+    "restrictions": [],
+    "options": {},
+    "expect": {"verdict": "clear", "flags": []}
+  },
+  {
+    "name": "no_public_access flag",
+    "lake": {"id": 108, "name": "Private Lake", "chord_ft": 2500, "area_acres": 60, "public_access": false, "federal_unit": null},
+    "restrictions": [],
+    "options": {},
+    "expect": {"verdict": "clear", "flags": ["no_public_access"]}
+  },
+  {
+    "name": "federal_overlay flag",
+    "lake": {"id": 109, "name": "Glen Lake", "chord_ft": 2500, "area_acres": 60, "public_access": true, "federal_unit": "Sleeping Bear Dunes National Lakeshore"},
+    "restrictions": [],
+    "options": {},
+    "expect": {"verdict": "clear", "flags": ["federal_overlay"]}
+  },
+  {
+    "name": "needs_review propagation from a restriction",
+    "lake": {"id": 110, "name": "Van Ettan Lake", "chord_ft": 2500, "area_acres": 60, "public_access": true, "federal_unit": null},
+    "restrictions": [
+      {"restriction_id": "b8", "rule_id": "R 281.799.9", "restriction_type": "other", "scope": "lakewide", "scope_description": null, "hours": null, "season": null, "speed_mph": null, "needs_review": true}
+    ],
+    "options": {},
+    "expect": {"verdict": "unknown", "flags": ["needs_review"]}
+  },
+  {
+    "name": "mac_pending flag when the MAC record has not been loaded",
+    "lake": {"id": 111, "name": "Walloon Lake", "chord_ft": 2500, "area_acres": 60, "public_access": true, "federal_unit": null},
+    "restrictions": [],
+    "options": {"mac_record_loaded": false},
+    "expect": {"verdict": "clear", "flags": ["mac_pending"]}
+  },
+  {
+    "name": "unnamed lake with a restricted restriction stays restricted",
+    "lake": {"id": 112, "name": null, "chord_ft": 2500, "area_acres": 60, "public_access": true, "federal_unit": null},
+    "restrictions": [
+      {"restriction_id": "b9", "rule_id": "R 281.701.1", "restriction_type": "no_motorboats", "scope": "lakewide", "scope_description": null, "hours": null, "season": null, "speed_mph": null, "needs_review": false}
+    ],
+    "options": {},
+    "expect": {"verdict": "restricted", "flags": []}
+  },
+  {
+    "name": "unnamed lake with only a clear restriction is floored at unknown",
+    "lake": {"id": 113, "name": null, "chord_ft": 2500, "area_acres": 60, "public_access": true, "federal_unit": null},
+    "restrictions": [
+      {"restriction_id": "b10", "rule_id": null, "restriction_type": "no_towing", "scope": "lakewide", "scope_description": null, "hours": null, "season": null, "speed_mph": null, "needs_review": false}
+    ],
+    "options": {},
+    "expect": {"verdict": "unknown", "flags": []}
+  },
+  {
+    "name": "all flags combined, plus a restricted restriction outranking an unclassified one",
+    "lake": {"id": 114, "name": "Kitchen Sink Lake", "chord_ft": 1200, "area_acres": 30, "public_access": false, "federal_unit": "Some National Wildlife Refuge"},
+    "restrictions": [
+      {"restriction_id": "b11", "rule_id": "R 281.799.9", "restriction_type": "other", "scope": "lakewide", "scope_description": null, "hours": null, "season": null, "speed_mph": null, "needs_review": true},
+      {"restriction_id": "b12", "rule_id": "R 281.701.1", "restriction_type": "no_motorboats", "scope": "lakewide", "scope_description": null, "hours": null, "season": null, "speed_mph": null, "needs_review": false}
+    ],
+    "options": {"mac_record_loaded": false},
+    "expect": {"verdict": "restricted", "flags": ["no_public_access", "chord_below_minimum", "federal_overlay", "needs_review", "mac_pending"]}
+  }
+]

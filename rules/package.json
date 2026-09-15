@@ -1,0 +1,11 @@
+{
+  "name": "seaplane-rules",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared rules engine for the Michigan seaplane lake map (see docs/data-contract.md).",
+  "scripts": {
+    "test": "node --test engine/test/*.test.js"
+  },
+  "dependencies": {}
+}
