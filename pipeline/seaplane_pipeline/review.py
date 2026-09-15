@@ -39,6 +39,8 @@ def _read_json(path, default):
 def collect(cfg: Config) -> dict:
     work = cfg.work_dir
     unmatched = _read_json(work / "unmatched.json", [])
+    # Lake-named rows are the real worklist; rivers, channels, and bays have no polygon and sort last.
+    unmatched = sorted(unmatched, key=lambda u: (u.get("kind") == "waterway", u.get("county") or "", u.get("lake_name_raw") or ""))
     matches = _read_json(work / "matches.json", [])
     verdicts = _read_json(work / "verdicts.json", {})
     diff = _read_json(work / "restrictions_diff.json", None)
@@ -100,9 +102,9 @@ def run(cfg: Config, args) -> int:
     console = Console()
     _table(
         console, "Unmatched restrictions",
-        ["restriction_id", "lake", "county", "township", "cands", "best", "reason"],
+        ["restriction_id", "lake", "county", "township", "kind", "cands", "best", "reason"],
         [
-            [u.get("restriction_id"), u.get("lake_name_raw"), u.get("county"), u.get("township"),
+            [u.get("restriction_id"), u.get("lake_name_raw"), u.get("county"), u.get("township"), u.get("kind"),
              u.get("candidates"), u.get("best_score"), u.get("reason")]
             for u in data["unmatched"]
         ],

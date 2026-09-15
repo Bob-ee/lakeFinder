@@ -33,6 +33,20 @@ cd pipeline && uv sync && uv run seaplane fetch && uv run seaplane parse-dnr && 
 cd web && npm install && npm run dev
 ```
 
+## Status (2026-09-15, phase 1 built)
+
+| | |
+|---|---|
+| DNR county pages crawled | 83 of 83 (7 have no controls) |
+| Restriction records parsed | 1,134 (34 flagged for review, 15 rescinded) |
+| Lakes with geometry | 10,783 (10,284 named + 499 unnamed over 20 acres) |
+| Restrictions matched to a lake | 764 of 1,119 active; 200 of the rest are rivers, channels, and bays with no lake polygon |
+| Verdicts | restricted 484 · conditional 207 · clear 9,612 · unknown 480 (unnamed) |
+| Data pack | 158 MB total: basemap 125 MB (z0–12), lakes 14 MB, index 4 MB |
+
+The review queue (`uv run seaplane review`) lists the ~150 lake-named restrictions that still need a hand entry in
+`data/manual/overrides.yaml`. The MAC seaplane record is not loaded yet; the app says so on every lake.
+
 ## Phases
 
 1. **v1 static map** (this build): pipeline stages 1 to 7 statewide, map with verdict outlines, tap for sheet, search, `?lake=`.

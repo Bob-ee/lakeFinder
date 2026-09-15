@@ -69,7 +69,8 @@ One record per (lake mention, rule). `restrictions.json` is `{ "<restriction_id>
   "fetched_at": "2026-09-15T18:00:00Z",
   "parser": "regex",                     // "regex" | "llm" | "manual"
   "needs_review": false,
-  "lake_ids": [1234567]                  // build stage only; [] when unmatched
+  "lake_ids": [1234567],                 // build stage only; [] when unmatched
+  "match_confidence": 0.9                // build stage only; matcher score (< 0.8 also sets needs_review)
 }
 ```
 
@@ -115,6 +116,12 @@ One record per (lake mention, rule). `restrictions.json` is `{ "<restriction_id>
 
 Synthetic restrictions (`mac_*`, `federal_*`) are produced by the pipeline from `data/manual/mac_record.yaml` and
 the federal overlay, with `parser: "manual"` and `source_url` pointing at the record.
+
+### Match stage outputs (`data/work/`)
+
+`matches.json`: `[{restriction_id, lake_id, score, method, needs_review}]`. `unmatched.json`: one row per active
+restriction with no acceptable lake, with `kind: "lake" | "waterway"` (rivers, creeks, channels, harbors, and bays have
+no lake polygon and are expected to stay unmatched) and a `reason`. `seaplane review` prints the lake-kind rows first.
 
 ## `rules/rules.json`
 

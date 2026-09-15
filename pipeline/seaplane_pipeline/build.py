@@ -37,6 +37,8 @@ log = logging.getLogger(__name__)
 BUILDS_JSON = "https://build-metadata.protomaps.dev/builds.json"
 BUILD_BASE = "https://build.protomaps.com/"
 BASEMAP_WARN_BYTES = 150 * 1024 * 1024
+# z12 keeps the Michigan extract at ~125 MB (z14 is ~550 MB). Lakes carry their own z14 detail layer.
+BASEMAP_MAXZOOM = 12
 
 LAKES_FLAGS = [
     "-z14", "-Z6",
@@ -49,6 +51,8 @@ LAKES_FLAGS = [
 
 def add_args(sp) -> None:
     sp.add_argument("--skip-basemap", action="store_true", help="Do not extract the Protomaps basemap")
+    sp.add_argument("--basemap-maxzoom", type=int, default=BASEMAP_MAXZOOM,
+                    help=f"Max zoom for the basemap extract (default {BASEMAP_MAXZOOM}; 14 is ~550 MB)")
     sp.add_argument("--skip-tiles", action="store_true", help="Only write the JSON files")
 
 
@@ -156,13 +160,13 @@ def latest_protomaps_build() -> str:
     return builds[-1]["key"]  # sorted oldest -> newest
 
 
-def extract_basemap(dest: Path, force: bool = False) -> Path | None:
+def extract_basemap(dest: Path, force: bool = False, maxzoom: int = BASEMAP_MAXZOOM) -> Path | None:
     if dest.exists() and not force:
         log.info("basemap.pmtiles already present (%.1f MB); skipping", dest.stat().st_size / 1e6)
         return dest
     key = latest_protomaps_build()
     bbox = ",".join(str(v) for v in MICHIGAN_BBOX)
-    cmd = ["pmtiles", "extract", BUILD_BASE + key, str(dest), f"--bbox={bbox}", "--maxzoom=14"]
+    cmd = ["pmtiles", "extract", BUILD_BASE + key, str(dest), f"--bbox={bbox}", f"--maxzoom={maxzoom}"]
     log.info("extracting basemap from %s (this takes a while)", key)
     proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
     if proc.returncode != 0:
@@ -421,7 +425,7 @@ def run(cfg: Config, args) -> int:
 
     basemap = out / "basemap.pmtiles"
     if not getattr(args, "skip_basemap", False):
-        if extract_basemap(basemap, force=cfg.force):
+        if extract_basemap(basemap, force=cfg.force, maxzoom=getattr(args, "basemap_maxzoom", BASEMAP_MAXZOOM)):
             emitted.append("basemap.pmtiles")
     else:
         log.info("skipping basemap extract (--skip-basemap)")

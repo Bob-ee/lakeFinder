@@ -420,3 +420,13 @@ All under `pipeline/tests/fixtures/gis/` (repo-relative from `/Users/bobbywhitel
    permanent substitute regardless.
 3. None of the ArcGIS Online/opendata hosts needed authentication or hit a rate limit during this
    recon; no API keys are required for anything above.
+
+
+## Addendum (integration, 2026-09-15)
+
+- **County and township names** come from `https://gisagocss.state.mi.us/arcgis/rest/services/OpenData/michigan_geographic_framework/MapServer`
+  layer 0 (Counties, 83 features) and layer 2 (Minor Civil Divisions, 1,520 features), spatial-joined on the lake
+  centroid. Both are cached in `data/cache/`. No Census TIGER download is needed.
+- **Basemap zoom:** the z14 Michigan extract is ~550 MB; the z12 extract is 125 MB and is what `build` produces by
+  default (`--basemap-maxzoom` overrides). Lakes carry their own z14 detail in `lakes.pmtiles`.
+- `gisago.mcgi.state.mi.us` also reset connections from this MacBook; `gisagocss.state.mi.us` is used throughout.

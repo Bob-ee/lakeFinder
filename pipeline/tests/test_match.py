@@ -75,7 +75,8 @@ def restriction(rid, name, county="Oakland", plss=None, **kw):
 
 def test_score_name_tiers():
     assert match.score_name("long", "long") == (1.0, "exact")
-    assert match.score_name("big school lot", "little school lot") == (0.6, "qualifier")
+    assert match.score_name("school lot", "little school lot") == (0.6, "qualifier")
+    assert match.score_name("big school lot", "little school lot") == (0.15, "qualifier-conflict")
     score, method = match.score_name("mud", "mud creek")
     assert method == "tokens" and 0 < score < 0.6
     assert match.score_name("silver", "round") == (0.0, "none")
@@ -312,3 +313,13 @@ def test_run_writes_matches_and_unmatched(tmp_path, monkeypatch):
         "method": "exact+plss", "needs_review": False,
     }
     assert [u["restriction_id"] for u in unmatched] == ["bbb"]  # rescinded "ccc" is never considered
+
+
+def test_conflicting_qualifiers_do_not_match():
+    from seaplane_pipeline.match import score_name
+
+    score, method = score_name("little school lot", "big school lot")
+    assert method == "qualifier-conflict"
+    assert score + 0.2 + 0.1 < 0.5, "section and county bonuses must not lift a sibling lake into the review band"
+    assert score_name("school lot", "big school lot") == (0.6, "qualifier")
+    assert score_name("big school lot", "big school lot") == (1.0, "exact")

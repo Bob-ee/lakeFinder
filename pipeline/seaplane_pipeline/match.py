@@ -18,6 +18,7 @@ Scoring
 |---|---|
 | `name_norm` exact | 1.0 |
 | qualifier-stripped names equal (big/little/north/south/upper/lower/east/west/middle) | 0.6 |
+| qualifier-stripped names equal but the qualifiers conflict (Little vs Big) | 0.15 |
 | token overlap | 0.4 x Jaccard |
 | near-identical spelling (difflib ratio >= 0.85) | 0.5 x ratio |
 | lake intersects the section itself, not just the 1 km buffer | +0.2 |
@@ -96,6 +97,38 @@ def plss_keys(plss: list[dict] | None) -> set[str]:
     return keys
 
 
+WATERWAY_RE = re.compile(
+    r"\b(rivers?|creeks?|channels?|canals?|drains?|bayous?|harbou?rs?|straits?|dams?|tributar(y|ies)|inlets?|"
+    r"outlets?|cuts?|sloughs?|marsh(es)?|swamps?|floodings?|backwaters?|bays?)\b",
+    re.IGNORECASE,
+)
+NAME_SUFFIX_RE = re.compile(r"\s+(-|–|—|including|incl\.?|and channels?|and tributaries|and the|near|at|in)\s+.*$", re.IGNORECASE)
+
+
+def is_waterway_name(raw_name: str) -> bool:
+    """True for DNR entries that describe a river, creek, channel, harbor, or bay; those have no lake polygon."""
+    head = NAME_SUFFIX_RE.sub("", raw_name or "")
+    return bool(WATERWAY_RE.search(head))
+
+
+def name_variants(raw_name: str) -> list[str]:
+    """Normalized alternates for a raw DNR header, most specific first (never includes the empty string)."""
+    out: list[str] = []
+    head = NAME_SUFFIX_RE.sub("", raw_name or "").strip()
+    for cand in (head, re.sub(r"\s*\(.*?\)\s*", " ", head)):
+        norm = ids.normalize_name(cand)
+        if norm and norm not in out:
+            out.append(norm)
+    return out
+
+
+_QUALIFIER_WORDS = frozenset({"big", "little", "north", "south", "east", "west", "upper", "lower", "middle"})
+
+
+def _qualifiers(norm: str) -> frozenset[str]:
+    return frozenset(t for t in norm.split() if t in _QUALIFIER_WORDS)
+
+
 def score_name(restriction_norm: str, lake_norm: str) -> tuple[float, str]:
     """Name-only score and the method that produced it."""
     if not restriction_norm or not lake_norm:
@@ -103,6 +136,10 @@ def score_name(restriction_norm: str, lake_norm: str) -> tuple[float, str]:
     if restriction_norm == lake_norm:
         return 1.0, "exact"
     if ids.strip_qualifiers(restriction_norm) == ids.strip_qualifiers(lake_norm):
+        # "Little School Lot" vs "Big School Lot" are different lakes: keep the pair below the review floor
+        # even with the section and county bonuses, so it surfaces in the review queue instead of matching.
+        if _qualifiers(restriction_norm) and _qualifiers(lake_norm) and _qualifiers(restriction_norm) != _qualifiers(lake_norm):
+            return 0.15, "qualifier-conflict"
         return 0.6, "qualifier"
     a, b = ids.name_tokens(restriction_norm), ids.name_tokens(lake_norm)
     union = a | b
@@ -202,7 +239,8 @@ class Matcher:
         return best_score, best_row, best_method
 
     def match_one(self, rec: dict) -> tuple[Match | None, dict | None]:
-        name_norm = rec.get("lake_name_norm") or ids.normalize_name(rec.get("lake_name_raw"))
+        raw_name = rec.get("lake_name_raw") or ""
+        name_norm = rec.get("lake_name_norm") or ids.normalize_name(raw_name)
         county = rec.get("county")
         keys = plss_keys(rec.get("plss"))
         section_geom = self.section_geometry(keys) if keys else None
@@ -214,17 +252,33 @@ class Matcher:
             source = "county" if not keys else "county-plss-miss"
 
         score, row, method = self.best(name_norm, county, rows, inside)
+        # Headers like "Spring Lake - Spring Lake Township" or "Lake Leelanau Including Carp River"
+        # carry a suffix the hydrography layer never has; retry on the trimmed name.
+        for variant in name_variants(raw_name):
+            if variant == name_norm or score >= ACCEPT:
+                break
+            v_score, v_row, v_method = self.best(variant, county, rows, inside)
+            if v_score > score:
+                score, row, method = v_score, v_row, f"{v_method}-trimmed"
         if row is None or score < REVIEW_FLOOR:
+            waterway = is_waterway_name(raw_name)
+            if rows and not waterway:
+                reason = "no candidate scored 0.5 or better"
+            elif waterway:
+                reason = "not a lake polygon (river/creek/channel/bay)"
+            else:
+                reason = f"no candidate lakes ({source})"
             return None, {
                 "restriction_id": rec.get("restriction_id"),
-                "lake_name_raw": rec.get("lake_name_raw"),
+                "lake_name_raw": raw_name,
                 "lake_name_norm": name_norm,
                 "county": county,
                 "township": rec.get("township"),
                 "candidates": len(rows),
                 "best_score": round(float(score), 3),
                 "best_lake_id": int(self.lakes["id"].iat[row]) if row is not None else None,
-                "reason": "no candidate scored 0.5 or better" if rows else f"no candidate lakes ({source})",
+                "kind": "waterway" if waterway else "lake",
+                "reason": reason,
             }
         return (
             Match(
