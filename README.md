@@ -44,8 +44,9 @@ cd web && npm install && npm run dev
 | Verdicts | restricted 484 · conditional 207 · clear 9,612 · unknown 480 (unnamed) |
 | Data pack | 158 MB total: basemap 125 MB (z0–12), lakes 14 MB, index 4 MB |
 
-The review queue (`uv run seaplane review`) lists the ~150 lake-named restrictions that still need a hand entry in
-`data/manual/overrides.yaml`. The MAC seaplane record is not loaded yet; the app says so on every lake.
+The review queue (`uv run seaplane review`) lists the ~140 lake-named restrictions that still need a hand entry in
+`data/manual/overrides.yaml`; `uv run seaplane suggest` writes paste-ready candidates for them to
+`data/manual/overrides.suggested.yaml`. The MAC seaplane record is not loaded yet; the app says so on every lake.
 
 ## Phases
 

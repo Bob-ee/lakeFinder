@@ -9,6 +9,8 @@ uv run seaplane --help
 uv run seaplane --county oakland fetch      # crawl one county + GIS sources
 uv run seaplane --county oakland parse-dnr
 uv run seaplane all                          # everything, statewide
+uv run seaplane review                       # print the review queue
+uv run seaplane suggest                      # write data/manual/overrides.suggested.yaml (paste-ready entries)
 uv run pytest
 ```
 

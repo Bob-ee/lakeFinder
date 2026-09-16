@@ -18,6 +18,7 @@ STAGES = [
     ("classify", "Run the shared rules engine"),
     ("build", "Emit tiles, index.json, restrictions.json, pack.json"),
     ("review", "Print the review queue"),
+    ("suggest", "Write data/manual/overrides.suggested.yaml from the review queue"),
     ("all", "Run every stage in order (fetch through build)"),
 ]
 
@@ -76,7 +77,7 @@ def main(argv: list[str] | None = None) -> int:
         cfg.run_date = args.run_date
     cfg.ensure_dirs()
 
-    stages = [s for s, _ in STAGES if s not in ("all", "review")] if args.stage == "all" else [args.stage]
+    stages = [s for s, _ in STAGES if s not in ("all", "review", "suggest")] if args.stage == "all" else [args.stage]
     for stage in stages:
         mod = _module_for(stage)
         if mod is None:
