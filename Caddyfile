@@ -13,11 +13,15 @@
 		header @pmtiles Content-Type application/octet-stream
 		header @pmtiles Accept-Ranges bytes
 		header Cache-Control "public, max-age=300"
+		# The briefing is rewritten several times a day by the api service.
+		@briefing path /briefing.json
+		header @briefing Cache-Control "no-cache"
 	}
 
-	# API (wind proxy in v2, saved-lake sync in v4).
+	# API (briefing + settings now, wind proxy in v2, saved-lake sync in v4).
+	# Compose resolves `api`; a brew/launchd install sets API_UPSTREAM=127.0.0.1:8000.
 	handle /api/* {
-		reverse_proxy api:8000
+		reverse_proxy {$API_UPSTREAM:api:8000}
 	}
 
 	# App shell.

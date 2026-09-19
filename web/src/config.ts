@@ -12,7 +12,12 @@ export const DATA_FILES = {
   lakes: `${DATA_BASE}/lakes.pmtiles`,
   usableWater: `${DATA_BASE}/usable_water.pmtiles`,
   overlays: `${DATA_BASE}/overlays.pmtiles`,
+  /** Written by the api service, read as a plain static file. Not part of pack.json. */
+  briefing: `${DATA_BASE}/briefing.json`,
 } as const;
+
+/** The api service (settings, refresh, health). Caddy and the Vite dev server proxy this. */
+export const API_BASE = "/api";
 
 /** Protomaps hosts the glyph and sprite assets that @protomaps/basemaps layers reference. */
 export const BASEMAP_ASSETS = {
@@ -86,11 +91,30 @@ export const STORAGE_KEYS = {
   layers: "seaplane.layers",
 } as const;
 
+/** v2 added the `briefing` store; state/db.ts creates every store behind a contains check. */
 export const IDB = {
   name: "seaplane",
-  version: 1,
-  stores: { saved: "saved", recent: "recent", wind: "wind" },
+  version: 2,
+  stores: { saved: "saved", recent: "recent", wind: "wind", briefing: "briefing" },
 } as const;
+
+export const BRIEFING = {
+  /** Key of the single row in the `briefing` store. */
+  cacheKey: "latest",
+  /** Refetch this often while the tab is visible. */
+  pollMs: 10 * 60 * 1000,
+  /** Past this the age badge is styled "stale". */
+  staleMinutes: 6 * 60,
+  /** `?briefing=1` opens the card; also useful as a home-screen shortcut. */
+  urlParam: "briefing",
+} as const;
+
+/**
+ * Same posture as the verdict disclaimer, for weather rather than law. It must not read as
+ * an authorization: no "legal", no "safe", no "go" or "no-go".
+ */
+export const BRIEFING_DISCLAIMER =
+  "Not a preflight weather briefing. Check the official METAR, TAF and forecast before operating.";
 
 export const SEARCH = {
   debounceMs: 100,

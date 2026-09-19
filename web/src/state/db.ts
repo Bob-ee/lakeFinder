@@ -17,10 +17,22 @@ export interface SavedRecord {
   last_landed: string | null;
 }
 
+/**
+ * Last good `/data/briefing.json`, so the card still reads offline. One row, key "latest"
+ * (data-contract "Client URL and storage"). `payload` is the raw parsed file; the loader
+ * owns its shape so a schema bump does not have to touch the database layer.
+ */
+export interface BriefingRecord {
+  key: string;
+  stored_at: number;
+  payload: unknown;
+}
+
 interface SeaplaneDB extends DBSchema {
   saved: { key: number; value: SavedRecord };
   recent: { key: number; value: RecentRecord };
   wind: { key: string; value: { key: string; fetched_at: number; payload: unknown } };
+  briefing: { key: string; value: BriefingRecord };
 }
 
 let dbPromise: Promise<IDBPDatabase<SeaplaneDB>> | null = null;
@@ -34,6 +46,9 @@ export function db(): Promise<IDBPDatabase<SeaplaneDB>> | null {
   if (!dbPromise) {
     try {
       dbPromise = openDB<SeaplaneDB>(IDB.name, IDB.version, {
+        // Every store is created behind a `contains` check, so this one upgrade function
+        // serves a fresh database and every version bump alike; existing stores are left
+        // untouched when the version moves (v1 -> v2 added `briefing`).
         upgrade(database) {
           if (!database.objectStoreNames.contains("saved")) {
             database.createObjectStore("saved", { keyPath: "id" });
@@ -43,6 +58,9 @@ export function db(): Promise<IDBPDatabase<SeaplaneDB>> | null {
           }
           if (!database.objectStoreNames.contains("wind")) {
             database.createObjectStore("wind", { keyPath: "key" });
+          }
+          if (!database.objectStoreNames.contains("briefing")) {
+            database.createObjectStore("briefing", { keyPath: "key" });
           }
         },
       });

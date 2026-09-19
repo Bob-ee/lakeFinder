@@ -1,6 +1,6 @@
 # Handoff: Michigan seaplane lake map
 
-Written 2026-09-19 for the next agent picking this up. Read this first, then `docs/design.md` (the spec) and
+Written 2026-09-19 for the next agent picking this up; updated the same day after the briefing (step B) was built. Read this first, then `docs/design.md` (the spec) and
 `docs/data-contract.md` (the schemas every part is built against). `README.md` has the status table; `CLAUDE.md`
 has the one-screen orientation.
 
@@ -13,11 +13,13 @@ reads as a build order.
 
 | part | state | verify with |
 |---|---|---|
-| `pipeline/` (Python 3.12, uv) | all 8 design stages plus `suggest`; statewide run takes ~5 min warm | `cd pipeline && uv run pytest -q` (252 pass) and `uv run ruff check seaplane_pipeline tests` |
+| `pipeline/` (Python 3.12, uv) | all 8 design stages plus `suggest`; `geometry` also computes `extent_by_bearing`; statewide run takes ~6 min warm | `cd pipeline && uv run pytest -q` (259 pass) and `uv run ruff check seaplane_pipeline tests` |
 | `rules/` (JS, zero deps) | 24 rules, shared fixtures, CLI used by the pipeline, module imported by the client | `cd rules && npm test` (117 pass) |
 | `web/` (Vite, TS, MapLibre) | map with verdict outlines, search, 3-snap sheet / iPad panel, `?lake=`, disclaimer, client-side rules engine | `cd web && npm run typecheck && npm run build` |
-| hosting | `Caddyfile`, `docker-compose.yml` written, **not deployed anywhere yet** | |
-| data | `data/out/` holds a full statewide pack (158 MB); gitignored, rebuild with `uv run seaplane all` | `pmtiles show data/out/lakes.pmtiles` |
+| `api/` (FastAPI, Python 3.12, uv) | briefing generator with the evening outlook, in-process scheduler, settings, airport lookup; `/api/wind/*` is an empty slot | `cd api && uv run pytest -q` (218 pass) and `uv run ruff check .` |
+| briefing client | Briefing tab + chip under the search bar, outlook hour strip and run-history chips, settings dialog, `?briefing=1` | same web commands; screenshots were checked at 390 px and 1180 px, light and dark |
+| hosting | `Caddyfile`, `docker-compose.yml` written (api has rw data + manual mounts, `API_UPSTREAM` for a non-Docker install), **not deployed anywhere yet** | |
+| data | `data/out/` holds a full statewide pack (158 MB) including `lake_extents.json` (6,054 lakes) and a live `briefing.json`; gitignored, rebuild with `uv run seaplane all` | `pmtiles show data/out/lakes.pmtiles` |
 
 Statewide numbers as of the last run: 83 county pages, 1,134 restriction records (34 flagged), 10,783 lakes,
 764 of 1,119 active restrictions matched, verdicts restricted 484 / conditional 207 / clear 9,612 / unknown 480.
@@ -78,6 +80,18 @@ web dev server / Caddy serve data/out at /data/ ──▶ client loads index.jso
 
 ## 4. Known issues and open items
 
+- **Briefing limits are placeholders.** `docs/briefing-design.md` section 8 lists what only Bobby can supply (SeaRey
+  wave, crosswind, wind and gust numbers, VFR minimums, radius, morning window). He edits them in the app's briefing
+  settings; nothing needs code. First real run note: Open-Meteo gusts read high (3 kt G12 scored "marginal, gusts"
+  on the 8 kt gust-spread default), so expect him to loosen `gust_spread_ok` or ask for a gust floor.
+- **Ceiling comes only from the METAR and TAF** (neither Open-Meteo nor NWS hourly carries a cloud base). Hours the
+  TAF does not cover read `ceiling_known: false` and the ceiling factor is skipped. KPTK's TAF covers the next
+  morning from the 18:00 run on, so the evening outlook is normally covered.
+- **Briefing nits:** `home_airport.runways` has no length, so parallel runways tie and the label can name the shorter
+  one (add `length_ft`; aviationweather returns `dimension`). NDBC buoys are fetched and parsed but unused until the
+  pipeline tags Great Lakes shoreline lakes. The steep-chop rule exists (`wave.steep_chop`) but is not wired in.
+  `web/` has no test runner.
+
 - **Review queue.** 138 lake-named restrictions are unmatched and 76 matches are low-confidence. Bobby is working
   through `data/manual/overrides.suggested.yaml` (regenerate with `uv run seaplane suggest`). When he adds entries
   to `overrides.yaml`, rerun `match overlay classify build --skip-basemap`.
@@ -104,18 +118,19 @@ copy or rsync `data/out` (or run the pipeline there), Caddy on :8080 behind `tai
 tailnet, open it on the phone and iPad, add to home screen. Then a `launchd` (or cron container) job for the weekly
 pipeline with a diff notification (design phase 4 mentions this; the diff file already exists).
 
-**B. Daily briefing (Bobby's newest ask, designed in `docs/briefing-design.md`).** Deterministic, no LLM: home
-airport adjustable in the app, wind/gust/crosswind/ceiling/visibility/convection/density altitude/ice scoring in
-3-hour blocks, per-lake wave height from wind and fetch (SPM 1984), ranked nearby lakes, refreshed every 3 hours by
-the new `api` service and written to `data/out/briefing.json`. Needs a pipeline addition (`extent_by_bearing`,
-`lake_extents.json`) and the `api` service the wind layer also needs, so build the service once for both. Section 8
-of that doc lists the numbers only Bobby can supply; use the placeholders until he does.
+**B. Daily briefing: BUILT 2026-09-19** (`docs/briefing-design.md`, schemas in the contract's "Briefing" section).
+Deterministic, no LLM. Runs at 06, 09, 12, 15, 18, 20, 22 local; the 18:00, 20:00, and 22:00 runs are Bobby's
+"plan tomorrow morning" outlook (hourly sunrise-to-noon scoring, best window, fog factor, run history with trend,
+confidence, optional ntfy push). What is left: deploy it with step A (the api needs a `launchd` job, see
+`api/README.md`, and the Mac must stay awake for the evening runs), Bobby's real limits, and deciding on ntfy.
+To try it locally: `cd api && uv run seaplane-api` and `cd web && npm run dev`, then open `/?briefing=1`.
 
 **C. Phase 2, flight mode.** Design sections 7.5, 7.7, 7.9. Client slots already exist and are wired as no-ops:
 `web/src/location/` (geolocation, follow-me, heading-up, wake lock), `web/src/lists/` (Nearest tab with forward
 cone; the row component has a `trailing` slot for distance/bearing), the recenter control (currently home view).
-Wind needs the `api` service (FastAPI, `/api/wind/*`) that the Compose file references but that does not exist yet;
-the Synoptic token is server-side. `chord_bearing_deg` is already in `index.json` for the crosswind component. The
+Wind needs `/api/wind/*` on the `api` service: the service now exists (`api/seaplane_api/wind.py` is the documented
+empty slot, and `fetch/aviationweather.py`, `fetch/openmeteo.py`, `fetch/ndbc.py` already cover three of the
+sources); the Synoptic token is server-side. `chord_bearing_deg` is already in `index.json` for the crosswind component. The
 usable-water layer already renders at z12+.
 
 **D. Phase 3, offline.** Plan is written in `web/src/sw/README.md` (cache-first shell, OPFS pack with sha256, pmtiles
@@ -145,4 +160,5 @@ contract first for anything that changes a schema. Ask him which should jump the
   for integration and verification. He reads terse status updates and a final recap.
 - Commits: plain messages describing the change, `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`
   trailer. Never commit `data/raw`, `data/work`, `data/out`, or `*.pmtiles`.
-- Run the three test suites before every commit; they take under 10 seconds combined.
+- Run the four test suites before every commit (pipeline, rules, api, web typecheck + build); under 15 seconds combined.
+- Vite's dev server listens on `localhost` (IPv6), not `127.0.0.1`; curl it as `http://localhost:<port>`.

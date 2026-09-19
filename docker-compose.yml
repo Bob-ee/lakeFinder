@@ -16,9 +16,12 @@ services:
     restart: unless-stopped
     environment:
       - SYNOPTIC_TOKEN=${SYNOPTIC_TOKEN:-}
+      - SEAPLANE_DATA_OUT=/srv/data
+      - SEAPLANE_DATA_MANUAL=/srv/manual
     volumes:
-      - lake_data:/srv/data:ro
-    profiles: ["v2"]
+      - lake_data:/srv/data            # rw: writes briefing.json next to the pack
+      - ./data/manual:/srv/manual      # rw: settings.json
+    profiles: ["api"]
 
   pipeline:
     build: ./pipeline

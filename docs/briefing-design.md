@@ -1,7 +1,9 @@
 # Daily briefing: "Is it a SeaRey day?"
 
-Added 2026-09-19 from Bobby's idea. Status: designed, not started. Belongs to the roadmap as step B in
-`docs/handoff.md` (it shares the `api` service with the wind layer).
+Added 2026-09-19 from Bobby's idea. Status: in progress. Belongs to the roadmap as step B in `docs/handoff.md`
+(it shares the `api` service with the wind layer). Section 3.4 (evening outlook for tomorrow morning) was added
+the same day from Bobby's follow-up ask. **Schemas and endpoints live in `docs/data-contract.md`**; this file is
+the reasoning and the algorithm.
 
 ## 1. Purpose
 
@@ -15,6 +17,8 @@ Hard constraints from Bobby:
 - **No LLM, no tokens.** Every number comes from a deterministic algorithm over public feeds. The output is
   templated text plus structured data.
 - **Updates itself every few hours** whether or not the app is open.
+- **A forecast for tomorrow morning is ready at 18:00, 20:00, and 22:00 local every evening** so Bobby can plan the
+  morning the night before and watch whether the forecast is holding (section 3.4).
 - **Home airport is adjustable in the app.**
 
 Not a weather product for legal preflight. The briefing card carries the same disclaimer posture as the verdicts:
@@ -28,7 +32,7 @@ All keyless or free tier, all fetched server-side and cached. Failures degrade o
 |---|---|---|---|
 | Home airport METAR, nearby METARs | aviationweather.gov | `/api/data/metar?ids=KPTK&format=json` and `?bbox=` | every run |
 | Home airport TAF | aviationweather.gov | `/api/data/taf?ids=KPTK&format=json` | every run |
-| Hourly forecast at the airport and at each candidate lake | Open-Meteo | `/v1/forecast?latitude=a,b,c&longitude=x,y,z&hourly=wind_speed_10m,wind_gusts_10m,wind_direction_10m,temperature_2m,precipitation,precipitation_probability,weather_code,cloud_cover,visibility,cape,surface_pressure&wind_speed_unit=kn&forecast_days=2&timezone=America/Detroit` (multi-point in one request; batch 50 lakes per call) | every run |
+| Hourly forecast at the airport and at each candidate lake | Open-Meteo | `/v1/forecast?latitude=a,b,c&longitude=x,y,z&hourly=wind_speed_10m,wind_gusts_10m,wind_direction_10m,temperature_2m,dew_point_2m,precipitation,precipitation_probability,weather_code,cloud_cover,visibility,cape,pressure_msl&wind_speed_unit=kn&forecast_days=2&timezone=America/Detroit` (multi-point in one request; batch 50 lakes per call) | every run |
 | NWS alerts (lake wind advisory, small craft advisory, wind advisory, convective) | api.weather.gov | `/alerts/active?point=lat,lon` | every run |
 | NWS hourly gridpoint forecast (sky cover, wind, as a second opinion for ceiling) | api.weather.gov | `/points/{lat},{lon}` then the `forecastHourly` URL | every run |
 | Great Lakes buoy observations (only for lakes flagged shoreline) | NDBC | `latest_obs.txt` filtered by bbox | every run |
@@ -36,6 +40,14 @@ All keyless or free tier, all fetched server-side and cached. Failures degrade o
 | Lake geometry: verdict, chord, extent by bearing, public access, distance from home | pipeline output | `index.json`, `lake_extents.json` (new, section 5) | at pipeline build |
 
 Open-Meteo's marine API covers oceans and the Great Lakes only; inland lake waves are computed, not fetched.
+
+Learned from the live feeds (2026-09-19): aviationweather airport `elev` is meters and runway `alignment` is degrees
+true; METAR `altim` is hPa; TAF and METAR visibility can be strings ("10+", "1 1/2"); Open-Meteo visibility is
+meters, has no ceiling product, and `pressure_msl` (not `surface_pressure`) is the altimeter source for density
+altitude; NWS `forecastHourly` has no sky cover, so **ceiling comes only from the METAR and TAF** and is "unknown"
+for hours neither covers. Lakes share forecast points on a 0.1° grid: 309 candidates near KPTK become 78 points and
+3 Open-Meteo calls; a full run is 8 HTTP requests and under 2 seconds. NDBC is fetched and parsed but unused until
+the pipeline tags Great Lakes shoreline water.
 
 ## 3. The algorithm
 
@@ -63,6 +75,7 @@ defaults are placeholders Bobby must confirm.
 | precipitation | none, prob < 30% | light, prob < 60% | otherwise | |
 | convection | `cape` < 500 and no TS weather code | `cape` < 1000 | otherwise, or any convective alert | J/kg |
 | density altitude | ≤ `da_ok` | ≤ `da_max` | above | 3500 / 5000 ft |
+| fog | otherwise | temp/dewpoint spread ≤ `fog_spread_f` with wind ≤ 5 kt ("fog risk") | model visibility < `vis_min`, or TAF carries FG/FZFG or vis < `vis_min` for the hour | 3 °F |
 | temperature | ≥ `temp_water_min` (water ops) | ≥ freezing (land only) | below freezing | 40 °F |
 | NWS alerts | none | wind advisory | lake wind advisory, small craft, any convective or winter alert | |
 
@@ -85,8 +98,11 @@ Candidate lakes: verdict `clear` or `conditional`, within `radius_nm` of the hom
    along the wind bearing: `extent_by_bearing[bin(wind_dir)]` from `lake_extents.json` (16 bins of 22.5°). Require
    ≥ `min_run_ft` (default 2000, same knob as `min_chord_ft`). If the wind is light (< 5 kt) use the longest chord
    instead and skip the crosswind check.
-3. **Fetch** is the same extent (waves build along the wind over the same line the aircraft uses). Being exact is
-   not needed: use the extent bin as the fetch length `F` in meters.
+3. **Fetch** is the largest extent of the wind bin and its two neighbors, `max(extent[b-1], extent[b], extent[b+1])`,
+   as the fetch length `F` in meters. The run uses the wind bin alone. Reason: `extent_by_bearing` samples 40 lines
+   per bearing and can undershoot on irregular shorelines (Orchard Lake's 90° bin reads 6,616 ft against an 8,084 ft
+   chord that threads a narrow neck). Undershooting is the conservative direction for the run and the wrong one for
+   fetch, and SPM practice is to consider an arc around the wind rather than one radial.
 4. **Significant wave height** from the SPM 1984 deep-water fetch-limited relation (USACE Shore Protection Manual,
    1984, eq. 3-33/3-34):
 
@@ -97,7 +113,9 @@ Candidate lakes: verdict `clear` or `conditional`, within `radius_nm` of the hom
    Tp  = 0.2857 * UA / g * (g * F / UA^2)^(1/3)  # seconds
    ```
 
-   Cap `Hs` at the fully developed value `Hs_fd = 2.482e-2 * UA^2 / g`. Deep water overestimates on shallow
+   Cap `Hs` at the fully developed value `Hs_fd = 2.433e-1 * UA^2 / g` (SPM 1984; an earlier draft of this doc had
+   2.482e-2, ten times too small, which would have capped the worked example below). The cap only binds past
+   roughly 370 km of fetch, so it never matters inland. Deep water overestimates on shallow
    inland lakes, which is the conservative direction. Worked check: 20 kt (10.3 m/s), fetch 5 km → about 0.45 m
    (1.5 ft); fetch 40 km (Lake St. Clair) → about 1.3 m (4.2 ft). Small lakes stay calm in wind that makes the big
    ones unusable, which is exactly what the feature is for.
@@ -110,13 +128,46 @@ Candidate lakes: verdict `clear` or `conditional`, within `radius_nm` of the hom
 7. **Ice gate:** if any of the last 5 days had a daily max temperature below 32 °F, or the date is between
    `ice_season_start` and `ice_season_end` (default Dec 1 to Apr 1), mark water ops "likely frozen, verify" and
    exclude from recommendations.
-8. Lake score = worst of the airport block score (you have to get there) and the lake's own wave, run, and
-   crosswind checks. Rank by score, then by predicted `Hs` ascending, then by distance.
+8. Lake score = the lake's own wave, run, water-crosswind, and ice checks. The airport weather score is *not* folded
+   in (changed 2026-09-19 after the first real run: every row read "marginal, ceiling", which repeats the header
+   and hides the water). Rank by score, then distance, then `Hs`. Ranking on `Hs` first put eight 2,000 ft ponds
+   36 nm out ahead of Cass and Orchard; small water still wins on windy days through the score.
 
 Output the top `n_lakes` (default 8) with, per lake: name, distance and bearing from home, verdict, `Hs` in inches,
 run available in the wind, wind at the lake, and the limiting factor.
 
-### 3.4 Text rendering
+### 3.4 Evening outlook for tomorrow morning (added 2026-09-19)
+
+Bobby plans morning flights the night before. Every run computes an `outlook` object; the 18:00, 20:00, and 22:00
+local runs (`settings.outlook.times_local`) are the ones he will read, and each of them is recorded so the card can
+show whether the forecast is holding.
+
+- **Target date.** Tomorrow when local time is at or past `morning_end_local` (default 12:00), otherwise today. The
+  06:00 run therefore refines *this* morning and its trend is measured against last night's 22:00 run.
+- **Window.** `morning_start` (default `sunrise`; also `civil_twilight` or `HH:MM`) to `morning_end_local`.
+- **Hourly, not 3-hour blocks.** Each whole hour that overlaps the window is scored with the section 3.2 factor table
+  using the forecast for that hour. The TAF is used for ceiling, visibility, and fog whenever it covers the hour (an
+  18Z TAF covers the next morning); otherwise Open-Meteo cloud cover and visibility with the NWS hourly sky cover as
+  the second opinion. Fog matters most here: radiation fog over the lakes at sunrise is the common morning killer.
+- **Outlook score** = the best level L for which at least `min_window_hours` (default 2) consecutive hours all score
+  L or better. `best_window` = the earliest longest such run. When the score is not favorable, `limiting` is the
+  limiting factor of the worst hour inside `best_window`. When it is favorable, `watch` names what ends the window,
+  if anything ("gusts after 11:00").
+- **Lakes.** The section 3.3 ranking evaluated over `best_window` (the whole window when there is none), each lake
+  taking its worst hour (max `Hs`, min run).
+- **Run history and trend.** Runs whose scheduled time is in `outlook.times_local` (and the first run of the target
+  morning) append `{at, generated_at, score, best_window, limiting, max_gust_kt}` to `outlook.runs`, carried forward
+  from the previous `briefing.json` while `target_date` is unchanged. `trend` compares with the previous entry:
+  score rank first, then `max_gust_kt` changing by 3 kt or more; `improving | steady | worsening`, `null` on the
+  first run.
+- **Confidence** (deterministic): `high` when the TAF covers the window and agrees with the model on the
+  ceiling/visibility score, NWS and Open-Meteo peak morning wind differ by ≤ 4 kt, and the score did not change
+  since the previous run; `low` when the two wind forecasts differ by more than 8 kt or the score moved two levels;
+  `medium` otherwise. `confidence_reasons` lists the plain-language causes.
+- **Push (optional).** When `settings.notify.ntfy_url` is set, each outlook run posts the outlook summary line to
+  that ntfy topic. Off by default; nothing leaves the tailnet until Bobby sets it.
+
+### 3.5 Text rendering
 
 Template strings only, e.g.:
 
@@ -124,17 +175,28 @@ Template strings only, e.g.:
 > advisory on Lake St. Clair. Best water: Lake Angelus is restricted; Cass Lake 6 in chop with 4,100 ft run into
 > the wind; Orchard Lake 5 in; Big Lake 3 in. Tomorrow: marginal, gusts to 22 after noon.
 
-Numbers are formatted by the same helpers the sheet uses (`web/src/ui/format.ts`), or their Python equivalents on
-the server, with a shared fixture so both round the same way.
+Outlook line, e.g.:
+
+> **Tomorrow morning (Sun): favorable 08:00–12:00.** Wind 240/6 G9, no ceiling, vis 10. Fog risk until 08:00.
+> Best water: Cass Lake 2 in, Orchard Lake 2 in. Steady since 18:00. Confidence medium: NWS and model wind differ
+> by 6 kt.
+
+All numbers in `briefing.json` are already rounded for display on the server (kt, °F, inches, and minutes as
+integers; ceiling and density altitude to the nearest 100 ft); the client prints them as they are.
+
 
 ## 4. Architecture
 
 - **`api/` service (new, FastAPI, Python 3.12, uv).** Already referenced by `docker-compose.yml` and the Caddyfile.
   Holds the wind proxy from design section 7.9 and the briefing generator. On macOS it can run under `launchd`
   instead of Docker; either way it writes into the same directory Caddy serves.
-- **Scheduler.** An in-process loop (`asyncio` task) runs the briefing every `refresh_hours` (default 3) and
-  immediately when settings change. A cron/launchd trigger hitting `POST /api/briefing/refresh` is an acceptable
-  alternative; pick one and document it.
+- **Scheduler.** An in-process `asyncio` task wakes every 30 s and runs the briefing when a wall-clock time in
+  `schedule.run_times_local ∪ outlook.times_local` (in `settings.timezone`, DST-safe via `zoneinfo`) has passed
+  since the last run. Checking "did a scheduled time pass" rather than sleeping until the next one survives the
+  MacBook sleeping; a missed time older than 90 minutes is skipped. It also runs on startup when `briefing.json`
+  is missing or older than 3 hours, and immediately when settings change. `seaplane-api briefing --once` does one
+  run from the CLI for a launchd/cron alternative. The host must stay awake for the evening runs (`pmset`/
+  `caffeinate`; decide at deploy time).
 - **Output.** `data/out/briefing.json` (schema in section 6), atomically replaced. The client reads it as a
   static file, so it works through the normal `/data/` path and caches like everything else.
 - **Settings.** `GET/PUT /api/settings` reads and writes `data/manual/settings.json`. The app's Settings screen
@@ -151,13 +213,18 @@ the server, with a shared fixture so both round the same way.
 - `geometry` computes `extent_by_bearing`: for each lake and each of 16 bearing bins, the longest straight segment
   through the polygon along that bearing (rotate the polygon so the bearing is the x axis, sample ~40 horizontal
   lines across its height, take the longest inside segment; verify containment as the chord code does). Store as
-  16 integers (ft). `longest_chord_ft` and `chord_bearing_deg` stay as they are.
+  16 integers (ft). `longest_chord_ft` and `chord_bearing_deg` stay as they are. Built 2026-09-19: bearings are
+  corrected for grid convergence (EPSG:3078 grid north is up to ~2° off true north across Michigan), computed only
+  for lakes with a chord of 1,000 ft or more (6,054 of 10,783), and add about 50 s to the statewide `geometry` run.
 - `build` writes `data/out/lake_extents.json`: `{ "<lake_id>": [ft × 16] }` for lakes with `chord_ft` ≥ 1000.
   Separate file so `index.json` stays under its budget. Listed in `pack.json`.
 - Lake depth is not available today. If a depth source appears (Michigan DNR lake maps), the shallow-water form
   of the SPM equations can replace the deep-water one per lake.
 
-## 6. Schemas (add to `docs/data-contract.md` when implementing)
+## 6. Schemas
+
+**Superseded: the authoritative schemas are in `docs/data-contract.md` ("Briefing").** The sketches below are the
+original design and lack the outlook, schedule, and notify fields.
 
 `data/manual/settings.json`
 
@@ -208,4 +275,6 @@ the server, with a shared fixture so both round the same way.
    wind and gust personal minimums, density altitude comfort, minimum water temperature or an ice rule.
 3. Personal VFR minimums (ceiling, visibility).
 4. Radius for candidate lakes and whether public access should be required in the recommendations.
-5. Whether a morning push (ntfy/email) is wanted in the first version or the in-app card is enough.
+5. Whether the evening outlook should also push to the phone (ntfy is built in but off; it needs the ntfy app and
+   a topic URL), or the in-app card is enough.
+6. Morning window: sunrise to noon is the default. Earlier start (civil twilight) or a different end?

@@ -1,0 +1,178 @@
+{
+ "icaoId": "KPTK",
+ "dbPopTime": "2026-09-19T11:20:27.648Z",
+ "bulletinTime": "2026-09-19T11:20:00.000Z",
+ "issueTime": "2026-09-19T11:20:00.000Z",
+ "validTimeFrom": 1789819200,
+ "validTimeTo": 1789905600,
+ "rawTAF": "TAF KPTK 191120Z 1912/2012 06005KT P6SM -SHRA SCT080 OVC100 FM191300 10006KT 6SM -RA SCT025 BKN035 OVC060 FM191700 11008KT 5SM -RA BR BKN016 OVC040 FM200000 10007KT 4SM SHRA BR BKN006 OVC012 FM200600 06006KT 3SM SHRA BR OVC006",
+ "mostRecent": 1,
+ "remarks": "",
+ "lat": 42.66315,
+ "lon": -83.410018,
+ "elev": 295,
+ "prior": 5,
+ "name": "Pontiac/Oakland Intl",
+ "fcsts": [
+  {
+   "timeFrom": 1789819200,
+   "timeTo": 1789822800,
+   "timeBec": null,
+   "fcstChange": null,
+   "probability": null,
+   "wdir": 60,
+   "wspd": 5,
+   "wgst": null,
+   "wshearHgt": null,
+   "wshearDir": null,
+   "wshearSpd": null,
+   "visib": "6+",
+   "altim": null,
+   "vertVis": null,
+   "wxString": "-SHRA",
+   "notDecoded": null,
+   "clouds": [
+    {
+     "cover": "SCT",
+     "base": 8000,
+     "type": null
+    },
+    {
+     "cover": "OVC",
+     "base": 10000,
+     "type": null
+    }
+   ],
+   "icgTurb": [],
+   "temp": []
+  },
+  {
+   "timeFrom": 1789822800,
+   "timeTo": 1789837200,
+   "timeBec": null,
+   "fcstChange": "FM",
+   "probability": null,
+   "wdir": 100,
+   "wspd": 6,
+   "wgst": null,
+   "wshearHgt": null,
+   "wshearDir": null,
+   "wshearSpd": null,
+   "visib": 6,
+   "altim": null,
+   "vertVis": null,
+   "wxString": "-RA",
+   "notDecoded": null,
+   "clouds": [
+    {
+     "cover": "SCT",
+     "base": 2500,
+     "type": null
+    },
+    {
+     "cover": "BKN",
+     "base": 3500,
+     "type": null
+    },
+    {
+     "cover": "OVC",
+     "base": 6000,
+     "type": null
+    }
+   ],
+   "icgTurb": [],
+   "temp": []
+  },
+  {
+   "timeFrom": 1789837200,
+   "timeTo": 1789862400,
+   "timeBec": null,
+   "fcstChange": "FM",
+   "probability": null,
+   "wdir": 110,
+   "wspd": 8,
+   "wgst": null,
+   "wshearHgt": null,
+   "wshearDir": null,
+   "wshearSpd": null,
+   "visib": 5,
+   "altim": null,
+   "vertVis": null,
+   "wxString": "-RA BR",
+   "notDecoded": null,
+   "clouds": [
+    {
+     "cover": "BKN",
+     "base": 1600,
+     "type": null
+    },
+    {
+     "cover": "OVC",
+     "base": 4000,
+     "type": null
+    }
+   ],
+   "icgTurb": [],
+   "temp": []
+  },
+  {
+   "timeFrom": 1789862400,
+   "timeTo": 1789884000,
+   "timeBec": null,
+   "fcstChange": "FM",
+   "probability": null,
+   "wdir": 100,
+   "wspd": 7,
+   "wgst": null,
+   "wshearHgt": null,
+   "wshearDir": null,
+   "wshearSpd": null,
+   "visib": 4,
+   "altim": null,
+   "vertVis": null,
+   "wxString": "SHRA BR",
+   "notDecoded": null,
+   "clouds": [
+    {
+     "cover": "BKN",
+     "base": 600,
+     "type": null
+    },
+    {
+     "cover": "OVC",
+     "base": 1200,
+     "type": null
+    }
+   ],
+   "icgTurb": [],
+   "temp": []
+  },
+  {
+   "timeFrom": 1789884000,
+   "timeTo": 1789905600,
+   "timeBec": null,
+   "fcstChange": "FM",
+   "probability": null,
+   "wdir": 60,
+   "wspd": 6,
+   "wgst": null,
+   "wshearHgt": null,
+   "wshearDir": null,
+   "wshearSpd": null,
+   "visib": 3,
+   "altim": null,
+   "vertVis": null,
+   "wxString": "SHRA BR",
+   "notDecoded": null,
+   "clouds": [
+    {
+     "cover": "OVC",
+     "base": 600,
+     "type": null
+    }
+   ],
+   "icgTurb": [],
+   "temp": []
+  }
+ ]
+}

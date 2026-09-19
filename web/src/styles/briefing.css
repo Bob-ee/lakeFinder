@@ -1,0 +1,694 @@
+/* Daily briefing: chip, card and settings form.
+
+   Colour decision. The verdict palette is the legal one (red / amber / green / grey) and a
+   pilot must never read a favourable-weather lake as a "clear" verdict. So the weather
+   scores use a separate, monotone cool ramp - blue, violet, magenta - which shares no hue
+   with any verdict colour, and a separate geometry: verdicts are circles and round pills,
+   scores are 6 px rounded rectangles with a solid score-coloured edge. The score word is
+   always spelled out next to the colour, so nothing depends on hue alone.
+
+   The card does reuse the amber `--verdict-conditional` for attention markers - the watch
+   line, alerts, the stale age badge, the fog marker, "likely frozen, verify" - because
+   those are warnings, not scores. No weather score is ever amber, so a lake row's colour
+   still cannot be mistaken for a verdict. */
+
+:root {
+  --score-favorable: #1b5fb5;
+  --score-marginal: #6b46c1;
+  --score-unfavorable: #a01d6d;
+  --score-neutral: #6b7280;
+}
+
+:root[data-theme="dark"] {
+  --score-favorable: #7ab6ff;
+  --score-marginal: #b8a2fd;
+  --score-unfavorable: #f186d3;
+  --score-neutral: #9aa4b2;
+}
+
+[data-score="favorable"] {
+  --score: var(--score-favorable);
+}
+[data-score="marginal"] {
+  --score: var(--score-marginal);
+}
+[data-score="unfavorable"] {
+  --score: var(--score-unfavorable);
+}
+
+/* -- chip on the map ---------------------------------------------------- */
+
+.brief-chip {
+  position: absolute;
+  top: calc(var(--safe-top) + 72px);
+  left: 12px;
+  right: 12px;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  max-width: 460px;
+  padding: 0 8px 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
+  text-align: left;
+  cursor: pointer;
+}
+
+.brief-chip-mark {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 18px;
+  border-radius: 3px;
+  background: var(--score, var(--score-neutral));
+}
+
+.brief-chip-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.brief-chip-age {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.brief-chip-age.is-stale,
+.peek-score.is-stale {
+  color: var(--verdict-conditional);
+  font-weight: 700;
+}
+
+.brief-chip-caret {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+}
+
+.brief-chip-caret svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* -- briefing peek row -------------------------------------------------- */
+
+.score-bar {
+  background: var(--score, var(--score-neutral));
+}
+
+.peek-score {
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* -- card --------------------------------------------------------------- */
+
+/* `minmax(0, 1fr)` plus `min-width: 0` on the items: without both, a grid column takes the
+   min-content width of its widest descendant, and the horizontally scrolling hour and
+   block strips would push the whole card wider than the phone viewport instead of
+   scrolling inside it. */
+.brief {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+}
+
+.brief > *,
+.brief-sections > *,
+.brief-alerts > *,
+.brief-foot > * {
+  min-width: 0;
+}
+
+.brief-head-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.brief-title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  min-width: 0;
+}
+
+.brief-score {
+  font-size: 23px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--score, var(--score-neutral));
+}
+
+.brief-window {
+  font-size: 17px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.brief-actions {
+  display: flex;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.brief-icon-btn {
+  color: var(--text-muted);
+}
+
+.brief-icon-btn:disabled {
+  opacity: 0.45;
+}
+
+.brief-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.brief-airport {
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.brief-dot {
+  opacity: 0.6;
+}
+
+.brief-stale-tag {
+  border-color: var(--verdict-conditional);
+  color: var(--verdict-conditional);
+}
+
+.brief-offline {
+  font-style: italic;
+}
+
+.brief-notice {
+  margin: 10px 0 0;
+  border-color: var(--verdict-conditional);
+  color: var(--verdict-conditional);
+  font-weight: 600;
+}
+
+.brief-sections {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+}
+
+.brief-section--outlook {
+  padding: 12px;
+  margin: 0 -2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.brief-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.brief-section-head .detail-h {
+  margin-bottom: 0;
+}
+
+.brief-section-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.brief-lead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.brief-lead-window {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.brief-summary {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.brief-watch {
+  margin: 8px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--verdict-conditional);
+}
+
+.brief-confidence,
+.brief-sun {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.brief-sun {
+  font-variant-numeric: tabular-nums;
+}
+
+.brief-conf-word {
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* Score pill: a rectangle, deliberately not the round verdict pill. */
+.score-pill {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 6px;
+  border: 1px solid var(--score, var(--score-neutral));
+  border-left-width: 4px;
+  background: color-mix(in srgb, var(--score, var(--score-neutral)) 12%, var(--surface));
+  color: var(--score, var(--score-neutral));
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* -- strips (hours, 3-hour blocks) -------------------------------------- */
+
+.strip {
+  display: flex;
+  gap: 4px;
+  max-width: 100%;
+  margin-top: 10px;
+  padding-bottom: 6px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+}
+
+.cell {
+  flex: 1 0 auto;
+  display: grid;
+  gap: 1px;
+  padding: 6px 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--score, var(--score-neutral)) 40%, var(--border));
+  border-top: 4px solid var(--score, var(--score-neutral));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--score, var(--score-neutral)) 10%, var(--surface));
+  text-align: center;
+  scroll-snap-align: start;
+}
+
+.cell--hour {
+  min-width: 50px;
+  max-width: 84px;
+}
+
+.cell--block {
+  min-width: 88px;
+  max-width: 140px;
+}
+
+.cell-time {
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.cell-wind,
+.cell-gust {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.cell-gust {
+  font-weight: 600;
+}
+
+.cell-score {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--score, var(--score-neutral));
+}
+
+.cell-limit {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.25;
+}
+
+.cell-fog {
+  min-height: 15px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: transparent;
+}
+
+.cell-fog.is-on {
+  color: var(--verdict-conditional);
+}
+
+/* -- run history -------------------------------------------------------- */
+
+.brief-runs {
+  margin-top: 12px;
+}
+
+.brief-runs-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.brief-run-chips {
+  margin-top: 4px;
+}
+
+.chip.brief-run {
+  border-radius: 6px;
+  border-color: color-mix(in srgb, var(--score, var(--score-neutral)) 45%, var(--border));
+  background: color-mix(in srgb, var(--score, var(--score-neutral)) 10%, var(--surface));
+  color: var(--score, var(--score-neutral));
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.chip.brief-trend {
+  font-weight: 700;
+}
+
+.chip.brief-trend[data-trend="improving"] {
+  border-color: var(--score-favorable);
+  color: var(--score-favorable);
+}
+
+.chip.brief-trend[data-trend="worsening"] {
+  border-color: var(--score-unfavorable);
+  color: var(--score-unfavorable);
+}
+
+/* -- per-day block group ------------------------------------------------ */
+
+.brief-day {
+  margin-top: 14px;
+}
+
+.brief-day-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.brief-day-name {
+  font-weight: 700;
+}
+
+.brief-day-window {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* -- alerts ------------------------------------------------------------- */
+
+.brief-alerts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.brief-alert {
+  display: grid;
+  gap: 1px;
+  padding: 8px 10px;
+  border: 1px solid var(--verdict-conditional);
+  border-left-width: 4px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--verdict-conditional) 8%, var(--surface));
+}
+
+.brief-alert-event {
+  font-weight: 700;
+  color: var(--verdict-conditional);
+}
+
+.brief-alert-area,
+.brief-alert-ends {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* -- ranked lakes ------------------------------------------------------- */
+
+.brief-sub {
+  margin-top: 14px;
+}
+
+.brief-lakes {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.brief-lake-row {
+  padding-left: 10px;
+  border-left: 4px solid var(--score, var(--score-neutral));
+  align-items: flex-start;
+}
+
+.brief-lakes .row:first-of-type {
+  border-top: 0;
+}
+
+.row-note {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--score, var(--text-muted));
+}
+
+.row-note.is-frozen {
+  color: var(--verdict-conditional);
+}
+
+.brief-trail {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex: 0 0 auto;
+  gap: 1px;
+}
+
+.brief-trail-main {
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.brief-trail-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.brief-lake-row.is-unknown-lake .row-place {
+  font-style: italic;
+}
+
+/* -- footer ------------------------------------------------------------- */
+
+.brief-foot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.brief-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.brief-links .source-link {
+  min-height: 44px;
+}
+
+.brief-errors {
+  margin: 0;
+}
+
+.brief-disclaimer {
+  margin: 0;
+}
+
+.brief-empty {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  justify-items: start;
+}
+
+/* -- settings form ------------------------------------------------------ */
+
+.brief-settings .about-section {
+  margin-bottom: 18px;
+}
+
+.field {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.field-label {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.field-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  font-size: 16px; /* 16px+ so iOS Safari does not zoom the dialog on focus */
+}
+
+.field-input--number,
+.field-input--time {
+  font-variant-numeric: tabular-nums;
+}
+
+.field-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.field-row .field {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.field-row .btn {
+  flex: 0 0 auto;
+}
+
+.brief-airport-card {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.brief-airport-id {
+  font-weight: 700;
+}
+
+.brief-airport-card .chips {
+  margin-top: 8px;
+}
+
+.time-list {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+  justify-items: start;
+}
+
+.time-list-rows {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+}
+
+.time-list-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.time-list-row .field-input {
+  flex: 1;
+  max-width: 180px;
+}
+
+.brief-problems {
+  margin-bottom: 12px;
+}
+
+.brief-problem-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.brief-settings-actions {
+  position: sticky;
+  bottom: -16px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 0;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+
+/* -- narrow phones ------------------------------------------------------ */
+
+@media (max-width: 430px) {
+  .tab {
+    padding: 0 10px;
+  }
+
+  .brief-section--outlook {
+    padding: 10px 8px;
+  }
+}
+
+@media (min-width: 840px) {
+  .brief-chip {
+    right: auto;
+    width: 420px;
+  }
+}

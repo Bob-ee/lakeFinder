@@ -22,6 +22,14 @@ function dataDir(): string {
   return existsSync(path.join(pipelineOut, "pack.json")) ? pipelineOut : devFixtures;
 }
 
+/**
+ * The `api/` service (settings, health, manual refresh) runs on 127.0.0.1:8000, the same
+ * place Caddy proxies it in production. `SEAPLANE_API_ORIGIN` points dev at a service
+ * running somewhere else. The briefing itself is a static file under /data/, not here.
+ */
+const API_ORIGIN = process.env["SEAPLANE_API_ORIGIN"] ?? "http://127.0.0.1:8000";
+const API_PROXY = { "/api": { target: API_ORIGIN, changeOrigin: true } };
+
 const CONTENT_TYPES: Record<string, string> = {
   ".pmtiles": "application/octet-stream",
   ".json": "application/json; charset=utf-8",
@@ -42,22 +50,37 @@ function dataRangeServer(): Plugin {
 
     const rel = decodeURIComponent(rawUrl.split("?")[0]!.slice("/data/".length));
     const root = dataDir();
-    const file = path.resolve(root, rel);
+    const candidate = path.resolve(root, rel);
     // Refuse anything that escapes the data directory.
-    if (file !== root && !file.startsWith(root + path.sep)) {
+    if (candidate !== root && !candidate.startsWith(root + path.sep)) {
       res.statusCode = 403;
       res.end("Forbidden");
       return;
     }
 
+    let file = candidate;
     let stat;
     try {
       stat = statSync(file);
     } catch {
-      res.statusCode = 404;
-      res.setHeader("Content-Type", "text/plain; charset=utf-8");
-      res.end(`Not found in ${root}: ${rel}`);
-      return;
+      // Fall back to the checked-in fixtures for a file the pipeline has not produced
+      // yet. `briefing.json` is written by the api service, not by the pipeline, so on a
+      // machine with a real data/out there would otherwise be nothing to develop against.
+      const fallback = path.resolve(devFixtures, rel);
+      if (root !== devFixtures && fallback.startsWith(devFixtures + path.sep)) {
+        try {
+          stat = statSync(fallback);
+          file = fallback;
+        } catch {
+          stat = undefined;
+        }
+      }
+      if (!stat) {
+        res.statusCode = 404;
+        res.setHeader("Content-Type", "text/plain; charset=utf-8");
+        res.end(`Not found in ${root}: ${rel}`);
+        return;
+      }
     }
     if (!stat.isFile()) {
       res.statusCode = 404;
@@ -245,6 +268,10 @@ export default defineConfig({
       // The @rules alias points outside the Vite root.
       allow: [here, rulesDir],
     },
+    proxy: API_PROXY,
+  },
+  preview: {
+    proxy: API_PROXY,
   },
   build: {
     target: "es2022",

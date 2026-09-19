@@ -1,0 +1,158 @@
+[
+ {
+  "id": 1900195525,
+  "name": "Cass Lake",
+  "name_norm": "cass",
+  "county": "Oakland",
+  "township": "West Bloomfield Township",
+  "lat": 42.60679,
+  "lon": -83.367166,
+  "bbox": [
+   -83.395836,
+   42.594834,
+   -83.347066,
+   42.618415
+  ],
+  "area_acres": 1118.28,
+  "chord_ft": 13879.6,
+  "chord_bearing_deg": 68,
+  "verdict": "conditional",
+  "flags": [
+   "no_public_access",
+   "mac_pending"
+  ],
+  "restriction_ids": [
+   "30dbba7d943a",
+   "ecf6b2477d92",
+   "682147f51792",
+   "fb59d97e5723"
+  ],
+  "access": null
+ },
+ {
+  "id": 934284173,
+  "name": "Orchard Lake",
+  "name_norm": "orchard",
+  "county": "Oakland",
+  "township": "City of Orchard Lake Village",
+  "lat": 42.587653,
+  "lon": -83.370532,
+  "bbox": [
+   -83.389318,
+   42.576463,
+   -83.356624,
+   42.597556
+  ],
+  "area_acres": 797.04,
+  "chord_ft": 8084.3,
+  "chord_bearing_deg": 90,
+  "verdict": "conditional",
+  "flags": [
+   "mac_pending"
+  ],
+  "restriction_ids": [
+   "7e5dfc8e2ea6",
+   "a9b5ab2d468b"
+  ],
+  "access": "Orchard Lake"
+ },
+ {
+  "id": 479840118,
+  "name": "Pontiac Lake",
+  "name_norm": "pontiac",
+  "county": "Oakland",
+  "township": "White Lake Township",
+  "lat": 42.668181,
+  "lon": -83.46011,
+  "bbox": [
+   -83.483849,
+   42.658712,
+   -83.440419,
+   42.675183
+  ],
+  "area_acres": 617.14,
+  "chord_ft": 9308.7,
+  "chord_bearing_deg": 118,
+  "verdict": "clear",
+  "flags": [
+   "mac_pending"
+  ],
+  "restriction_ids": [],
+  "access": "Pontiac Lake"
+ },
+ {
+  "id": 961845076,
+  "name": "Union Lake",
+  "name_norm": "union",
+  "county": "Oakland",
+  "township": "West Bloomfield Township",
+  "lat": 42.606539,
+  "lon": -83.43447,
+  "bbox": [
+   -83.446985,
+   42.5996,
+   -83.421201,
+   42.613575
+  ],
+  "area_acres": 466.56,
+  "chord_ft": 7604.3,
+  "chord_bearing_deg": 120,
+  "verdict": "clear",
+  "flags": [
+   "mac_pending"
+  ],
+  "restriction_ids": [],
+  "access": "Union Lake South"
+ },
+ {
+  "id": 1155360940,
+  "name": "Lake Angelus",
+  "name_norm": "angelus",
+  "county": "Oakland",
+  "township": "City of Lake Angelus",
+  "lat": 42.691396,
+  "lon": -83.323914,
+  "bbox": [
+   -83.339857,
+   42.685986,
+   -83.309491,
+   42.699224
+  ],
+  "area_acres": 412.17,
+  "chord_ft": 7820.9,
+  "chord_bearing_deg": 99,
+  "verdict": "restricted",
+  "flags": [
+   "no_public_access",
+   "mac_pending"
+  ],
+  "restriction_ids": [
+   "feba686c5746"
+  ],
+  "access": null
+ },
+ {
+  "id": 110846180,
+  "name": "Big Lake",
+  "name_norm": "big",
+  "county": "Oakland",
+  "township": "Springfield Township",
+  "lat": 42.721965,
+  "lon": -83.519357,
+  "bbox": [
+   -83.529646,
+   42.715844,
+   -83.509152,
+   42.728529
+  ],
+  "area_acres": 212.79,
+  "chord_ft": 5644.1,
+  "chord_bearing_deg": 47,
+  "verdict": "clear",
+  "flags": [
+   "mac_pending"
+  ],
+  "restriction_ids": [],
+  "access": "Big Lake"
+ }
+]

@@ -1,6 +1,6 @@
 import { el } from "../ui/format";
 
-export type TabId = "detail" | "nearest" | "saved";
+export type TabId = "detail" | "briefing" | "nearest" | "saved";
 
 interface TabDef {
   id: TabId;
@@ -9,12 +9,13 @@ interface TabDef {
 
 const TABS: TabDef[] = [
   { id: "detail", label: "Detail" },
+  { id: "briefing", label: "Briefing" },
   { id: "nearest", label: "Nearest" },
   { id: "saved", label: "Saved" },
 ];
 
 /**
- * Tab strip for the sheet. Detail is live in phase 1; Nearest and Saved are real slots
+ * Tab strip for the sheet. Detail and Briefing are live; Nearest and Saved are real slots
  * with placeholder panels so phases 2 and 4 drop straight in.
  */
 export class Tabs {
@@ -43,6 +44,7 @@ export class Tabs {
       this.body.append(panel);
       this.panels.set(tab.id, panel);
     }
+    this.panels.get("detail")?.append(detailPlaceholder());
     this.panels.get("nearest")?.append(placeholder("Nearest lakes", "phase 2", nearestBlurb()));
     this.panels.get("saved")?.append(placeholder("Saved lakes", "phase 4", savedBlurb()));
     this.apply();
@@ -77,6 +79,19 @@ export class Tabs {
       panel.hidden = id !== this.active;
     }
   }
+}
+
+/**
+ * The Detail panel is empty until a lake is selected, which can now happen while the
+ * sheet is already open for the briefing. Says so rather than showing nothing.
+ */
+export function detailPlaceholder(): HTMLElement {
+  const wrap = el("div", "placeholder");
+  wrap.append(el("h3", "detail-h", "No lake selected"));
+  wrap.append(
+    el("p", "muted", "Tap a lake on the map, search for one, or pick one from the briefing."),
+  );
+  return wrap;
 }
 
 function placeholder(title: string, phase: string, body: string): HTMLElement {

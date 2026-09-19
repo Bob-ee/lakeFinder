@@ -9,6 +9,11 @@
  *   geojson/*.geojson                                          <- intermediate, gitignored
  *   lakes.pmtiles  usable_water.pmtiles  overlays.pmtiles      <- gitignored binaries
  *
+ * This script only writes the files it lists; it never clears the directory. Two fixtures
+ * are hand-maintained and must survive a regeneration: basemap.pmtiles and briefing.json
+ * (the api service writes the real briefing, so the pipeline has nothing to derive it
+ * from). If you ever add a clean step here, keep both.
+ *
  * basemap.pmtiles is NOT produced here; it is a one-off Protomaps extract, see
  * `npm run fixtures -- --print-basemap-cmd` or the README.
  *

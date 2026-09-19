@@ -27,3 +27,6 @@ web/dev-dist/
 .env
 .env.*
 !.env.example
+
+# written by the api service (home airport, limits, ntfy topic)
+data/manual/settings.json

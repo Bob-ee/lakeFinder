@@ -1,0 +1,112 @@
+{
+ "@context": [
+  "https://geojson.org/geojson-ld/geojson-context.jsonld",
+  {
+   "@version": "1.1",
+   "wx": "https://api.weather.gov/ontology#",
+   "s": "https://schema.org/",
+   "geo": "http://www.opengis.net/ont/geosparql#",
+   "unit": "http://codes.wmo.int/common/unit/",
+   "@vocab": "https://api.weather.gov/ontology#",
+   "geometry": {
+    "@id": "s:GeoCoordinates",
+    "@type": "geo:wktLiteral"
+   },
+   "city": "s:addressLocality",
+   "state": "s:addressRegion",
+   "distance": {
+    "@id": "s:Distance",
+    "@type": "s:QuantitativeValue"
+   },
+   "bearing": {
+    "@type": "s:QuantitativeValue"
+   },
+   "value": {
+    "@id": "s:value"
+   },
+   "unitCode": {
+    "@id": "s:unitCode",
+    "@type": "@id"
+   },
+   "forecastOffice": {
+    "@type": "@id"
+   },
+   "forecastGridData": {
+    "@type": "@id"
+   },
+   "publicZone": {
+    "@type": "@id"
+   },
+   "county": {
+    "@type": "@id"
+   }
+  }
+ ],
+ "id": "https://api.weather.gov/points/42.6655,-83.4187",
+ "type": "Feature",
+ "geometry": {
+  "type": "Point",
+  "coordinates": [
+   -83.4187,
+   42.6655
+  ]
+ },
+ "properties": {
+  "@id": "https://api.weather.gov/points/42.6655,-83.4187",
+  "@type": "wx:Point",
+  "cwa": "DTX",
+  "type": "land",
+  "forecastOffice": "https://api.weather.gov/offices/DTX",
+  "gridId": "DTX",
+  "gridX": 52,
+  "gridY": 48,
+  "forecast": "https://api.weather.gov/gridpoints/DTX/52,48/forecast",
+  "forecastHourly": "https://api.weather.gov/gridpoints/DTX/52,48/forecast/hourly",
+  "forecastGridData": "https://api.weather.gov/gridpoints/DTX/52,48",
+  "observationStations": "https://api.weather.gov/gridpoints/DTX/52,48/stations",
+  "relativeLocation": {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -83.4211318,
+     42.7321335
+    ]
+   },
+   "properties": {
+    "city": "Village of Clarkston",
+    "state": "MI",
+    "distance": {
+     "unitCode": "wmoUnit:m",
+     "value": 6644.4411820045
+    },
+    "bearing": {
+     "unitCode": "wmoUnit:degree_(angle)",
+     "value": 178
+    }
+   }
+  },
+  "forecastZone": "https://api.weather.gov/zones/forecast/MIZ069",
+  "county": "https://api.weather.gov/zones/county/MIC125",
+  "fireWeatherZone": "https://api.weather.gov/zones/fire/MIZ069",
+  "timeZone": "America/Detroit",
+  "radarStation": "KDTX",
+  "astronomicalData": {
+   "sunrise": "2026-09-19T07:18:03-04:00",
+   "sunset": "2026-09-19T19:36:40-04:00",
+   "transit": "2026-09-19T13:27:22-04:00",
+   "civilTwilightBegin": "2026-09-19T06:49:55-04:00",
+   "civilTwilightEnd": "2026-09-19T20:04:48-04:00",
+   "nauticalTwilightBegin": "2026-09-19T06:16:44-04:00",
+   "nauticalTwilightEnd": "2026-09-19T20:37:59-04:00",
+   "astronomicalTwilightBegin": "2026-09-19T05:42:44-04:00",
+   "astronomicalTwilightEnd": "2026-09-19T21:11:59-04:00"
+  },
+  "nwr": {
+   "transmitter": "KEC63",
+   "sameCode": "026125",
+   "areaBroadcast": "https://api.weather.gov/radio/KEC63/broadcast",
+   "pointBroadcast": "https://api.weather.gov/points/42.6655,-83.4187/radio"
+  }
+ }
+}

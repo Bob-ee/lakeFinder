@@ -1,0 +1,44 @@
+{
+ "icaoId": "KPTK",
+ "iataId": "PTK",
+ "faaId": "PTK",
+ "name": "PONTIAC/OAKLAND COUNTY INTL ",
+ "state": "MI",
+ "country": "US",
+ "source": "FAA",
+ "type": "ARP",
+ "lat": 42.6656,
+ "lon": -83.4205,
+ "elev": 299,
+ "magdec": "07W",
+ "owner": "P",
+ "rwyNum": "3",
+ "rwyLength": "M",
+ "rwyType": "A",
+ "services": "S",
+ "tower": "T",
+ "beacon": "B",
+ "operations": "0",
+ "freqs": "LCL/P,120.5;ATIS,125.025",
+ "priority": "4",
+ "runways": [
+  {
+   "id": "09L/27R",
+   "dimension": "5676x100",
+   "surface": "A",
+   "alignment": 88
+  },
+  {
+   "id": "09R/27L",
+   "dimension": "6521x150",
+   "surface": "A",
+   "alignment": 88
+  },
+  {
+   "id": "18/36",
+   "dimension": "2582x75",
+   "surface": "A",
+   "alignment": 172
+  }
+ ]
+}

@@ -4,8 +4,10 @@ import "./styles/base.css";
 import "./styles/map.css";
 import "./styles/search.css";
 import "./styles/sheet.css";
+import "./styles/briefing.css";
 
-import { Tabs } from "./lists";
+import { BriefingController, readBriefingParam } from "./briefing";
+import { Tabs, detailPlaceholder } from "./lists";
 import { MapController } from "./map";
 import { SearchBox } from "./search/ui";
 import { Sheet } from "./sheet";
@@ -62,12 +64,34 @@ async function boot(): Promise<void> {
 
   mountMapControls(app, map, prefs);
 
+  // The briefing lives in the sheet because that is the one surface that is already a
+  // bottom sheet on a phone and a docked panel on an iPad. The chip on the map keeps it
+  // one tap away from the default view.
+  const briefing = new BriefingController({
+    show: () => {
+      tabs.select("briefing");
+      if (sheet.current === "hidden" || sheet.current === "peek") sheet.setSnap("full");
+    },
+    hide: () => sheet.setSnap("hidden"),
+    hasSelection: () => state.current != null,
+    lookupLake: (id) => state.search.get(id) ?? null,
+    selectLake: (id) => {
+      // Come back to half so the lake is visible on the map behind the sheet.
+      if (sheet.current === "full") sheet.setSnap("half");
+      if (!state.selectLake(id, "list")) toast("That lake is not in this data pack");
+    },
+  });
+  briefing.mountPanel(tabs.panel("briefing"));
+  briefing.mountPeek(sheet.slots.peek);
+  briefing.mountChip(app);
+  briefing.start();
+
   const search = new SearchBox(app, {
     index: state.search,
     onSelect: (id) => {
       if (!state.selectLake(id, "search")) toast("That lake is not in the index");
     },
-    onOpenAbout: () => openAbout(state, theme),
+    onOpenAbout: () => openAbout(state, theme, () => briefing.openSettings()),
   });
 
   theme.onChange((resolved) => map.setTheme(resolved));
@@ -76,8 +100,15 @@ async function boot(): Promise<void> {
 
   state.onSelection((selection) => {
     if (!selection) {
-      sheet.setSnap("hidden");
       map.clearSelection();
+      // Clearing a lake that was picked from the briefing falls back to the briefing
+      // rather than closing the sheet out from under it.
+      if (briefing.isOpen) {
+        detailPanel.replaceChildren(detailPlaceholder());
+        briefing.reveal();
+        return;
+      }
+      sheet.setSnap("hidden");
       return;
     }
     renderSelection(selection);
@@ -105,6 +136,9 @@ async function boot(): Promise<void> {
 
   maybeShowFirstRun(state);
 
+  // `?briefing=1` first, so `?lake=` still wins the sheet when both are present.
+  if (readBriefingParam()) briefing.reveal();
+
   const fromUrl = readUrlParam();
   if (fromUrl != null) {
     if (!state.selectLake(fromUrl, "url")) {
@@ -113,7 +147,7 @@ async function boot(): Promise<void> {
   }
 
   // Deliberately global: handy from the console and from the phase-3 service worker.
-  Object.assign(window, { seaplane: { state, map, sheet, search, theme } });
+  Object.assign(window, { seaplane: { state, map, sheet, search, theme, briefing } });
 }
 
 void boot().catch((err: unknown) => {

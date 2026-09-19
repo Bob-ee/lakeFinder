@@ -40,8 +40,10 @@ export function maybeShowFirstRun(state: AppState): void {
 }
 
 /** Settings and About: theme override, data pack facts, the same disclaimer. */
-export function openAbout(state: AppState, theme: Theme): void {
+export function openAbout(state: AppState, theme: Theme, onBriefingSettings?: () => void): void {
   const body = el("div", "prose");
+  // Assigned by openDialog at the bottom; the handlers below only ever run after that.
+  let close: () => void = () => {};
 
   const themeSection = el("section", "about-section");
   themeSection.append(el("h3", "detail-h", "Appearance"));
@@ -94,6 +96,27 @@ export function openAbout(state: AppState, theme: Theme): void {
   }
   body.append(dataSection);
 
+  if (onBriefingSettings) {
+    const briefingSection = el("section", "about-section");
+    briefingSection.append(el("h3", "detail-h", "Daily briefing"));
+    const open = el("button", "btn", "Briefing settings");
+    open.type = "button";
+    open.addEventListener("click", () => {
+      close();
+      onBriefingSettings();
+    });
+    briefingSection.append(open);
+    briefingSection.append(
+      el(
+        "p",
+        "muted small",
+        "Home airport, candidate lakes, the morning outlook times and your personal limits. " +
+          "Needs the briefing service to be reachable.",
+      ),
+    );
+    body.append(briefingSection);
+  }
+
   const legal = el("section", "about-section");
   legal.append(el("h3", "detail-h", "Disclaimer"));
   legal.append(el("p", undefined, disclaimerText(pack?.version ?? null)));
@@ -102,7 +125,7 @@ export function openAbout(state: AppState, theme: Theme): void {
   const version = el("p", "muted small", `App ${__APP_VERSION__} · phase 1, static map`);
   body.append(version);
 
-  openDialog({ title: "Settings and about", body });
+  close = openDialog({ title: "Settings and about", body });
 }
 
 function fact(list: HTMLElement, label: string, value: string): void {

@@ -1,0 +1,502 @@
+import { BRIEFING, BRIEFING_DISCLAIMER } from "../config";
+import { lakeRow } from "../lists/row";
+import type { Lake } from "../types";
+import { ageMinutes, el, formatRelative, formatThousands } from "../ui/format";
+import { icon } from "../ui/icons";
+import {
+  CONFIDENCE_WORD,
+  SCORE_WORD,
+  TREND_ARROW,
+  TREND_WORD,
+  anyCeilingUnknown,
+  dayHeading,
+  formatCeiling,
+  formatWindow,
+  limitingLabel,
+  morningHeading,
+  outlookLeads,
+  shortDate,
+  shortWeekday,
+  utcToZoneTime,
+  zoneNow,
+} from "./labels";
+import type { BriefingState } from "./store";
+import type {
+  Briefing,
+  BriefingBlock,
+  BriefingDay,
+  BriefingLake,
+  Health,
+  Outlook,
+  OutlookHour,
+  OutlookRun,
+  Score,
+  Window,
+} from "./types";
+
+export interface BriefingCardDeps {
+  /** index.json lookup, so a ranked lake carries the county and the real verdict. */
+  lookupLake: (id: number) => Lake | null;
+  /** The single selectLake(id) path. */
+  onSelectLake: (id: number) => void;
+  onOpenSettings: () => void;
+  onRefresh: () => void;
+}
+
+export interface BriefingCardOptions extends BriefingCardDeps {
+  state: BriefingState;
+  /** null when `/api/health` failed; undefined while the probe is still running. */
+  health: Health | null | undefined;
+  refreshing: boolean;
+}
+
+/** The whole card, rebuilt from scratch on every state change. It is a small tree. */
+export function renderBriefingCard(opts: BriefingCardOptions): HTMLElement {
+  const wrap = el("div", "brief");
+  const { state } = opts;
+
+  if (state.kind === "loading") {
+    wrap.append(el("p", "muted", "Loading the briefing…"));
+    return wrap;
+  }
+  if (state.kind === "empty" || state.kind === "unavailable") {
+    wrap.append(emptyState(state.kind, opts));
+    return wrap;
+  }
+
+  const b = state.briefing;
+  const today = zoneNow(b.timezone).date;
+  const leadsWithOutlook = b.outlook != null && outlookLeads(b.outlook, b.timezone);
+
+  wrap.append(header(b, leadsWithOutlook, state.fromCache, opts));
+
+  const sections = el("div", "brief-sections");
+  const outlookNode = b.outlook ? outlookSection(b, b.outlook, today, opts) : outlookMissing();
+  const daysNode = daysSection(b, today);
+  if (leadsWithOutlook) sections.append(outlookNode, daysNode);
+  else sections.append(daysNode, outlookNode);
+  wrap.append(sections);
+
+  if (b.alerts.length > 0) wrap.append(alertsSection(b));
+  wrap.append(lakesSection("Calmest water nearby", b.lakes, b, opts));
+  wrap.append(footer(b));
+  return wrap;
+}
+
+// -- header ----------------------------------------------------------------
+
+function header(
+  b: Briefing,
+  leadsWithOutlook: boolean,
+  fromCache: boolean,
+  opts: BriefingCardOptions,
+): HTMLElement {
+  const head = el("header", "brief-head");
+
+  const lead = leadsWithOutlook && b.outlook ? b.outlook : b.days[0];
+  const score: Score = lead?.score ?? "unfavorable";
+  const window: Window | null = lead?.best_window ?? null;
+
+  const top = el("div", "brief-head-top");
+  const title = el("div", "brief-title");
+  title.dataset["score"] = score;
+  title.append(el("span", "brief-score", SCORE_WORD[score]));
+  title.append(el("span", "brief-window", formatWindow(window)));
+  top.append(title);
+
+  const actions = el("div", "brief-actions");
+  if (opts.health !== null) {
+    const refresh = el("button", "icon-btn brief-icon-btn");
+    refresh.type = "button";
+    refresh.title = "Refresh now";
+    refresh.setAttribute("aria-label", "Refresh the briefing now");
+    refresh.innerHTML = icon("refresh");
+    refresh.disabled = opts.refreshing;
+    refresh.addEventListener("click", () => opts.onRefresh());
+
+    const gear = el("button", "icon-btn brief-icon-btn");
+    gear.type = "button";
+    gear.title = "Briefing settings";
+    gear.setAttribute("aria-label", "Briefing settings");
+    gear.innerHTML = icon("sliders");
+    gear.addEventListener("click", () => opts.onOpenSettings());
+    actions.append(refresh, gear);
+  }
+  top.append(actions);
+  head.append(top);
+
+  const meta = el("div", "brief-meta");
+  const mins = ageMinutes(b.generated_at);
+  const age = el("span", "brief-age", formatRelative(b.generated_at));
+  if (mins != null && mins >= BRIEFING.staleMinutes) {
+    age.classList.add("is-stale");
+    age.title = "Older than six hours";
+    meta.append(age, el("span", "brief-dot", "·"), el("span", "tag brief-stale-tag", "stale"));
+  } else {
+    meta.append(age);
+  }
+  meta.append(el("span", "brief-dot", "·"));
+  const airport = el("span", "brief-airport", b.home_airport.id);
+  airport.title = b.home_airport.name;
+  meta.append(airport);
+  if (fromCache) {
+    meta.append(el("span", "brief-dot", "·"), el("span", "brief-offline", "last stored copy"));
+  }
+  head.append(meta);
+
+  if (opts.health === null) {
+    head.append(el("p", "notice brief-notice", "Briefing service not reachable"));
+  }
+  return head;
+}
+
+// -- outlook ---------------------------------------------------------------
+
+function outlookSection(
+  b: Briefing,
+  o: Outlook,
+  today: string,
+  opts: BriefingCardOptions,
+): HTMLElement {
+  const sec = el("section", "brief-section brief-section--outlook");
+  sec.append(
+    sectionHead(
+      morningHeading(o.target_date, today),
+      `${shortWeekday(o.target_date)} ${shortDate(o.target_date)} · ${o.window.start}–${o.window.end}`,
+    ),
+  );
+
+  const line = el("div", "brief-lead");
+  line.append(scorePill(o.score, o.limiting ? `${SCORE_WORD[o.score]} · ${limitingLabel(o.limiting)}` : undefined));
+  line.append(el("span", "brief-lead-window", `Best window ${formatWindow(o.best_window)}`));
+  sec.append(line);
+
+  if (o.summary) sec.append(el("p", "brief-summary", o.summary));
+
+  if (o.hours.length > 0) {
+    const strip = el("div", "strip strip--hours");
+    strip.setAttribute("role", "list");
+    strip.setAttribute("aria-label", "Hour by hour");
+    for (const hour of o.hours) strip.append(hourCell(hour));
+    sec.append(strip);
+    if (anyCeilingUnknown(o.hours)) sec.append(ceilingUnknownNote());
+  }
+
+  if (o.watch) {
+    sec.append(el("p", "brief-watch", `Watch: ${o.watch}`));
+  }
+
+  if (o.runs.length > 0) sec.append(runHistory(o));
+
+  const conf = el("p", "brief-confidence");
+  conf.append(el("span", "brief-conf-word", `${CONFIDENCE_WORD[o.confidence]} confidence`));
+  if (o.confidence_reasons.length > 0) {
+    conf.append(el("span", "muted", ` — ${o.confidence_reasons.join("; ")}`));
+  }
+  sec.append(conf);
+
+  sec.append(
+    el(
+      "p",
+      "brief-sun",
+      `Civil dawn ${o.sun.civil_dawn} · Sunrise ${o.sun.sunrise} · Sunset ${o.sun.sunset} · Civil dusk ${o.sun.civil_dusk}`,
+    ),
+  );
+
+  sec.append(lakesSection("Calmest water in the window", o.lakes, b, opts, true));
+  return sec;
+}
+
+function outlookMissing(): HTMLElement {
+  const sec = el("section", "brief-section");
+  sec.append(sectionHead("Morning outlook", null));
+  sec.append(el("p", "muted", "No morning outlook in this run: the forecast input failed."));
+  return sec;
+}
+
+function hourCell(hour: OutlookHour): HTMLElement {
+  const cell = el("div", "cell cell--hour");
+  cell.dataset["score"] = hour.score;
+  cell.setAttribute("role", "listitem");
+  const limit = limitingLabel(hour.limiting);
+  cell.title =
+    `${hour.time} ${SCORE_WORD[hour.score].toLowerCase()}${limit ? ` (${limit})` : ""} · ` +
+    `${hour.wind.dir}/${hour.wind.kt}${hour.wind.gust == null ? "" : ` G${hour.wind.gust}`} · ` +
+    `${formatCeiling(hour.ceiling_ft, hour.ceiling_known)} · vis ${hour.vis_sm} · ${hour.temp_f}°F`;
+
+  cell.append(el("span", "cell-time", hour.time));
+  cell.append(el("span", "cell-wind", `${pad3(hour.wind.dir)}/${hour.wind.kt}`));
+  cell.append(el("span", "cell-gust", hour.wind.gust == null ? "—" : `G${hour.wind.gust}`));
+  const fog = el("span", "cell-fog", hour.fog_risk ? "fog" : "");
+  fog.classList.toggle("is-on", hour.fog_risk);
+  cell.append(fog);
+  return cell;
+}
+
+function runHistory(o: Outlook): HTMLElement {
+  const wrap = el("div", "brief-runs");
+  wrap.append(el("span", "brief-runs-label", "Runs"));
+  const chips = el("div", "chips brief-run-chips");
+  for (const run of o.runs) chips.append(runChip(run));
+  if (o.trend) {
+    const trend = el("span", "chip brief-trend", `${TREND_WORD[o.trend]} ${TREND_ARROW[o.trend]}`);
+    trend.dataset["trend"] = o.trend;
+    trend.title = "Compared with the previous run for this morning";
+    chips.append(trend);
+  }
+  wrap.append(chips);
+  return wrap;
+}
+
+function runChip(run: OutlookRun): HTMLElement {
+  const limit = limitingLabel(run.limiting);
+  const chip = el(
+    "span",
+    "chip brief-run",
+    `${run.at} ${SCORE_WORD[run.score].toLowerCase()}${limit ? ` (${limit})` : ""}`,
+  );
+  chip.dataset["score"] = run.score;
+  chip.title = `${formatWindow(run.best_window)} · peak gust ${run.max_gust_kt} kt`;
+  return chip;
+}
+
+// -- days ------------------------------------------------------------------
+
+function daysSection(b: Briefing, today: string): HTMLElement {
+  const sec = el("section", "brief-section");
+  sec.append(sectionHead("Today and tomorrow", null));
+  if (b.summary) sec.append(el("p", "brief-summary", b.summary));
+  if (b.days.length === 0) {
+    sec.append(el("p", "muted", "No day blocks in this run."));
+    return sec;
+  }
+  for (const day of b.days) sec.append(dayBlock(day, today));
+  return sec;
+}
+
+function dayBlock(day: BriefingDay, today: string): HTMLElement {
+  const wrap = el("div", "brief-day");
+  const head = el("div", "brief-day-head");
+  head.append(el("span", "brief-day-name", dayHeading(day.date, today)));
+  head.append(scorePill(day.score));
+  head.append(el("span", "brief-day-window", formatWindow(day.best_window)));
+  wrap.append(head);
+
+  const strip = el("div", "strip strip--blocks");
+  strip.setAttribute("role", "list");
+  strip.setAttribute("aria-label", `${dayHeading(day.date, today)} three-hour blocks`);
+  for (const block of day.blocks) strip.append(blockCell(block));
+  wrap.append(strip);
+  if (anyCeilingUnknown(day.blocks)) wrap.append(ceilingUnknownNote());
+  return wrap;
+}
+
+/** Said once per strip rather than per cell: a missing ceiling is not a clear sky. */
+function ceilingUnknownNote(): HTMLElement {
+  return el("p", "muted small brief-note", "Ceiling not reported for part of this period.");
+}
+
+function blockCell(block: BriefingBlock): HTMLElement {
+  const cell = el("div", "cell cell--block");
+  cell.dataset["score"] = block.score;
+  cell.setAttribute("role", "listitem");
+  cell.title =
+    `${block.start}–${block.end} · ${pad3(block.wind.dir)}/${block.wind.kt}` +
+    `${block.wind.gust == null ? "" : ` G${block.wind.gust}`} · xwind ${block.xwind_kt} kt on ${block.runway} · ` +
+    `${formatCeiling(block.ceiling_ft, block.ceiling_known)} · vis ${block.vis_sm} · DA ${formatThousands(block.da_ft)} ft · ` +
+    `${block.temp_f}°F · precip ${block.precip_prob}%`;
+
+  cell.append(el("span", "cell-time", `${block.start}–${block.end}`));
+  cell.append(el("span", "cell-score", SCORE_WORD[block.score]));
+  // Only a non-favorable block needs to say what is holding it back.
+  const limit = block.score === "favorable" ? null : limitingLabel(block.limiting);
+  cell.append(el("span", "cell-limit", limit ?? `${pad3(block.wind.dir)}/${block.wind.kt}`));
+  return cell;
+}
+
+// -- alerts ----------------------------------------------------------------
+
+function alertsSection(b: Briefing): HTMLElement {
+  const sec = el("section", "brief-section");
+  sec.append(sectionHead("Alerts", null));
+  const list = el("ul", "brief-alerts");
+  for (const alert of b.alerts) {
+    const li = el("li", "brief-alert");
+    li.append(el("span", "brief-alert-event", alert.event));
+    li.append(el("span", "brief-alert-area", alert.area));
+    li.append(
+      el("span", "brief-alert-ends", `until ${utcToZoneTime(alert.ends, b.timezone)}`),
+    );
+    list.append(li);
+  }
+  sec.append(list);
+  return sec;
+}
+
+// -- ranked lakes ----------------------------------------------------------
+
+function lakesSection(
+  title: string,
+  rows: BriefingLake[],
+  b: Briefing,
+  opts: BriefingCardDeps,
+  nested = false,
+): HTMLElement {
+  const sec = el("section", nested ? "brief-sub" : "brief-section");
+  sec.append(sectionHead(title, null));
+  if (rows.length === 0) {
+    sec.append(el("p", "muted", "No lake in range had usable water."));
+    return sec;
+  }
+  const list = el("div", "brief-lakes");
+  list.setAttribute("role", "listbox");
+  for (const row of rows) list.append(rankedLakeRow(row, b, opts));
+  sec.append(list);
+  return sec;
+}
+
+function rankedLakeRow(row: BriefingLake, b: Briefing, opts: BriefingCardDeps): HTMLElement {
+  const known = opts.lookupLake(row.id);
+  const lake = known ?? standInLake(row);
+
+  // Two stacked lines in the trailing slot: water first, then where it is.
+  const trailing = el("span", "brief-trail");
+  trailing.append(
+    el("span", "brief-trail-main", `${row.hs_in} in · ${formatThousands(row.run_ft)} ft`),
+  );
+  trailing.append(
+    el("span", "brief-trail-sub", `${row.distance_nm} nm · ${pad3(row.bearing_deg)}°`),
+  );
+
+  // The row score covers the water only (waves, usable run, crosswind on the water, ice);
+  // the weather for getting there is the header, the day blocks and the outlook hours.
+  const parts = [`Water ${SCORE_WORD[row.score].toLowerCase()}`];
+  const limit = limitingLabel(row.limiting);
+  if (limit) parts.push(limit);
+  if (row.frozen) parts.push("likely frozen, verify");
+  const note = el("span", undefined, parts.join(" · "));
+  note.dataset["score"] = row.score;
+  if (row.frozen) note.classList.add("is-frozen");
+
+  const element = lakeRow(lake, {
+    onSelect: (id) => opts.onSelectLake(id),
+    trailing,
+    note,
+  });
+  element.classList.add("brief-lake-row");
+  element.dataset["score"] = row.score;
+  const wind = `${pad3(row.wind.dir)}/${row.wind.kt}${row.wind.gust == null ? "" : ` G${row.wind.gust}`}`;
+  element.title = `${row.name} · wind ${wind} · ${b.home_airport.id} ${row.distance_nm} nm`;
+  if (!known) element.classList.add("is-unknown-lake");
+  return element;
+}
+
+/**
+ * The briefing and index.json are built from the same pipeline output, so a miss here
+ * means the two are out of step. Render the row anyway rather than dropping a lake; the
+ * tap then reports "not in this data pack" through the usual path.
+ */
+function standInLake(row: BriefingLake): Lake {
+  return {
+    id: row.id,
+    name: row.name,
+    name_norm: "",
+    county: "not in this data pack",
+    township: null,
+    lat: 0,
+    lon: 0,
+    bbox: [0, 0, 0, 0],
+    area_acres: 0,
+    chord_ft: 0,
+    chord_bearing_deg: 0,
+    verdict: row.verdict,
+    flags: [],
+    restriction_ids: [],
+    access: null,
+  };
+}
+
+// -- footer ----------------------------------------------------------------
+
+const LINK_LABELS: Array<[keyof Briefing["links"], string]> = [
+  ["metar", "METAR"],
+  ["taf", "TAF"],
+  ["forecast", "Forecast"],
+];
+
+function footer(b: Briefing): HTMLElement {
+  const foot = el("footer", "brief-foot");
+
+  const links = el("div", "brief-links");
+  let any = false;
+  for (const [key, label] of LINK_LABELS) {
+    const href = b.links?.[key];
+    if (!href) continue;
+    any = true;
+    const a = el("a", "source-link");
+    a.href = href;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.innerHTML = `<span>${label}</span>${icon("external")}`;
+    links.append(a);
+  }
+  if (any) foot.append(links);
+
+  if (b.errors.length > 0) {
+    foot.append(el("p", "muted small brief-errors", `Inputs that failed: ${b.errors.join("; ")}`));
+  }
+
+  foot.append(el("p", "muted small brief-disclaimer", BRIEFING_DISCLAIMER));
+  return foot;
+}
+
+// -- empty states ----------------------------------------------------------
+
+function emptyState(kind: "empty" | "unavailable", opts: BriefingCardOptions): HTMLElement {
+  const wrap = el("div", "brief-empty");
+  if (kind === "empty") {
+    wrap.append(el("h3", "detail-h", "No briefing yet"));
+    wrap.append(
+      el(
+        "p",
+        "muted",
+        "The briefing service writes /data/briefing.json on its next run. It will appear here on its own.",
+      ),
+    );
+  } else {
+    wrap.append(el("h3", "detail-h", "Briefing unavailable"));
+    wrap.append(
+      el("p", "muted", "The briefing could not be read and nothing is stored on this device yet."),
+    );
+  }
+  if (opts.health === null) {
+    wrap.append(el("p", "notice brief-notice", "Briefing service not reachable"));
+  } else {
+    const btn = el("button", "btn", "Refresh now");
+    btn.type = "button";
+    btn.disabled = opts.refreshing;
+    btn.addEventListener("click", () => opts.onRefresh());
+    wrap.append(btn);
+  }
+  wrap.append(el("p", "muted small brief-disclaimer", BRIEFING_DISCLAIMER));
+  return wrap;
+}
+
+// -- small pieces ----------------------------------------------------------
+
+function sectionHead(title: string, sub: string | null): HTMLElement {
+  const head = el("div", "brief-section-head");
+  head.append(el("h3", "detail-h", title));
+  if (sub) head.append(el("span", "brief-section-sub", sub));
+  return head;
+}
+
+function scorePill(score: Score, text?: string): HTMLElement {
+  const pill = el("span", "score-pill", text ?? SCORE_WORD[score]);
+  pill.dataset["score"] = score;
+  return pill;
+}
+
+function pad3(n: number): string {
+  return String(Math.round(n)).padStart(3, "0");
+}

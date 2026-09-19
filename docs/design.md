@@ -257,7 +257,7 @@ seaplane-map/
 
 A deterministic, no-LLM "is it a SeaRey day?" briefing anchored on an adjustable home airport, refreshed every few
 hours by the `api` service, with per-lake wave height from wind and fetch and a ranked list of nearby favorable
-lakes. Full design: `docs/briefing-design.md`. Sits between phase 1 deployment and the rest of phase 2 because it
+lakes. Built 2026-09-19, including an evening outlook for the next morning at 18:00, 20:00, and 22:00 local. Full design: `docs/briefing-design.md`. Sits between phase 1 deployment and the rest of phase 2 because it
 shares the `api` service with the wind layer.
 
 ## 11. Open items

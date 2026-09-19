@@ -1,0 +1,72 @@
+{
+ "icaoId": "KPTK",
+ "dbPopTime": "2026-09-19T11:20:27.648Z",
+ "bulletinTime": "2026-09-19T11:20:00.000Z",
+ "issueTime": "2026-09-19T00:00:00Z",
+ "validTimeFrom": 1789776000,
+ "validTimeTo": 1789927200,
+ "rawTAF": "TAF KPTK (fixture taf_ifr.json)",
+ "mostRecent": 1,
+ "remarks": "",
+ "lat": 42.66315,
+ "lon": -83.410018,
+ "elev": 295,
+ "prior": 5,
+ "name": "Pontiac/Oakland Intl",
+ "fcsts": [
+  {
+   "timeFrom": 1789776000,
+   "timeTo": 1789927200,
+   "timeBec": null,
+   "fcstChange": null,
+   "probability": null,
+   "wdir": 90,
+   "wspd": 8,
+   "wgst": 12,
+   "wshearHgt": null,
+   "wshearDir": null,
+   "wshearSpd": null,
+   "visib": 1.0,
+   "altim": null,
+   "vertVis": null,
+   "wxString": "-RA BR",
+   "notDecoded": null,
+   "clouds": [
+    {
+     "cover": "OVC",
+     "base": 400,
+     "type": null
+    }
+   ],
+   "icgTurb": [],
+   "temp": []
+  },
+  {
+   "timeFrom": 1789815600,
+   "timeTo": 1789833600,
+   "timeBec": null,
+   "fcstChange": "PROB",
+   "probability": 30,
+   "wdir": 90,
+   "wspd": 5,
+   "wgst": null,
+   "wshearHgt": null,
+   "wshearDir": null,
+   "wshearSpd": null,
+   "visib": "1/2",
+   "altim": null,
+   "vertVis": null,
+   "wxString": "FG",
+   "notDecoded": null,
+   "clouds": [
+    {
+     "cover": "OVC",
+     "base": 200,
+     "type": null
+    }
+   ],
+   "icgTurb": [],
+   "temp": []
+  }
+ ]
+}

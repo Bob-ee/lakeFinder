@@ -14,6 +14,9 @@ export const ICONS = {
   copy: svg('<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 012-2h10"/>'),
   external: svg('<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M19 14v4a2 2 0 01-2 2H6a2 2 0 01-2-2V7a2 2 0 012-2h4"/>'),
   grip: svg('<path d="M6 10h12M6 14h12"/>'),
+  sliders: svg('<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>'),
+  refresh: svg('<path d="M20 12a8 8 0 10-2.3 5.7"/><path d="M20 5v6h-6"/>'),
+  chevron: svg('<path d="M9 6l6 6-6 6"/>'),
 } as const;
 
 export type IconName = keyof typeof ICONS;

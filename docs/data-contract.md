@@ -246,10 +246,123 @@ entries:
 ## Client URL and storage
 
 - `?lake=<id>` opens that lake via the single `selectLake(id)` path.
-- IndexedDB db `seaplane`, stores `saved` (key `id`), `recent` (key `id`), `wind` (key bbox tile).
+- IndexedDB db `seaplane`, stores `saved` (key `id`), `recent` (key `id`), `wind` (key bbox tile), `briefing` (key `"latest"`).
 - OPFS directory `pack/` holds the downloaded data pack files by name (phase 3).
 
-## Briefing files (designed, not built)
+## Briefing
 
-`data/manual/settings.json`, `data/out/briefing.json`, and `data/out/lake_extents.json` are specified in
-`docs/briefing-design.md` section 6. Move their schemas into this file when the briefing is implemented.
+Algorithm and reasoning: `docs/briefing-design.md`. Three parts build against this section: the pipeline
+(`lake_extents.json`), the `api/` service (settings, scheduler, `briefing.json`), and the client (card + settings).
+Scores are `favorable | marginal | unfavorable` (rank 0, 1, 2); the briefing never says "go", "safe", or "legal".
+All local times are `HH:MM` 24-hour strings in `settings.timezone`; all `*_at` / `generated_at` values are UTC ISO 8601
+with `Z`. Every number is already rounded for display by the server (kt, °F, inches as integers; `ceiling_ft` and
+`da_ft` to the nearest 100; `vis_sm` capped at 10); the client prints them as they are. `ceiling_ft: null` with
+`ceiling_known: true` means no ceiling; `ceiling_known: false` means no data covered that hour (no TAF or METAR; the
+models carry no cloud base) and the ceiling factor was not evaluated.
+
+### `data/out/lake_extents.json` (pipeline stage `build`, listed in `pack.json`)
+
+`{"<lake_id>": [ft × 16]}` for lakes with `chord_ft` ≥ 1000. Bin `i` is centered on bearing `i × 22.5°` true
+(0 = north, 4 = east); a bearing maps to bin `round(bearing / 22.5) % 16`. The value is the longest straight segment
+through the lake polygon along that bearing, in whole feet. A segment has two directions, so bin `i` always equals
+bin `(i + 8) % 16`. Computed in `geometry` as the lake column `extent_by_bearing` (list of 16 ints).
+
+### `data/manual/settings.json` (written by the api service; gitignored; created with these defaults on first start)
+
+```jsonc
+{"home_airport": {"id": "KPTK", "name": "Oakland County Intl", "lat": 42.6655, "lon": -83.4187, "elev_ft": 981,
+                  "runways": [{"id": "09L/27R", "heading": 88}, {"id": "09R/27L", "heading": 88},
+                              {"id": "18/36", "heading": 172}]},   // heading: degrees TRUE of the first-named end
+ "timezone": "America/Detroit",
+ "radius_nm": 40, "n_lakes": 8, "public_access_only": false,
+ "schedule": {"run_times_local": ["06:00", "09:00", "12:00", "15:00", "18:00", "20:00", "22:00"]},
+ "outlook": {"times_local": ["18:00", "20:00", "22:00"],     // evening runs recorded in outlook.runs; always also run times
+             "morning_start": "sunrise",                      // "sunrise" | "civil_twilight" | "HH:MM"
+             "morning_end_local": "12:00", "min_window_hours": 2},
+ "notify": {"ntfy_url": null},                                // when set, each outlook run POSTs outlook.summary there
+ "limits": {"wind_ok": 12, "wind_max": 18, "gust_spread_ok": 8, "gust_spread_max": 12,
+            "xwind_runway_ok": 8, "xwind_runway_max": 12, "xwind_water_max": 10,
+            "ceiling_ok": 3000, "ceiling_min": 1500, "vis_ok": 6, "vis_min": 3,
+            "da_ok": 3500, "da_max": 5000, "temp_water_min_f": 40, "fog_spread_f": 3,
+            "wave_ok_in": 8, "wave_max_in": 12, "min_run_ft": 2000,
+            "ice_season_start": "12-01", "ice_season_end": "04-01"}}
+```
+
+Unknown keys are rejected; missing keys are filled from the defaults, so an older file keeps working.
+
+### `data/out/briefing.json` (written atomically by the api service; not part of `pack.json`)
+
+```jsonc
+{"schema": 1,
+ "generated_at": "2026-09-19T22:00:04Z",
+ "run_kind": "outlook",                       // "scheduled" | "outlook" | "manual" | "startup"
+ "timezone": "America/Detroit",
+ "home_airport": {"id": "KPTK", "name": "Oakland County Intl", "lat": 42.6655, "lon": -83.4187},
+ "summary": "Favorable 10:00–16:00 today. KPTK wind 250/9 G14, ceiling 4,500, vis 10. …",
+ "days": [{"date": "2026-09-19", "score": "favorable", "best_window": ["10:00", "16:00"],   // best_window null when none
+           "blocks": [{"start": "07:00", "end": "10:00", "score": "marginal", "limiting": "gusts",
+                       "wind": {"dir": 250, "kt": 9, "gust": 17}, "xwind_kt": 6, "runway": "27L",
+                       "ceiling_ft": 4500, "ceiling_known": true, "vis_sm": 10, "da_ft": 2100, "temp_f": 61,
+                       "precip_prob": 10}]}],
+ "outlook": {
+   "target_date": "2026-09-20",               // tomorrow once local time ≥ morning_end_local, else today
+   "window": {"start": "07:18", "end": "12:00"},
+   "sun": {"civil_dawn": "06:49", "sunrise": "07:18", "sunset": "19:34", "civil_dusk": "20:03"},
+   "score": "favorable", "limiting": null,    // limiting: factor id when score is not favorable
+   "watch": "gusts after 11:00",              // what ends a favorable window, or null
+   "best_window": ["08:00", "12:00"],         // null when no run of min_window_hours exists
+   "hours": [{"time": "08:00", "score": "favorable", "limiting": null,
+              "wind": {"dir": 240, "kt": 6, "gust": 9}, "xwind_kt": 3, "runway": "27L",
+              "ceiling_ft": null, "ceiling_known": true, "vis_sm": 10, "temp_f": 52, "dewpoint_f": 47, "fog_risk": false,
+              "precip_prob": 5, "da_ft": 1200}],
+   "lakes": [ /* same row shape as top-level "lakes", worst hour inside best_window */ ],
+   "confidence": "medium", "confidence_reasons": ["NWS and model wind differ by 6 kt"],
+   "trend": "steady",                         // vs previous entry in runs: "improving" | "steady" | "worsening" | null
+   "runs": [{"at": "18:00", "generated_at": "2026-09-19T22:00:03Z", "score": "favorable",
+             "best_window": ["08:00", "12:00"], "limiting": null, "max_gust_kt": 12}],
+   "summary": "Tomorrow morning (Sun): favorable 08:00–12:00. Wind 240/6 G9, no ceiling, vis 10. …"},
+ "alerts": [{"event": "Lake Wind Advisory", "area": "Lake St. Clair", "ends": "2026-09-20T02:00:00Z"}],
+ "lakes": [{"id": 1234567, "name": "Cass Lake", "score": "favorable", "limiting": null, "hs_in": 6, "run_ft": 4100,
+            "wind": {"dir": 250, "kt": 10, "gust": 15}, "distance_nm": 6.1, "bearing_deg": 118,
+            "verdict": "conditional", "frozen": false}],
+ "sources": {"metar": "2026-09-19T21:53:00Z", "taf": "2026-09-19T17:20:00Z", "open_meteo": "…", "nws": "…"},  // null when that input failed
+ "links": {"metar": "https://…", "taf": "https://…", "forecast": "https://…"},
+ "errors": ["nws: timeout"]}
+```
+
+Lake rows are **water-only**: `score` and `limiting` come from waves, run, water crosswind, and ice at that lake, not
+from the airport weather, which lives in the header, blocks, and hours. Rows are ranked by score, then distance, then
+`hs_in`. Frozen lakes stay in the list as `frozen: true`, `unfavorable`, `limiting: "ice"`. When target_date is today,
+`outlook.hours` holds only hours that have not ended, while `outlook.window` stays the nominal morning window; the
+client lays out its hour strip from `hours`, not from `window`.
+
+`limiting` factor ids: `wind`, `gusts`, `xwind_runway`, `ceiling`, `visibility`, `fog`, `precip`, `convection`,
+`density_altitude`, `temperature`, `alert`, `daylight`; lakes add `waves`, `run`, `xwind_water`, `ice`. `outlook.runs`
+is carried forward from the previous `briefing.json` while `target_date` is unchanged (an entry with the same `at`
+is replaced). `outlook` is `null` only when the forecast input failed entirely.
+
+### api service (`api/`, FastAPI, Python 3.12, uv, package `seaplane_api`)
+
+Run: `cd api && uv run seaplane-api` (uvicorn on `127.0.0.1:8000`, scheduler in-process) ·
+`uv run seaplane-api briefing --once` (one run, no server) · tests `cd api && uv run pytest -q`. Directories come from
+`SEAPLANE_DATA_OUT` and `SEAPLANE_DATA_MANUAL` (default `../data/out`, `../data/manual`). Caddy and the Vite dev
+server proxy `/api/*` to it. Single user, tailnet only, no auth.
+
+| endpoint | behavior |
+|---|---|
+| `GET /api/health` | `{"ok": true, "briefing_generated_at": "…" \| null, "next_run_local": "20:00"}` |
+| `GET /api/settings` | the settings object |
+| `PUT /api/settings` | full object, validated (422 on bad input), written atomically, triggers a `manual` run in the background; returns the saved object |
+| `GET /api/airports/{ident}` | resolves an identifier to the `home_airport` shape (aviationweather.gov airport info); 404 when unknown |
+| `POST /api/briefing/refresh` | runs now, returns the new `briefing.json` body |
+
+The client reads the briefing as the static file `/data/briefing.json`, never through `/api`.
+
+### Client
+
+- Briefing card: summary, block strip per day, the outlook section (hour strip, best window, run-history chips with
+  trend, confidence), ranked lakes as rows through `selectLake(id)`, links to raw METAR/TAF/forecast, age badge,
+  "stale" past 6 hours. The outlook section leads when `outlook.target_date` is tomorrow and local time is 17:00 or
+  later, or when it is today and the window has not ended.
+- IndexedDB store `briefing` (key `"latest"`) keeps the last briefing for offline.
+- Settings screen edits `settings.json` through `/api/settings`; hidden with a notice when `/api/health` fails.

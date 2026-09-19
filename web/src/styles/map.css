@@ -25,9 +25,12 @@
 
 /* -- right-edge control stack ------------------------------------------- */
 
+/* On a phone the stack starts below the briefing chip, which owns the band under the
+   search bar; at the panel breakpoint the chip is a fixed 420 px and they sit side by
+   side again. */
 .map-controls {
   position: absolute;
-  top: calc(var(--safe-top) + 84px);
+  top: calc(var(--safe-top) + 130px);
   right: 12px;
   z-index: 20;
   display: flex;
@@ -90,6 +93,7 @@
 
 @media (min-width: 840px) {
   .map-controls {
+    top: calc(var(--safe-top) + 84px);
     /* Stay clear of the docked detail panel. */
     right: calc(380px + 12px);
   }
