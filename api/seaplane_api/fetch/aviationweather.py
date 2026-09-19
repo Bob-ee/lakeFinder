@@ -39,6 +39,26 @@ async def fetch_metar(c: httpx.AsyncClient, ids: str) -> tuple[list[dict] | None
     return (data if isinstance(data, list) else []), None
 
 
+async def fetch_metar_bbox(
+    c: httpx.AsyncClient, bbox: tuple[float, float, float, float]
+) -> tuple[list[dict] | None, str | None]:
+    """Every current METAR inside `(min_lat, min_lon, max_lat, max_lon)`.
+
+    Verified live on 2026-09-19: `?bbox=42.2,-83.2,42.8,-82.2` returns KMTC, KDET, KVLL and CYQG,
+    each with `lat`, `lon`, `name` and `obsTime`, so the caller can rank them by distance to the
+    water and label them. The order the feed returns them in is not distance order.
+    """
+    data, err = await get_json(
+        c,
+        f"{BASE}/metar",
+        {"bbox": ",".join(f"{v:.3f}" for v in bbox), "format": "json"},
+        label="metar_bbox",
+    )
+    if err:
+        return None, err
+    return (data if isinstance(data, list) else []), None
+
+
 async def fetch_taf(c: httpx.AsyncClient, ids: str) -> tuple[list[dict] | None, str | None]:
     data, err = await get_json(c, f"{BASE}/taf", {"ids": ids, "format": "json"}, label="taf")
     if err:

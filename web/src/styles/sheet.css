@@ -8,6 +8,12 @@
   bottom: 0;
   z-index: 40;
   display: none;
+  /* Same trap the briefing card documents: an `auto` grid track is sized by its content's
+     min-content width, and `min-width: 0` on a flex item does not reduce that contribution.
+     One long peek subtitle ("Great Lakes water · Oakland, Wayne, Macomb") was enough to
+     push the whole sheet wider than the phone. `minmax(0, 1fr)` pins it to the viewport and
+     lets the ellipsis inside do its job. */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto auto auto 1fr;
   height: var(--sheet-height, 0px);
   max-height: 95dvh;

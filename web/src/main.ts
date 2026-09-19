@@ -5,14 +5,22 @@ import "./styles/map.css";
 import "./styles/search.css";
 import "./styles/sheet.css";
 import "./styles/briefing.css";
+import "./styles/waves.css";
 
 import { BriefingController, readBriefingParam } from "./briefing";
+import { minRunFt } from "./briefing/home-water";
+import { WAVES } from "./config";
 import { Tabs, detailPlaceholder } from "./lists";
 import { MapController } from "./map";
 import { SearchBox } from "./search/ui";
 import { Sheet } from "./sheet";
 import { renderDetail, renderPeek, type DetailInput } from "./sheet/detail";
 import { AppState, readUrlParam, type Selection } from "./state";
+import { waveGeo } from "./waves/geo";
+import { WaveLegend } from "./waves/legend";
+import { WaveFieldLoader } from "./waves/load";
+import { WaterSection, type WaveState } from "./waves/section";
+import { defaultWindFor, forecastWindFor } from "./waves/wind";
 import { maybeShowFirstRun, openAbout } from "./ui/about";
 import { el } from "./ui/format";
 import { loadLayerPrefs, mountMapControls } from "./ui/controls";
@@ -29,6 +37,8 @@ async function boot(): Promise<void> {
   app.append(mapEl);
 
   const state = new AppState();
+  /** Bumped on every selection change; a late wave-field load checks it before painting. */
+  let waterToken = 0;
   const sheet = new Sheet(app);
   const tabs = new Tabs(sheet.slots.tabs, sheet.slots.body);
   const detailPanel = tabs.panel("detail");
@@ -64,6 +74,12 @@ async function boot(): Promise<void> {
 
   mountMapControls(app, map, prefs);
 
+  // The wave field: one index fetch, then one Range request per water body. Everything
+  // about it degrades to "this water body has no wave field", which is also the honest
+  // answer for every lake too small for the pipeline to sample.
+  const waves = new WaveFieldLoader();
+  const legend = new WaveLegend(app);
+
   // The briefing lives in the sheet because that is the one surface that is already a
   // bottom sheet on a phone and a docked panel on an iPad. The chip on the map keeps it
   // one tap away from the default view.
@@ -80,6 +96,15 @@ async function boot(): Promise<void> {
       if (sheet.current === "full") sheet.setSnap("half");
       if (!state.selectLake(id, "list")) toast("That lake is not in this data pack");
     },
+    selectRegion: (id, lat, lon) => {
+      if (sheet.current === "full") sheet.setSnap("half");
+      if (!state.selectLake(id, "list")) {
+        toast("That water body is not in this data pack");
+        return;
+      }
+      // After the selection's own fitBounds has run, so the region wins the camera.
+      map.map.once("moveend", () => map.flyToRegion(lon, lat));
+    },
   });
   briefing.mountPanel(tabs.panel("briefing"));
   briefing.mountPeek(sheet.slots.peek);
@@ -94,13 +119,18 @@ async function boot(): Promise<void> {
     onOpenAbout: () => openAbout(state, theme, () => briefing.openSettings()),
   });
 
-  theme.onChange((resolved) => map.setTheme(resolved));
+  theme.onChange((resolved) => {
+    map.setTheme(resolved);
+    legend.paintRamp();
+  });
   sheet.onSnapChange(() => map.resize());
   window.addEventListener("resize", () => map.resize());
 
   state.onSelection((selection) => {
     if (!selection) {
       map.clearSelection();
+      legend.hide();
+      waterToken++;
       // Clearing a lake that was picked from the briefing falls back to the briefing
       // rather than closing the sheet out from under it.
       if (briefing.isOpen) {
@@ -126,8 +156,45 @@ async function boot(): Promise<void> {
       pack: state.pack,
     };
     renderPeek(input, sheet.slots.peek);
-    detailPanel.replaceChildren(renderDetail(input));
+    const detail = renderDetail(input);
+    detailPanel.replaceChildren(detail.element);
     detailPanel.scrollTop = 0;
+    void mountWaterSection(selection, detail.water);
+  }
+
+  /**
+   * Loads this water body's wave field and mounts the Water section, which then owns the
+   * wind and pushes every change at the map. The token guards against a slow Range request
+   * landing after the pilot has already tapped a different lake.
+   */
+  async function mountWaterSection(selection: Selection, slot: HTMLElement): Promise<void> {
+    const token = ++waterToken;
+    map.setWaveField(null);
+    legend.hide();
+
+    const field = await waves.field(selection.lake.id);
+    if (token !== waterToken || !field) return;
+    const minRun = await minRunFt(WAVES.defaultMinRunFt);
+    if (token !== waterToken || !slot.isConnected) return;
+
+    const briefed = briefing.store.briefing;
+    const paint = (waveState: WaveState): void => {
+      if (token !== waterToken) return;
+      map.setWaveField(waveGeo(waveState));
+      legend.show(waveState);
+    };
+
+    const section = new WaterSection({
+      lake: selection.lake,
+      field,
+      minRunFt: minRun,
+      initialWind: defaultWindFor(briefed, selection.lake.id),
+      forecast: forecastWindFor(briefed, selection.lake.id),
+      onChange: paint,
+      onRegionTap: (_region, point) => map.flyToRegion(point.lon, point.lat),
+    });
+    slot.replaceChildren(section.element);
+    paint(section.current);
   }
 
   if (state.search.size === 0) {

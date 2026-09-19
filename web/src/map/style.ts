@@ -1,18 +1,22 @@
 import { layers as basemapLayers, namedFlavor } from "@protomaps/basemaps";
+import type { FeatureCollection } from "geojson";
 import type {
   ExpressionSpecification,
   LayerSpecification,
   StyleSpecification,
 } from "maplibre-gl";
-import { BASEMAP_ASSETS, DATA_FILES, USABLE_WATER_MIN_ZOOM } from "../config";
+import { BASEMAP_ASSETS, DATA_FILES, USABLE_WATER_MIN_ZOOM, WAVES } from "../config";
 import type { ResolvedTheme } from "../ui/theme";
 import type { Verdict } from "../types";
+import { WAVE_DOT_RING, waveColorExpression } from "../waves/ramp";
 
 export const SOURCE = {
   basemap: "protomaps",
   lakes: "lakes",
   usableWater: "usable_water",
   overlays: "overlays",
+  wavePoints: "wave-points",
+  waveRegions: "wave-regions",
 } as const;
 
 export const LAYER = {
@@ -28,7 +32,12 @@ export const LAYER = {
   bas: "overlay-bas",
   airports: "overlay-airports",
   airportLabels: "overlay-airport-labels",
+  wavePoints: "wave-points-circle",
+  waveRegionLabels: "wave-region-labels",
 } as const;
+
+/** An empty GeoJSON source, so the wave layers exist before any water body is selected. */
+export const EMPTY_FEATURES: FeatureCollection = { type: "FeatureCollection", features: [] };
 
 /** Toggleable overlay groups. `bas` is the only one on by default (design.md 7.2). */
 export const OVERLAY_GROUPS = {
@@ -253,6 +262,64 @@ function overlayLayers(theme: ResolvedTheme): LayerSpecification[] {
 }
 
 /**
+ * The selected water body's wave field: one circle per sample point, coloured by the wave
+ * height for the wind the sheet is asking about, and the region labels at their
+ * representative points once the zoom can fit them.
+ *
+ * Two plain GeoJSON sources that start empty and are updated in place. They are always in
+ * the style, even with no selection, so switching lakes is one `setData` rather than a
+ * source add and a layer add; an empty collection costs nothing to render. Both layers sit
+ * last, so the wave field draws over the verdict outlines and the selection highlight
+ * instead of hiding under them.
+ */
+function waveLayers(theme: ResolvedTheme): LayerSpecification[] {
+  const dark = theme === "dark";
+  return [
+    {
+      id: LAYER.wavePoints,
+      type: "circle",
+      source: SOURCE.wavePoints,
+      paint: {
+        // Small enough that a 400-point lake reads as a field of dots with water showing
+        // between them rather than as a blanket over the lake, and big enough to still be
+        // there at the zoom a whole Great Lake fits on a phone.
+        "circle-radius": ["interpolate", ["linear"], ["zoom"], 7, 1.6, 10, 3, 13, 6, 16, 11],
+        "circle-color": waveColorExpression(theme) as unknown as ExpressionSpecification,
+        // A point with too short a run into this wind is not a landing spot, so it fades
+        // rather than disappearing: it was measured, it just is not an answer.
+        "circle-opacity": ["case", ["get", "usable"], 0.92, 0.35],
+        "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 7, 0.5, 12, 1.2],
+        "circle-stroke-color": WAVE_DOT_RING[theme],
+        "circle-stroke-opacity": ["case", ["get", "usable"], 0.75, 0.3],
+      },
+    },
+    {
+      id: LAYER.waveRegionLabels,
+      type: "symbol",
+      source: SOURCE.waveRegions,
+      minzoom: WAVES.labelMinZoom,
+      layout: {
+        "text-field": ["get", "label"],
+        "text-font": ["Noto Sans Regular"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 10, 11, 14, 14],
+        "text-offset": [0, -1.2],
+        "text-anchor": "bottom",
+        "text-padding": 6,
+        // Rather than stack labels on top of each other on a crowded bay, drop the ones
+        // that do not fit; the sheet's list always has all of them.
+        "text-allow-overlap": false,
+        "text-optional": true,
+      },
+      paint: {
+        "text-color": dark ? "#e6edf3" : "#11181c",
+        "text-halo-color": dark ? "#0d1117" : "#ffffff",
+        "text-halo-width": 1.8,
+      },
+    },
+  ];
+}
+
+/**
  * Builds the whole style. Sources whose pmtiles archive returned 404 are left out entirely
  * along with their layers, so a partial data directory renders what it has.
  */
@@ -314,6 +381,10 @@ export function buildStyle(theme: ResolvedTheme, available: AvailableTiles): Sty
     };
     styleLayers.push(...overlayLayers(theme));
   }
+
+  sources[SOURCE.wavePoints] = { type: "geojson", data: EMPTY_FEATURES };
+  sources[SOURCE.waveRegions] = { type: "geojson", data: EMPTY_FEATURES };
+  styleLayers.push(...waveLayers(theme));
 
   return {
     version: 8,

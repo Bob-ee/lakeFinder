@@ -18,6 +18,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 
+from . import service
 from .fetch import aviationweather
 from .fetch.http import client
 from .paths import briefing_path, read_json
@@ -66,6 +67,13 @@ def create_app(*, scheduler: Scheduler | None = None) -> FastAPI:
             new = Settings.model_validate(payload)
         except Exception as e:  # pydantic ValidationError, and anything else a bad body causes
             raise HTTPException(status_code=422, detail=str(e)) from e
+        # `home_water.id` has to exist in `index.json`. That is a filesystem question, so it cannot
+        # live in the pydantic model; a client that typed an id would otherwise get a briefing with
+        # a quiet error in it instead of a 422 on the form.
+        if new.home_water is not None and not service.index_has(new.home_water.id):
+            raise HTTPException(
+                status_code=422, detail=f"home_water: id {new.home_water.id} is not in index.json"
+            )
         sched: Scheduler = app.state.scheduler
         sched.settings = new
         save_settings(new)

@@ -71,7 +71,9 @@ One record per (lake mention, rule). `restrictions.json` is `{ "<restriction_id>
   "needs_review": false,
   "lake_ids": [1234567],                 // build stage only; [] when unmatched
   "match_confidence": 0.9,               // build stage only; matcher score (< 0.8 also sets needs_review)
-  "reach_unresolved": true               // build stage only, and only when true; see "Waterway matching"
+  "reach_unresolved": true,              // build stage only, and only when true; see "Waterway matching"
+  "big_water_partial": true              // build stage only, and only when true; see "Waterway matching".
+                                         //   The rules engine caps this restriction at `conditional`.
 }
 ```
 
@@ -131,9 +133,15 @@ does *not* end in a lake generic (`Lake`, `Pond`, `Reservoir`, `Flowage`, `Impou
 `"Stoney Creek Lake"` stays a lake and `"Pine River"` is a waterway. The two sides never cross:
 
 - a **lake** header only ever scores against `kind: "lake"` polygons;
-- a **waterway** header only ever scores against `kind: "river"` polygons and the river-named `kind: "lake"`
+- a **waterway** header only ever scores against `kind: "river"` polygons, the river-named `kind: "lake"`
   polygons (impoundments the hydrography layer types as lakes but names `"Au Sable River"`, `"Cornwall Creek
-  Flooding"`).
+  Flooding"`), and the `kind: "great_lake"` / `kind: "connecting_water"` polygons.
+
+Big water is reachable **only** from the waterway track. That is what keeps an inland lake-named restriction off
+a Great Lake: `"Saint Clair Lake"` (Antrim), `"Huron Lake"` (Houghton), the 25-acre `"Lake Erie"` in Monroe and
+`"Superior Lakes"` (Marquette) are lake headers matching lake polygons, while `"Detroit River"`,
+`"St. Clair River"` and `"Lake St. Clair, Certain Creeks"` are waterway headers that reach the big-water
+polygons by name.
 
 A waterway header may attach to **several** polygons, because one river is digitized as several polygons sharing one
 name (Grand River: 19, Sturgeon River: 29). Candidates are the same-name polygons that intersect the restriction's
@@ -143,8 +151,31 @@ When neither narrows it, every same-name polygon in the county is matched and th
 `reach_unresolved: true`, which `build` copies onto the published restriction record and `classify` surfaces as the
 lake flag `reach_unresolved`. It means "the rule covers part of this river; read the rule text", not "unverified".
 
-Creeks, channels, canals, and bays with no polygon in the hydrography layer stay unmatched waterways, as do the Great
-Lakes and their connecting waters, which the layer does not contain at all.
+Creeks, channels and canals with no polygon in any water layer stay unmatched waterways.
+
+**Big water always carries `reach_unresolved`.** A match onto a `great_lake` or `connecting_water` polygon is
+`reach_unresolved: true` whatever the narrowing found, because a township or a section never covers a 430 sq mi
+lake or a 20 mile river: the rule is always about a reach. (On `river` polygons the existing behaviour is
+unchanged — `reach_unresolved` only when nothing narrowed the set below the county.)
+
+**Bay and harbor fallback.** A waterway header whose name *ends* in `Bay` or `Harbor` (optionally `Harbor of
+Refuge`), and which matched no polygon by name, attaches to a Great Lake when both hold:
+
+1. the restriction's county touches exactly one `great_lake` polygon (county polygon ∩ lake polygon > 0.1 km²);
+   a county touching two — Chippewa, Mackinac, St. Clair, Wayne — is ambiguous and the rule stays unmatched;
+2. the restriction's own narrowing geometry — the buffered PLSS section union, else the union of its named
+   township/city polygons — intersects that lake.
+
+Both are required. Condition 2 is what keeps an inland bay off the Great Lake: `"Pine Creek Bay"` (Ottawa) is on
+Lake Macatawa and carries neither PLSS nor township, so it is not attached. A header that merely *contains* a bay
+word (`"Bay of Lake Nettie"`, `"Sandy Creek Bay and North"` before its trailing clause is trimmed) is not a bay
+header. These matches score 1.0 with method `bay+great-lake` and carry `reach_unresolved`.
+
+**`big_water_partial`.** `build` publishes `big_water_partial: true` on a restriction whose every matched water
+body is a `great_lake` or `connecting_water` (and therefore every match is `reach_unresolved`). The rules engine
+reads that one field and caps the restriction at `conditional` — see "Rules engine API". It lives on the
+published restriction record rather than on the water body so that the pipeline and the client, which re-runs
+the engine from `restrictions.json`, reach the same verdict with no extra input.
 
 ## `rules/rules.json`
 
@@ -171,6 +202,11 @@ Lakes and their connecting waters, which the layer does not contain at all.
 - Rules are evaluated in order; the **first** matching rule decides that restriction's verdict and note. If no rule
   matches, the restriction gets `verdict: "unknown"` and note `"Unclassified restriction."`.
 - `note` templates substitute `{scope_description}`, `{hours.text}`, `{season.text}`, `{speed_mph}`, `{rule_id}`.
+- **Big-water cap, applied after the rule matched:** a restriction with `big_water_partial: true` can be no worse
+  than `conditional`, so a `restricted` verdict becomes `conditional` and everything else is left alone. The note
+  gains ` (Covers part of this water; verdict limited to conditional.)`. This is the "Water body kinds" rule —
+  a slow-no-wake zone at a creek mouth must not turn Lake St. Clair red — and it is in the engine rather than in
+  `rules.json` so the pipeline and the client cannot drift.
 
 ## Rules engine API (`rules/engine/index.js`, ESM, zero deps)
 
@@ -208,16 +244,39 @@ A JSON array, target under 5 MB. One entry per named hydrography polygon (plus u
  "lat": 42.7712, "lon": -83.5901, "bbox": [-83.60, 42.76, -83.58, 42.78],
  "area_acres": 41.2, "chord_ft": 2350, "chord_bearing_deg": 47,
  "verdict": "restricted", "flags": ["no_public_access"], "restriction_ids": ["3f2a9c1d0b7e"],
- "access": "School Lot Lake BAS"}      // launch name or null
+ "access": "School Lot Lake BAS",      // launch name or null
+ "federal_unit": "Seney National Wildlife Refuge"}   // present only when set; absent otherwise
 ```
+
+`federal_unit` is the name behind the `federal_overlay` flag, written only on the entries that have
+one (172 of 12,571; a fixed `null` on every row would cost 260 KB of the 5 MB budget). The client
+reads it as optional.
 
 `chord_bearing_deg` is 0–179 (a chord has two directions; the client shows both).
 
-`kind` is `"lake"` or `"river"`, straight from the hydrography layer's `TYPE`. Everything the layer types `lake`
-stays `"lake"`, including the ~500 impoundments it names after a river (`"Au Sable River"`). The value is open: a
-later source adds `"great_lake"` and `"connecting_water"` for the Great Lakes and Lake St. Clair, which this layer
-does not contain. `kind` does not change verdict logic — the same DNR local watercraft controls apply — it only
-labels the waterbody in the client and gates which restrictions may match it (see "Waterway matching").
+`kind` is `"lake"`, `"river"`, `"great_lake"` or `"connecting_water"`. `"lake"` and `"river"` come straight from
+the hydrography layer's `TYPE`; everything the layer types `lake` stays `"lake"`, including the ~500 impoundments
+it names after a river (`"Au Sable River"`). `"great_lake"` (the Great Lakes and Lake St. Clair) and
+`"connecting_water"` (the Detroit, St. Clair and St. Marys Rivers) come from the separate big-water sources the
+inland layer does not contain, and flow through every stage alongside the rest. `kind` does not change verdict
+logic — the same DNR local watercraft controls apply — it labels the waterbody in the client, gates which
+restrictions may match it (see "Waterway matching"), and tells the client how to word the flags below.
+
+Water bodies **do not overlap each other**, whatever their kind: `geometry` subtracts the inland polygons from the
+big-water polygons, and the connecting waters from the Great Lakes, so no square metre of water is published
+twice (the source layers do overlap — Michigan's "Lake Michigan Shoreline" swallows Torch Lake and Lake
+Charlevoix, and "Lake Erie Shoreline" runs up the Detroit River past Grosse Ile). Small slivers along shared
+shorelines survive; duplicate features do not.
+
+**On `great_lake` and `connecting_water` every per-water-body flag means "part of this water".** These bodies are
+one feature covering hundreds of square miles, so `airspace_class`, `federal_unit` / the `federal_overlay` flag,
+`access` / `no_public_access` and the restriction list all describe some part of the water, never the whole of it.
+The client words them that way off `kind` alone; there is no extra field. Concretely: Lake St. Clair is
+`airspace_class: "D"` because Selfridge's Class D covers Anchor Bay, not because the lake is inside Class D, and
+the Detroit River carries `federal_overlay` because the Detroit River International Wildlife Refuge holds islands
+and shoals in it. For that last reason `classify` does **not** synthesize the `federal_no_landing` restriction on
+these two kinds: a refuge over a few islands does not close a Great Lake, so the overlay is a flag only and the
+verdict is untouched. Per-region overlay geometry is future work.
 
 For a `"river"` polygon, `chord_ft` / `chord_bearing_deg` are the longest straight *reach* of open water inside the
 polygon, which is the number a pilot needs on a sinuous river.
@@ -301,8 +360,11 @@ the lake-level numbers (`lake_extents.json`, fetch = three-bin arc), exactly as 
 - `fetch[16]`: distance in the direction of bearing bin `i` (`i × 22.5°` true, convergence corrected) from the point
   to the first land, mean of 5 rays at −12°, −6°, 0°, +6°, +12°. Rays run across the **fetch mask**, the union of all
   water polygons of every kind, so a ray crosses from the Detroit River into Lake Erie or between connected lakes
-  without stopping. Capped at 100 km. A ray that leaves the mask through an artificial edge (a boundary segment
-  longer than 1,500 m: a clip line, not a shore) counts as the cap. Wind **from** direction `d` uses
+  without stopping. Capped at 100 km. A ray that leaves the mask through an **artificial edge** counts as the cap:
+  a run of consecutive mask-boundary vertices that all lie within 60 m of the chord joining the run's ends, more
+  than 2,000 m long in total. That is how a clip line looks (Lake Huron and Lake Superior stop at the international
+  boundary, densified, so a single-segment length test misses them). A long straight breakwater also qualifies,
+  which errs toward more waves. Wind **from** direction `d` uses
   `bin = floor(d / 22.5 + 0.5) % 16` and reads `fetch[bin]`.
 - `run[8]`: length of the straight line through the point along bearing bin `i` (and `i + 8`) inside the water
   body's own usable water, both directions summed. Wind bin `b` reads `run[b % 8]`.
@@ -456,6 +518,14 @@ Unknown keys are rejected; missing keys are filled from the defaults, so an olde
 Briefing candidates: every kind. A water body with wave points is scored by its **best region** for the wind
 ("Wave field" above); one without is scored at lake level as before, and `river` / `connecting_water` without wave
 points are not candidates (a reach length says nothing about width).
+
+Region details: a region with no usable run into the wind keeps `hs_in: null`, and its `lat`/`lon` are its calmest
+point so the map still has somewhere to go. When *no* region is usable the row is `unfavorable`, `limiting: "run"`,
+and reports the calmest region's label, its all-points wave height as `hs_in`, and its ungated median run. Region and
+lake-level waves are both computed at the gust. A big water body is a candidate when any of its sample points is
+within `radius_nm`; `distance_nm` / `bearing_deg` are to the best region's point. `observed[].name` is null for NDBC
+stations (the feed has no names). `marine_hs_in` is null when the marine model has no value or its grid point snapped
+more than 10 nm from the centroid (it otherwise reports the nearest Great Lake for an inland point).
 
 Lake rows are **water-only**: `score` and `limiting` come from waves, run, water crosswind, and ice at that lake, not
 from the airport weather, which lives in the header, blocks, and hours. Rows are ranked by score, then distance, then

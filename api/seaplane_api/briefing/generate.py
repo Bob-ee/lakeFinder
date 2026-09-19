@@ -20,9 +20,10 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from ..fetch import aviationweather, nws, openmeteo
+from ..fetch import aviationweather, ndbc, nws, openmeteo
 from ..settings import Settings
 from . import blocks as blocks_mod
+from . import homewater as homewater_mod
 from . import lakes as lakes_mod
 from . import outlook as outlook_mod
 from . import render
@@ -48,12 +49,19 @@ class Feeds:
     lake_series: dict[tuple[int, int], HourlySeries] = field(default_factory=dict)
     alerts: list[dict] | None = None
     nws_hourly: list[dict] | None = None
+    buoys: list[dict] | None = None  # NDBC rows near the home water
+    home_water_metars: list[dict] | None = None  # METARs from the bbox around the home water
+    marine: dict | None = None  # Open-Meteo marine at the home water's centroid
     fetched_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     errors: list[str] = field(default_factory=list)
 
 
 async def collect_feeds(
-    settings: Settings, candidates: list[lakes_mod.Candidate], *, client: httpx.AsyncClient
+    settings: Settings,
+    candidates: list[lakes_mod.Candidate],
+    *,
+    client: httpx.AsyncClient,
+    home_water: lakes_mod.Candidate | None = None,
 ) -> Feeds:
     """Fetch every input. Never raises; failures land in `feeds.errors`."""
     home = settings.home_airport
@@ -85,16 +93,20 @@ async def collect_feeds(
         feeds.airport = HourlySeries.from_open_meteo(airport_payloads[0], tz)
         feeds.airport_daily = airport_payloads[0].get("daily")
 
-    points = lakes_mod.grid_points(candidates)
-    if points:
-        payloads, errs = await openmeteo.fetch_points(client, points, timezone=settings.timezone, forecast_days=2)
+    # The home water is briefed whatever `radius_nm` says, so its own grid cell joins the list even
+    # when it is not a candidate. Its wind comes from its own centroid, never from the airport.
+    cell_of = lakes_mod.grid_cells(candidates if home_water is None else [*candidates, home_water])
+    if cell_of:
+        payloads, errs = await openmeteo.fetch_points(
+            client, list(cell_of.values()), timezone=settings.timezone, forecast_days=2
+        )
         feeds.errors.extend(errs)
-        cell_of = {}
-        for c in candidates:
-            cell_of.setdefault(c.cell, c.cell_point)
         for cell, payload in zip(cell_of.keys(), payloads, strict=False):
             if payload:
                 feeds.lake_series[cell] = HourlySeries.from_open_meteo(payload, tz)
+
+    if home_water is not None:
+        await _collect_home_water(feeds, home_water, client=client, timezone=settings.timezone)
 
     alerts, err = await nws.fetch_alerts(client, home.lat, home.lon)
     if err:
@@ -111,6 +123,34 @@ async def collect_feeds(
     return feeds
 
 
+async def _collect_home_water(
+    feeds: Feeds, home_water: lakes_mod.Candidate, *, client: httpx.AsyncClient, timezone: str
+) -> None:
+    """The home water's second opinions: buoys, the METARs around it, and the marine model.
+
+    All three are optional. Each failure is one error string and one `None`; none of them can stop
+    the home water being briefed from the computed wave field.
+    """
+    min_lat, min_lon, max_lat, max_lon = homewater_mod.bbox_around(home_water)
+    buoys, err = await ndbc.fetch_latest_obs(client, (min_lon, min_lat, max_lon, max_lat))
+    if err:
+        feeds.errors.append(err)
+    else:
+        feeds.buoys = buoys
+
+    metars, err = await aviationweather.fetch_metar_bbox(client, (min_lat, min_lon, max_lat, max_lon))
+    if err:
+        feeds.errors.append(err)
+    else:
+        feeds.home_water_metars = metars
+
+    marine, err = await openmeteo.fetch_marine(client, home_water.lat, home_water.lon, timezone=timezone)
+    if err:
+        feeds.errors.append(err)
+    else:
+        feeds.marine = marine
+
+
 def build_briefing(
     settings: Settings,
     feeds: Feeds,
@@ -121,6 +161,7 @@ def build_briefing(
     run_at: str | None = None,
     previous: dict | None = None,
     extra_errors: list[str] | None = None,
+    home_water: lakes_mod.Candidate | None = None,
 ) -> dict:
     """Assemble the contract's `briefing.json` dict. Pure."""
     tz = ZoneInfo(settings.timezone)
@@ -172,9 +213,17 @@ def build_briefing(
     today = next((d for d in days if d["date"] == now_local.date().isoformat()), None)
     tomorrow = next((d for d in days if d["date"] == (now_local.date() + timedelta(days=1)).isoformat()), None)
 
-    lake_rows, _ = _rank_for_blocks(
+    lake_rows, _, scope_centers = _rank_for_blocks(
         day_blocks, today, candidates, feeds, limits, frozen=frozen, n_lakes=settings.n_lakes
     )
+
+    home_water_row = _home_water_block(
+        home_water, scope_centers, feeds, limits, frozen=frozen, now_utc=now_utc, with_observed=True
+    )
+    if home_water is not None and home_water_row is None and scope_centers:
+        # There are blocks to score but no wind for this water: worth saying, since the pilot asked
+        # for it by name. No blocks at all (after dark) is not an error, it is the end of the day.
+        errors.append(f"home_water: no forecast covered {home_water.name}")
 
     first_block = day_blocks[0] if day_blocks else None
     summary = render.summary(
@@ -202,6 +251,7 @@ def build_briefing(
             run_at=run_at,
             run_kind=run_kind,
             previous=previous,
+            home_water=home_water,
         )
 
     # No `valid_from` / `valid_to`: the superseded design-doc sketch had them, the authoritative
@@ -217,6 +267,7 @@ def build_briefing(
         "outlook": outlook,
         "alerts": feeds.alerts or [],
         "lakes": lake_rows,
+        "home_water": home_water_row,
         "sources": _sources(feeds),
         "links": {
             "metar": aviationweather.METAR_LINK.format(ids=home.id),
@@ -236,24 +287,56 @@ def _rank_for_blocks(
     *,
     frozen: bool,
     n_lakes: int,
-) -> tuple[list[dict], list[lakes_mod.RankedLake]]:
-    """Rank lakes over today's best window, or over every remaining block when there is none."""
+) -> tuple[list[dict], list[lakes_mod.RankedLake], list[datetime]]:
+    """Rank lakes over today's best window, or over every remaining block when there is none.
+
+    The block centres are returned as well, because the home water is scored over exactly the same
+    span as the rows beside it: two different windows in one briefing would be unreadable.
+    """
     if not day_blocks:
-        return [], []
+        return [], [], []
     today_blocks = [b for b in day_blocks if day and b.start.date().isoformat() == day["date"]] or day_blocks
     window = day.get("best_window") if day else None
     scope = today_blocks
     if window:
         scope = [b for b in today_blocks if window[0] <= b.start.strftime("%H:%M") < window[1]] or today_blocks
+    centers = [b.center for b in scope]
     ranked = lakes_mod.rank_lakes(
         candidates,
         feeds.lake_series,
-        [b.center for b in scope],
+        centers,
         limits,
         frozen=frozen,
         n_lakes=n_lakes,
     )
-    return [r.to_row() for r in ranked], ranked
+    return [r.to_row() for r in ranked], ranked, centers
+
+
+def _home_water_block(
+    home_water: lakes_mod.Candidate | None,
+    when: list[datetime],
+    feeds: Feeds,
+    limits,
+    *,
+    frozen: bool,
+    now_utc: datetime,
+    with_observed: bool,
+) -> dict | None:
+    """The `home_water` object over `when`, worst hour, or `None` when there is nothing to say."""
+    if home_water is None or not when:
+        return None
+    ranked = lakes_mod.score_over(home_water, feeds.lake_series, when, limits, frozen=frozen)
+    if ranked is None:
+        return None
+    observed = None
+    if with_observed:
+        observed = homewater_mod.observed_rows(
+            home_water, buoys=feeds.buoys, metars=feeds.home_water_metars, now_utc=now_utc
+        )
+    marine = None
+    if ranked.hour.when is not None:
+        marine = homewater_mod.marine_hs_in(feeds.marine, ranked.hour.when, home_water)
+    return homewater_mod.block(ranked, limits, observed=observed, marine_hs_in=marine)
 
 
 def _outlook_hour(
@@ -296,6 +379,7 @@ def _build_outlook(
     run_at: str | None,
     run_kind: str,
     previous: dict | None,
+    home_water: lakes_mod.Candidate | None = None,
 ) -> dict | None:
     limits = settings.limits
     home = settings.home_airport
@@ -334,17 +418,23 @@ def _build_outlook(
     max_gust = max(
         (round(h.conditions.gust_kt) for h in scope if h.conditions.gust_kt is not None), default=None
     )
+    scope_hours = [h.start for h in scope]
     lake_rows = [
         r.to_row()
         for r in lakes_mod.rank_lakes(
             candidates,
             feeds.lake_series,
-            [h.start for h in scope],
+            scope_hours,
             limits,
             frozen=frozen,
             n_lakes=settings.n_lakes,
         )
     ]
+    # No `observed` here: the outlook is about a morning that has not happened, and a reading from
+    # this evening pinned under tomorrow's numbers would read as this morning's water.
+    home_water_row = _home_water_block(
+        home_water, scope_hours, feeds, limits, frozen=frozen, now_utc=now_utc, with_observed=False
+    )
 
     runs = outlook_mod.carry_runs(previous, target)
     prev_entry = runs[-1] if runs else None
@@ -399,6 +489,7 @@ def _build_outlook(
         ceiling_known=hours[0].conditions.ceiling_known,
         fog_until=fog_until,
         lake_rows=lake_rows,
+        home_water=home_water_row,
         trend=trend,
         previous_at=previous_at,
         confidence=confidence,
@@ -420,6 +511,7 @@ def _build_outlook(
         "best_window": best_window,
         "hours": [h.to_row() for h in hours],
         "lakes": lake_rows,
+        "home_water": home_water_row,
         "confidence": confidence,
         "confidence_reasons": reasons,
         "trend": trend,

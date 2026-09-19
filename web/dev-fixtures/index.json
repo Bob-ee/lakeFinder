@@ -27,6 +27,34 @@
     "access": null
   },
   {
+    "id": 797249953,
+    "name": "Big Fixture Lake",
+    "name_norm": "big fixture",
+    "kind": "great_lake",
+    "county": null,
+    "counties": [
+      "Oakland",
+      "Wayne",
+      "Macomb"
+    ],
+    "township": null,
+    "lat": 42.4698,
+    "lon": -83.1409,
+    "bbox": [
+      -83.2615,
+      42.4131,
+      -83.03,
+      42.5269
+    ],
+    "area_acres": 36920.2,
+    "chord_ft": 65740,
+    "chord_bearing_deg": 71,
+    "verdict": "clear",
+    "flags": [],
+    "restriction_ids": [],
+    "access": "Big Fixture Lake Metropark BAS"
+  },
+  {
     "id": 1191379730,
     "name": "Big School Lot Lake",
     "name_norm": "big school lot",
@@ -75,6 +103,40 @@
     "flags": [],
     "restriction_ids": [],
     "access": "Dodge Brothers #4 BAS"
+  },
+  {
+    "id": 1126253882,
+    "name": "Fixture Channel",
+    "name_norm": "fixture channel",
+    "kind": "connecting_water",
+    "county": null,
+    "counties": [
+      "Oakland",
+      "Wayne"
+    ],
+    "township": null,
+    "lat": 42.4301,
+    "lon": -83.2996,
+    "bbox": [
+      -83.3537,
+      42.4142,
+      -83.2413,
+      42.4461
+    ],
+    "area_acres": 1600.8,
+    "chord_ft": 32200,
+    "chord_bearing_deg": 70,
+    "verdict": "conditional",
+    "flags": [
+      "reach_unresolved",
+      "federal_overlay",
+      "no_public_access"
+    ],
+    "restriction_ids": [
+      "af5df247310f"
+    ],
+    "access": null,
+    "federal_unit": "Fixture National Wildlife Refuge"
   },
   {
     "id": 442037361,

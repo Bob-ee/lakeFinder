@@ -32,6 +32,8 @@ const API_PROXY = { "/api": { target: API_ORIGIN, changeOrigin: true } };
 
 const CONTENT_TYPES: Record<string, string> = {
   ".pmtiles": "application/octet-stream",
+  // wave_points.bin, read one water body at a time with a Range request.
+  ".bin": "application/octet-stream",
   ".json": "application/json; charset=utf-8",
   ".geojson": "application/geo+json",
   ".yaml": "text/yaml; charset=utf-8",
@@ -40,7 +42,9 @@ const CONTENT_TYPES: Record<string, string> = {
 
 /**
  * Serves `/data/*` with byte-range support. pmtiles issues HTTP Range requests for the
- * header, the directory tree and every tile; without 206 responses the map stays blank.
+ * header, the directory tree and every tile; without 206 responses the map stays blank. The
+ * wave field uses the same mechanism: one Range request per water body against
+ * `wave_points.bin`, which the client falls back to slicing if it gets a 200.
  * Production is Caddy, which does this natively. Used by both `vite dev` and `vite preview`.
  */
 function dataRangeServer(): Plugin {

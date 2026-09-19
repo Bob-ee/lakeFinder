@@ -35,10 +35,17 @@ export type Flag =
   | "saved";
 
 /**
- * Hydrography `TYPE`. Open on purpose: the Great Lakes and Lake St. Clair come from a different
- * source and will add values, so the client must never assume this is exhaustive.
+ * Water body kind. `lake` and `river` come from the hydrography layer's `TYPE`;
+ * `great_lake` (the Great Lakes and Lake St. Clair) and `connecting_water` (the Detroit,
+ * St. Clair and St. Marys Rivers) come from a different source. Still open on purpose: a
+ * nationwide source may add more, so the client must never assume this is exhaustive.
  */
-export type WaterbodyKind = "lake" | "river" | (string & {});
+export type WaterbodyKind = "lake" | "river" | "great_lake" | "connecting_water" | (string & {});
+
+/** The two kinds whose flags and copy describe part of a very large water body. */
+export function isBigWater(kind: WaterbodyKind): boolean {
+  return kind === "great_lake" || kind === "connecting_water";
+}
 
 export interface TimeWindow {
   text: string;
@@ -87,6 +94,13 @@ export interface Restriction {
    * the county: it covers some reach of each matched polygon, not all of it.
    */
   reach_unresolved?: boolean;
+  /**
+   * Set by the pipeline on a restriction attached to a `great_lake` or `connecting_water`:
+   * it covers part of the water body, so the shared engine caps its verdict at
+   * `conditional` and says so in the note. The client never acts on it and must pass every
+   * restriction field through to the engine untouched (see pack/rules.ts).
+   */
+  big_water_partial?: boolean;
 }
 
 export type RestrictionIndex = Record<string, Restriction>;
@@ -97,7 +111,10 @@ export interface Lake {
   name: string | null;
   name_norm: string;
   kind: WaterbodyKind;
-  county: string;
+  /** null on `great_lake` / `connecting_water`, which touch many counties (see `counties`). */
+  county: string | null;
+  /** Every county the water body touches. Only written for the two big-water kinds. */
+  counties?: string[];
   township: string | null;
   lat: number;
   lon: number;
@@ -110,6 +127,8 @@ export interface Lake {
   flags: Flag[];
   restriction_ids: string[];
   access: string | null;
+  /** Name of the federal unit this water body sits in. Only on the ~170 entries inside one. */
+  federal_unit?: string | null;
 }
 
 export interface PackFileEntry {

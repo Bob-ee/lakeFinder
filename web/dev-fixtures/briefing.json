@@ -1,638 +1,1331 @@
 {
-  "schema": 1,
-  "generated_at": "2026-09-19T13:10:00Z",
-  "run_kind": "scheduled",
-  "timezone": "America/Detroit",
-  "home_airport": {
-    "id": "KPTK",
-    "name": "Oakland County Intl",
-    "lat": 42.6655,
-    "lon": -83.4187
-  },
-  "summary": "Favorable 10:00-16:00 today, marginal after 16:00 as gusts build to 21. Tomorrow favorable 07:00-13:00, then convection in the afternoon. KPTK wind 250/10 G14, ceiling 5,500, vis 10. Density altitude 2,100 ft. Lake Wind Advisory on Lake St. Clair until 18:00. Calmest water: Pontiac Lake 7 in with a 4,300 ft run into the wind; Union Lake 8 in; Cass Lake 9 in of chop.",
-  "days": [
+ "schema": 1,
+ "generated_at": "2026-09-19T13:10:00Z",
+ "run_kind": "scheduled",
+ "timezone": "America/Detroit",
+ "home_airport": {
+  "id": "KPTK",
+  "name": "Oakland County Intl",
+  "lat": 42.6655,
+  "lon": -83.4187
+ },
+ "summary": "Favorable 10:00-16:00 today, marginal after 16:00 as gusts build to 21. Tomorrow favorable 07:00-13:00, then convection in the afternoon. KPTK wind 250/10 G14, ceiling 5,500, vis 10. Density altitude 2,100 ft. Lake Wind Advisory on Lake St. Clair until 18:00. Calmest water: Pontiac Lake 7 in with a 4,300 ft run into the wind; Union Lake 8 in; Cass Lake 9 in of chop.",
+ "days": [
+  {
+   "date": "2026-09-19",
+   "score": "favorable",
+   "best_window": [
+    "10:00",
+    "16:00"
+   ],
+   "blocks": [
     {
-      "date": "2026-09-19",
-      "score": "favorable",
-      "best_window": [
-        "10:00",
-        "16:00"
-      ],
-      "blocks": [
-        {
-          "start": "07:00",
-          "end": "10:00",
-          "score": "marginal",
-          "limiting": "gusts",
-          "wind": {
-            "dir": 250,
-            "kt": 9,
-            "gust": 18
-          },
-          "xwind_kt": 3,
-          "runway": "27L",
-          "ceiling_ft": 4500,
-          "vis_sm": 10,
-          "da_ft": 1800,
-          "temp_f": 58,
-          "precip_prob": 10,
-          "ceiling_known": true
-        },
-        {
-          "start": "10:00",
-          "end": "13:00",
-          "score": "favorable",
-          "limiting": null,
-          "wind": {
-            "dir": 250,
-            "kt": 10,
-            "gust": 14
-          },
-          "xwind_kt": 4,
-          "runway": "27L",
-          "ceiling_ft": 5500,
-          "vis_sm": 10,
-          "da_ft": 2100,
-          "temp_f": 68,
-          "precip_prob": 0,
-          "ceiling_known": true
-        },
-        {
-          "start": "13:00",
-          "end": "16:00",
-          "score": "favorable",
-          "limiting": null,
-          "wind": {
-            "dir": 260,
-            "kt": 11,
-            "gust": 16
-          },
-          "xwind_kt": 2,
-          "runway": "27L",
-          "ceiling_ft": null,
-          "vis_sm": 10,
-          "da_ft": 2600,
-          "temp_f": 74,
-          "precip_prob": 0,
-          "ceiling_known": true
-        },
-        {
-          "start": "16:00",
-          "end": "19:00",
-          "score": "marginal",
-          "limiting": "gusts",
-          "wind": {
-            "dir": 270,
-            "kt": 12,
-            "gust": 21
-          },
-          "xwind_kt": 0,
-          "runway": "27L",
-          "ceiling_ft": 6000,
-          "vis_sm": 10,
-          "da_ft": 2600,
-          "temp_f": 73,
-          "precip_prob": 10,
-          "ceiling_known": true
-        },
-        {
-          "start": "19:00",
-          "end": "22:00",
-          "score": "marginal",
-          "limiting": "daylight",
-          "wind": {
-            "dir": 260,
-            "kt": 8,
-            "gust": 13
-          },
-          "xwind_kt": 2,
-          "runway": "27L",
-          "ceiling_ft": 6000,
-          "vis_sm": 10,
-          "da_ft": 2000,
-          "temp_f": 65,
-          "precip_prob": 0,
-          "ceiling_known": true
-        }
-      ]
+     "start": "07:00",
+     "end": "10:00",
+     "score": "marginal",
+     "limiting": "gusts",
+     "wind": {
+      "dir": 250,
+      "kt": 9,
+      "gust": 18
+     },
+     "xwind_kt": 3,
+     "runway": "27L",
+     "ceiling_ft": 4500,
+     "vis_sm": 10,
+     "da_ft": 1800,
+     "temp_f": 58,
+     "precip_prob": 10,
+     "ceiling_known": true
     },
     {
-      "date": "2026-09-20",
-      "score": "favorable",
-      "best_window": [
-        "07:00",
-        "13:00"
-      ],
-      "blocks": [
-        {
-          "start": "07:00",
-          "end": "10:00",
-          "score": "favorable",
-          "limiting": null,
-          "wind": {
-            "dir": 240,
-            "kt": 6,
-            "gust": 9
-          },
-          "xwind_kt": 3,
-          "runway": "27L",
-          "ceiling_ft": null,
-          "vis_sm": 10,
-          "da_ft": 1000,
-          "temp_f": 53,
-          "precip_prob": 5,
-          "ceiling_known": true
-        },
-        {
-          "start": "10:00",
-          "end": "13:00",
-          "score": "favorable",
-          "limiting": null,
-          "wind": {
-            "dir": 250,
-            "kt": 10,
-            "gust": 17
-          },
-          "xwind_kt": 4,
-          "runway": "27L",
-          "ceiling_ft": 6500,
-          "vis_sm": 10,
-          "da_ft": 1900,
-          "temp_f": 64,
-          "precip_prob": 5,
-          "ceiling_known": true
-        },
-        {
-          "start": "13:00",
-          "end": "16:00",
-          "score": "marginal",
-          "limiting": "gusts",
-          "wind": {
-            "dir": 250,
-            "kt": 12,
-            "gust": 22
-          },
-          "xwind_kt": 4,
-          "runway": "27L",
-          "ceiling_ft": 5000,
-          "vis_sm": 10,
-          "da_ft": 2500,
-          "temp_f": 71,
-          "precip_prob": 20,
-          "ceiling_known": true
-        },
-        {
-          "start": "16:00",
-          "end": "19:00",
-          "score": "unfavorable",
-          "limiting": "convection",
-          "wind": {
-            "dir": 260,
-            "kt": 14,
-            "gust": 26
-          },
-          "xwind_kt": 3,
-          "runway": "27L",
-          "ceiling_ft": 3500,
-          "vis_sm": 7,
-          "da_ft": 2400,
-          "temp_f": 70,
-          "precip_prob": 55,
-          "ceiling_known": true
-        },
-        {
-          "start": "19:00",
-          "end": "22:00",
-          "score": "marginal",
-          "limiting": "daylight",
-          "wind": {
-            "dir": 250,
-            "kt": 9,
-            "gust": 16
-          },
-          "xwind_kt": 3,
-          "runway": "27L",
-          "ceiling_ft": null,
-          "vis_sm": 9,
-          "da_ft": 1800,
-          "temp_f": 62,
-          "precip_prob": 25,
-          "ceiling_known": false
-        }
-      ]
+     "start": "10:00",
+     "end": "13:00",
+     "score": "favorable",
+     "limiting": null,
+     "wind": {
+      "dir": 250,
+      "kt": 10,
+      "gust": 14
+     },
+     "xwind_kt": 4,
+     "runway": "27L",
+     "ceiling_ft": 5500,
+     "vis_sm": 10,
+     "da_ft": 2100,
+     "temp_f": 68,
+     "precip_prob": 0,
+     "ceiling_known": true
+    },
+    {
+     "start": "13:00",
+     "end": "16:00",
+     "score": "favorable",
+     "limiting": null,
+     "wind": {
+      "dir": 260,
+      "kt": 11,
+      "gust": 16
+     },
+     "xwind_kt": 2,
+     "runway": "27L",
+     "ceiling_ft": null,
+     "vis_sm": 10,
+     "da_ft": 2600,
+     "temp_f": 74,
+     "precip_prob": 0,
+     "ceiling_known": true
+    },
+    {
+     "start": "16:00",
+     "end": "19:00",
+     "score": "marginal",
+     "limiting": "gusts",
+     "wind": {
+      "dir": 270,
+      "kt": 12,
+      "gust": 21
+     },
+     "xwind_kt": 0,
+     "runway": "27L",
+     "ceiling_ft": 6000,
+     "vis_sm": 10,
+     "da_ft": 2600,
+     "temp_f": 73,
+     "precip_prob": 10,
+     "ceiling_known": true
+    },
+    {
+     "start": "19:00",
+     "end": "22:00",
+     "score": "marginal",
+     "limiting": "daylight",
+     "wind": {
+      "dir": 260,
+      "kt": 8,
+      "gust": 13
+     },
+     "xwind_kt": 2,
+     "runway": "27L",
+     "ceiling_ft": 6000,
+     "vis_sm": 10,
+     "da_ft": 2000,
+     "temp_f": 65,
+     "precip_prob": 0,
+     "ceiling_known": true
     }
+   ]
+  },
+  {
+   "date": "2026-09-20",
+   "score": "favorable",
+   "best_window": [
+    "07:00",
+    "13:00"
+   ],
+   "blocks": [
+    {
+     "start": "07:00",
+     "end": "10:00",
+     "score": "favorable",
+     "limiting": null,
+     "wind": {
+      "dir": 240,
+      "kt": 6,
+      "gust": 9
+     },
+     "xwind_kt": 3,
+     "runway": "27L",
+     "ceiling_ft": null,
+     "vis_sm": 10,
+     "da_ft": 1000,
+     "temp_f": 53,
+     "precip_prob": 5,
+     "ceiling_known": true
+    },
+    {
+     "start": "10:00",
+     "end": "13:00",
+     "score": "favorable",
+     "limiting": null,
+     "wind": {
+      "dir": 250,
+      "kt": 10,
+      "gust": 17
+     },
+     "xwind_kt": 4,
+     "runway": "27L",
+     "ceiling_ft": 6500,
+     "vis_sm": 10,
+     "da_ft": 1900,
+     "temp_f": 64,
+     "precip_prob": 5,
+     "ceiling_known": true
+    },
+    {
+     "start": "13:00",
+     "end": "16:00",
+     "score": "marginal",
+     "limiting": "gusts",
+     "wind": {
+      "dir": 250,
+      "kt": 12,
+      "gust": 22
+     },
+     "xwind_kt": 4,
+     "runway": "27L",
+     "ceiling_ft": 5000,
+     "vis_sm": 10,
+     "da_ft": 2500,
+     "temp_f": 71,
+     "precip_prob": 20,
+     "ceiling_known": true
+    },
+    {
+     "start": "16:00",
+     "end": "19:00",
+     "score": "unfavorable",
+     "limiting": "convection",
+     "wind": {
+      "dir": 260,
+      "kt": 14,
+      "gust": 26
+     },
+     "xwind_kt": 3,
+     "runway": "27L",
+     "ceiling_ft": 3500,
+     "vis_sm": 7,
+     "da_ft": 2400,
+     "temp_f": 70,
+     "precip_prob": 55,
+     "ceiling_known": true
+    },
+    {
+     "start": "19:00",
+     "end": "22:00",
+     "score": "marginal",
+     "limiting": "daylight",
+     "wind": {
+      "dir": 250,
+      "kt": 9,
+      "gust": 16
+     },
+     "xwind_kt": 3,
+     "runway": "27L",
+     "ceiling_ft": null,
+     "vis_sm": 9,
+     "da_ft": 1800,
+     "temp_f": 62,
+     "precip_prob": 25,
+     "ceiling_known": false
+    }
+   ]
+  }
+ ],
+ "outlook": {
+  "target_date": "2026-09-19",
+  "window": {
+   "start": "07:18",
+   "end": "12:00"
+  },
+  "sun": {
+   "civil_dawn": "06:49",
+   "sunrise": "07:18",
+   "sunset": "19:34",
+   "civil_dusk": "20:03"
+  },
+  "score": "favorable",
+  "limiting": null,
+  "watch": "gusts after 11:00",
+  "best_window": [
+   "08:00",
+   "12:00"
   ],
-  "outlook": {
-    "target_date": "2026-09-19",
-    "window": {
-      "start": "07:18",
-      "end": "12:00"
+  "hours": [
+   {
+    "time": "07:00",
+    "score": "marginal",
+    "limiting": "fog",
+    "wind": {
+     "dir": 230,
+     "kt": 4,
+     "gust": 6
     },
-    "sun": {
-      "civil_dawn": "06:49",
-      "sunrise": "07:18",
-      "sunset": "19:34",
-      "civil_dusk": "20:03"
-    },
+    "xwind_kt": 3,
+    "runway": "27L",
+    "ceiling_ft": null,
+    "vis_sm": 4,
+    "temp_f": 50,
+    "dewpoint_f": 49,
+    "fog_risk": true,
+    "precip_prob": 5,
+    "da_ft": 800,
+    "ceiling_known": true
+   },
+   {
+    "time": "08:00",
     "score": "favorable",
     "limiting": null,
-    "watch": "gusts after 11:00",
-    "best_window": [
-      "08:00",
-      "12:00"
-    ],
-    "hours": [
-      {
-        "time": "07:00",
-        "score": "marginal",
-        "limiting": "fog",
-        "wind": {
-          "dir": 230,
-          "kt": 4,
-          "gust": 6
-        },
-        "xwind_kt": 3,
-        "runway": "27L",
-        "ceiling_ft": null,
-        "vis_sm": 4,
-        "temp_f": 50,
-        "dewpoint_f": 49,
-        "fog_risk": true,
-        "precip_prob": 5,
-        "da_ft": 800,
-        "ceiling_known": true
-      },
-      {
-        "time": "08:00",
-        "score": "favorable",
-        "limiting": null,
-        "wind": {
-          "dir": 240,
-          "kt": 6,
-          "gust": 9
-        },
-        "xwind_kt": 3,
-        "runway": "27L",
-        "ceiling_ft": null,
-        "vis_sm": 10,
-        "temp_f": 52,
-        "dewpoint_f": 47,
-        "fog_risk": false,
-        "precip_prob": 5,
-        "da_ft": 1000,
-        "ceiling_known": true
-      },
-      {
-        "time": "09:00",
-        "score": "favorable",
-        "limiting": null,
-        "wind": {
-          "dir": 240,
-          "kt": 7,
-          "gust": 10
-        },
-        "xwind_kt": 4,
-        "runway": "27L",
-        "ceiling_ft": 7000,
-        "vis_sm": 10,
-        "temp_f": 56,
-        "dewpoint_f": 46,
-        "fog_risk": false,
-        "precip_prob": 5,
-        "da_ft": 1300,
-        "ceiling_known": true
-      },
-      {
-        "time": "10:00",
-        "score": "favorable",
-        "limiting": null,
-        "wind": {
-          "dir": 245,
-          "kt": 8,
-          "gust": 12
-        },
-        "xwind_kt": 4,
-        "runway": "27L",
-        "ceiling_ft": 6500,
-        "vis_sm": 10,
-        "temp_f": 60,
-        "dewpoint_f": 45,
-        "fog_risk": false,
-        "precip_prob": 5,
-        "da_ft": 1600,
-        "ceiling_known": true
-      },
-      {
-        "time": "11:00",
-        "score": "favorable",
-        "limiting": null,
-        "wind": {
-          "dir": 250,
-          "kt": 10,
-          "gust": 15
-        },
-        "xwind_kt": 4,
-        "runway": "27L",
-        "ceiling_ft": 6000,
-        "vis_sm": 10,
-        "temp_f": 64,
-        "dewpoint_f": 45,
-        "fog_risk": false,
-        "precip_prob": 10,
-        "da_ft": 1900,
-        "ceiling_known": true
-      },
-      {
-        "time": "12:00",
-        "score": "marginal",
-        "limiting": "gusts",
-        "wind": {
-          "dir": 250,
-          "kt": 11,
-          "gust": 20
-        },
-        "xwind_kt": 4,
-        "runway": "27L",
-        "ceiling_ft": null,
-        "vis_sm": 10,
-        "temp_f": 67,
-        "dewpoint_f": 44,
-        "fog_risk": false,
-        "precip_prob": 10,
-        "da_ft": 2200,
-        "ceiling_known": false
-      }
-    ],
-    "lakes": [
-      {
-        "id": 368858589,
-        "name": "Pontiac Lake",
-        "score": "favorable",
-        "limiting": null,
-        "hs_in": 7,
-        "run_ft": 4700,
-        "wind": {
-          "dir": 250,
-          "kt": 10,
-          "gust": 15
-        },
-        "distance_nm": 1.7,
-        "bearing_deg": 310,
-        "verdict": "conditional",
-        "frozen": false
-      },
-      {
-        "id": 314179109,
-        "name": "Union Lake",
-        "score": "favorable",
-        "limiting": null,
-        "hs_in": 8,
-        "run_ft": 6300,
-        "wind": {
-          "dir": 250,
-          "kt": 10,
-          "gust": 15
-        },
-        "distance_nm": 3.2,
-        "bearing_deg": 180,
-        "verdict": "clear",
-        "frozen": false
-      },
-      {
-        "id": 461406506,
-        "name": "Lake Angelus",
-        "score": "favorable",
-        "limiting": null,
-        "hs_in": 6,
-        "run_ft": 3800,
-        "wind": {
-          "dir": 250,
-          "kt": 10,
-          "gust": 15
-        },
-        "distance_nm": 4.8,
-        "bearing_deg": 57,
-        "verdict": "conditional",
-        "frozen": false
-      },
-      {
-        "id": 460478574,
-        "name": "Cass Lake",
-        "score": "favorable",
-        "limiting": null,
-        "hs_in": 8,
-        "run_ft": 12200,
-        "wind": {
-          "dir": 250,
-          "kt": 10,
-          "gust": 15
-        },
-        "distance_nm": 4.8,
-        "bearing_deg": 135,
-        "verdict": "clear",
-        "frozen": false
-      },
-      {
-        "id": 260200585,
-        "name": "Round Lake",
-        "score": "favorable",
-        "limiting": null,
-        "hs_in": 6,
-        "run_ft": 3300,
-        "wind": {
-          "dir": 250,
-          "kt": 10,
-          "gust": 15
-        },
-        "distance_nm": 6.4,
-        "bearing_deg": 326,
-        "verdict": "clear",
-        "frozen": false
-      },
-      {
-        "id": 223057208,
-        "name": "Loon Lake",
-        "score": "favorable",
-        "limiting": null,
-        "hs_in": 5,
-        "run_ft": 3100,
-        "wind": {
-          "dir": 250,
-          "kt": 10,
-          "gust": 15
-        },
-        "distance_nm": 8.8,
-        "bearing_deg": 215,
-        "verdict": "clear",
-        "frozen": false
-      }
-    ],
-    "confidence": "medium",
-    "confidence_reasons": [
-      "NWS and model wind differ by 6 kt",
-      "the TAF covers only the first three hours of the window"
-    ],
-    "trend": "improving",
-    "runs": [
-      {
-        "at": "18:00",
-        "generated_at": "2026-09-18T22:00:08Z",
-        "score": "favorable",
-        "best_window": [
-          "08:00",
-          "12:00"
-        ],
-        "limiting": null,
-        "max_gust_kt": 11
-      },
-      {
-        "at": "20:00",
-        "generated_at": "2026-09-19T00:00:05Z",
-        "score": "marginal",
-        "best_window": [
-          "09:00",
-          "12:00"
-        ],
-        "limiting": "gusts",
-        "max_gust_kt": 16
-      },
-      {
-        "at": "22:00",
-        "generated_at": "2026-09-19T02:00:12Z",
-        "score": "favorable",
-        "best_window": [
-          "08:00",
-          "12:00"
-        ],
-        "limiting": null,
-        "max_gust_kt": 13
-      }
-    ],
-    "summary": "This morning (Sat): favorable 08:00-12:00. Wind 240/6 G9, no ceiling, vis 10. Fog risk until 08:00. Calmest water: Pontiac Lake 7 in, Union Lake 8 in. Improving since 20:00. Confidence medium: NWS and model wind differ by 6 kt."
-  },
-  "alerts": [
-    {
-      "event": "Lake Wind Advisory",
-      "area": "Lake St. Clair and nearshore Michigan waters",
-      "ends": "2026-09-19T22:00:00Z"
-    }
+    "wind": {
+     "dir": 240,
+     "kt": 6,
+     "gust": 9
+    },
+    "xwind_kt": 3,
+    "runway": "27L",
+    "ceiling_ft": null,
+    "vis_sm": 10,
+    "temp_f": 52,
+    "dewpoint_f": 47,
+    "fog_risk": false,
+    "precip_prob": 5,
+    "da_ft": 1000,
+    "ceiling_known": true
+   },
+   {
+    "time": "09:00",
+    "score": "favorable",
+    "limiting": null,
+    "wind": {
+     "dir": 240,
+     "kt": 7,
+     "gust": 10
+    },
+    "xwind_kt": 4,
+    "runway": "27L",
+    "ceiling_ft": 7000,
+    "vis_sm": 10,
+    "temp_f": 56,
+    "dewpoint_f": 46,
+    "fog_risk": false,
+    "precip_prob": 5,
+    "da_ft": 1300,
+    "ceiling_known": true
+   },
+   {
+    "time": "10:00",
+    "score": "favorable",
+    "limiting": null,
+    "wind": {
+     "dir": 245,
+     "kt": 8,
+     "gust": 12
+    },
+    "xwind_kt": 4,
+    "runway": "27L",
+    "ceiling_ft": 6500,
+    "vis_sm": 10,
+    "temp_f": 60,
+    "dewpoint_f": 45,
+    "fog_risk": false,
+    "precip_prob": 5,
+    "da_ft": 1600,
+    "ceiling_known": true
+   },
+   {
+    "time": "11:00",
+    "score": "favorable",
+    "limiting": null,
+    "wind": {
+     "dir": 250,
+     "kt": 10,
+     "gust": 15
+    },
+    "xwind_kt": 4,
+    "runway": "27L",
+    "ceiling_ft": 6000,
+    "vis_sm": 10,
+    "temp_f": 64,
+    "dewpoint_f": 45,
+    "fog_risk": false,
+    "precip_prob": 10,
+    "da_ft": 1900,
+    "ceiling_known": true
+   },
+   {
+    "time": "12:00",
+    "score": "marginal",
+    "limiting": "gusts",
+    "wind": {
+     "dir": 250,
+     "kt": 11,
+     "gust": 20
+    },
+    "xwind_kt": 4,
+    "runway": "27L",
+    "ceiling_ft": null,
+    "vis_sm": 10,
+    "temp_f": 67,
+    "dewpoint_f": 44,
+    "fog_risk": false,
+    "precip_prob": 10,
+    "da_ft": 2200,
+    "ceiling_known": false
+   }
   ],
   "lakes": [
-    {
-      "id": 368858589,
-      "name": "Pontiac Lake",
-      "score": "favorable",
-      "limiting": null,
-      "hs_in": 7,
-      "run_ft": 4300,
-      "wind": {
-        "dir": 260,
-        "kt": 11,
-        "gust": 16
-      },
-      "distance_nm": 1.7,
-      "bearing_deg": 310,
-      "verdict": "conditional",
-      "frozen": false
+   {
+    "id": 368858589,
+    "name": "Pontiac Lake",
+    "score": "favorable",
+    "limiting": null,
+    "hs_in": 2,
+    "run_ft": 4640,
+    "wind": {
+     "dir": 250,
+     "kt": 10,
+     "gust": 15
     },
-    {
-      "id": 314179109,
-      "name": "Union Lake",
-      "score": "favorable",
-      "limiting": null,
-      "hs_in": 8,
-      "run_ft": 6100,
-      "wind": {
-        "dir": 260,
-        "kt": 11,
-        "gust": 16
-      },
-      "distance_nm": 3.2,
-      "bearing_deg": 180,
-      "verdict": "clear",
-      "frozen": false
+    "distance_nm": 1.7,
+    "bearing_deg": 310,
+    "verdict": "conditional",
+    "frozen": false,
+    "kind": "lake",
+    "region": "northwest side",
+    "hs_open_in": 4,
+    "regions": [
+     {
+      "label": "northwest side",
+      "hs_in": 2,
+      "run_ft": 4640,
+      "lat": 42.69141,
+      "lon": -83.45357,
+      "score": "favorable"
+     },
+     {
+      "label": "southwest side",
+      "hs_in": 2,
+      "run_ft": 4230,
+      "lat": 42.67728,
+      "lon": -83.45357,
+      "score": "marginal"
+     },
+     {
+      "label": "west end",
+      "hs_in": 2,
+      "run_ft": 5070,
+      "lat": 42.68535,
+      "lon": -83.45631,
+      "score": "marginal"
+     },
+     {
+      "label": "middle",
+      "hs_in": 3,
+      "run_ft": 4730,
+      "lat": 42.6793,
+      "lon": -83.45082,
+      "score": "unfavorable"
+     }
+    ]
+   },
+   {
+    "id": 314179109,
+    "name": "Union Lake",
+    "score": "favorable",
+    "limiting": null,
+    "hs_in": 2,
+    "run_ft": 3570,
+    "wind": {
+     "dir": 250,
+     "kt": 10,
+     "gust": 15
     },
-    {
-      "id": 461406506,
-      "name": "Lake Angelus",
-      "score": "favorable",
-      "limiting": null,
-      "hs_in": 7,
-      "run_ft": 4200,
-      "wind": {
-        "dir": 260,
-        "kt": 11,
-        "gust": 16
-      },
-      "distance_nm": 4.8,
-      "bearing_deg": 57,
-      "verdict": "conditional",
-      "frozen": false
+    "distance_nm": 3.2,
+    "bearing_deg": 180,
+    "verdict": "clear",
+    "frozen": false,
+    "kind": "lake",
+    "region": "south end",
+    "hs_open_in": 4,
+    "regions": [
+     {
+      "label": "south end",
+      "hs_in": 2,
+      "run_ft": 3570,
+      "lat": 42.60593,
+      "lon": -83.41962,
+      "score": "favorable"
+     },
+     {
+      "label": "southwest side",
+      "hs_in": 2,
+      "run_ft": 4240,
+      "lat": 42.60912,
+      "lon": -83.42612,
+      "score": "marginal"
+     },
+     {
+      "label": "west end",
+      "hs_in": 2,
+      "run_ft": 5940,
+      "lat": 42.61072,
+      "lon": -83.43046,
+      "score": "marginal"
+     },
+     {
+      "label": "middle",
+      "hs_in": 3,
+      "run_ft": 5520,
+      "lat": 42.61072,
+      "lon": -83.42178,
+      "score": "unfavorable"
+     }
+    ]
+   },
+   {
+    "id": 461406506,
+    "name": "Lake Angelus",
+    "score": "favorable",
+    "limiting": null,
+    "hs_in": 1,
+    "run_ft": 2290,
+    "wind": {
+     "dir": 250,
+     "kt": 10,
+     "gust": 15
     },
-    {
-      "id": 260200585,
-      "name": "Round Lake",
-      "score": "favorable",
-      "limiting": null,
-      "hs_in": 6,
-      "run_ft": 3500,
-      "wind": {
-        "dir": 260,
-        "kt": 11,
-        "gust": 16
-      },
-      "distance_nm": 6.4,
-      "bearing_deg": 326,
-      "verdict": "clear",
-      "frozen": false
+    "distance_nm": 4.8,
+    "bearing_deg": 57,
+    "verdict": "conditional",
+    "frozen": false,
+    "kind": "lake",
+    "region": "south end",
+    "hs_open_in": 3,
+    "regions": [
+     {
+      "label": "south end",
+      "hs_in": 1,
+      "run_ft": 2290,
+      "lat": 42.70392,
+      "lon": -83.32704,
+      "score": "favorable"
+     },
+     {
+      "label": "northwest side",
+      "hs_in": 2,
+      "run_ft": 3140,
+      "lat": 42.712,
+      "lon": -83.33621,
+      "score": "marginal"
+     },
+     {
+      "label": "southwest side",
+      "hs_in": 2,
+      "run_ft": 2870,
+      "lat": 42.70796,
+      "lon": -83.33254,
+      "score": "marginal"
+     },
+     {
+      "label": "west end",
+      "hs_in": 2,
+      "run_ft": 3720,
+      "lat": 42.70931,
+      "lon": -83.33621,
+      "score": "unfavorable"
+     }
+    ]
+   },
+   {
+    "id": 460478574,
+    "name": "Cass Lake",
+    "score": "favorable",
+    "limiting": null,
+    "hs_in": 3,
+    "run_ft": 4240,
+    "wind": {
+     "dir": 250,
+     "kt": 10,
+     "gust": 15
     },
-    {
-      "id": 223057208,
-      "name": "Loon Lake",
-      "score": "favorable",
-      "limiting": null,
-      "hs_in": 6,
-      "run_ft": 3500,
-      "wind": {
-        "dir": 260,
-        "kt": 11,
-        "gust": 16
-      },
-      "distance_nm": 8.8,
-      "bearing_deg": 215,
-      "verdict": "clear",
-      "frozen": false
+    "distance_nm": 4.8,
+    "bearing_deg": 135,
+    "verdict": "clear",
+    "frozen": false,
+    "kind": "lake",
+    "region": "northwest side",
+    "hs_open_in": 6,
+    "regions": [
+     {
+      "label": "northwest side",
+      "hs_in": 3,
+      "run_ft": 4240,
+      "lat": 42.61476,
+      "lon": -83.35292,
+      "score": "favorable"
+     },
+     {
+      "label": "southwest side",
+      "hs_in": 3,
+      "run_ft": 11090,
+      "lat": 42.60155,
+      "lon": -83.35651,
+      "score": "marginal"
+     },
+     {
+      "label": "west end",
+      "hs_in": 3,
+      "run_ft": 10130,
+      "lat": 42.60419,
+      "lon": -83.3601,
+      "score": "marginal"
+     },
+     {
+      "label": "south end",
+      "hs_in": 4,
+      "run_ft": 9640,
+      "lat": 42.60155,
+      "lon": -83.34574,
+      "score": "unfavorable"
+     }
+    ]
+   },
+   {
+    "id": 260200585,
+    "name": "Round Lake",
+    "score": "favorable",
+    "limiting": null,
+    "hs_in": 1,
+    "run_ft": 2390,
+    "wind": {
+     "dir": 250,
+     "kt": 10,
+     "gust": 15
     },
-    {
-      "id": 460478574,
-      "name": "Cass Lake",
-      "score": "marginal",
-      "limiting": "waves",
-      "hs_in": 9,
-      "run_ft": 12100,
-      "wind": {
-        "dir": 260,
-        "kt": 11,
-        "gust": 16
-      },
-      "distance_nm": 4.8,
-      "bearing_deg": 135,
-      "verdict": "clear",
-      "frozen": false
-    }
+    "distance_nm": 6.4,
+    "bearing_deg": 326,
+    "verdict": "clear",
+    "frozen": false,
+    "kind": "lake",
+    "region": "south end",
+    "hs_open_in": 3,
+    "regions": [
+     {
+      "label": "south end",
+      "hs_in": 1,
+      "run_ft": 2390,
+      "lat": 42.75108,
+      "lon": -83.50076,
+      "score": "favorable"
+     },
+     {
+      "label": "northwest side",
+      "hs_in": 2,
+      "run_ft": 2400,
+      "lat": 42.75512,
+      "lon": -83.5026,
+      "score": "marginal"
+     },
+     {
+      "label": "southeast side",
+      "hs_in": 2,
+      "run_ft": 2660,
+      "lat": 42.75243,
+      "lon": -83.49709,
+      "score": "marginal"
+     },
+     {
+      "label": "southwest side",
+      "hs_in": 2,
+      "run_ft": 3210,
+      "lat": 42.75108,
+      "lon": -83.5026,
+      "score": "unfavorable"
+     }
+    ]
+   },
+   {
+    "id": 223057208,
+    "name": "Loon Lake",
+    "score": "favorable",
+    "limiting": null,
+    "hs_in": 1,
+    "run_ft": 2280,
+    "wind": {
+     "dir": 250,
+     "kt": 10,
+     "gust": 15
+    },
+    "distance_nm": 8.8,
+    "bearing_deg": 215,
+    "verdict": "clear",
+    "frozen": false,
+    "kind": "lake",
+    "region": "southwest side",
+    "hs_open_in": 3,
+    "regions": [
+     {
+      "label": "southwest side",
+      "hs_in": 1,
+      "run_ft": 2280,
+      "lat": 42.54357,
+      "lon": -83.53524,
+      "score": "favorable"
+     },
+     {
+      "label": "middle",
+      "hs_in": 2,
+      "run_ft": 2720,
+      "lat": 42.54357,
+      "lon": -83.53341,
+      "score": "marginal"
+     },
+     {
+      "label": "west end",
+      "hs_in": 2,
+      "run_ft": 3030,
+      "lat": 42.54492,
+      "lon": -83.54073,
+      "score": "marginal"
+     },
+     {
+      "label": "east end",
+      "hs_in": 3,
+      "run_ft": 2070,
+      "lat": 42.54492,
+      "lon": -83.52975,
+      "score": "unfavorable"
+     }
+    ]
+   }
   ],
-  "sources": {
-    "metar": "2026-09-19T12:53:00Z",
-    "taf": "2026-09-19T11:20:00Z",
-    "open_meteo": "2026-09-19T13:00:00Z",
-    "nws": null
+  "confidence": "medium",
+  "confidence_reasons": [
+   "NWS and model wind differ by 6 kt",
+   "the TAF covers only the first three hours of the window"
+  ],
+  "trend": "improving",
+  "runs": [
+   {
+    "at": "18:00",
+    "generated_at": "2026-09-18T22:00:08Z",
+    "score": "favorable",
+    "best_window": [
+     "08:00",
+     "12:00"
+    ],
+    "limiting": null,
+    "max_gust_kt": 11
+   },
+   {
+    "at": "20:00",
+    "generated_at": "2026-09-19T00:00:05Z",
+    "score": "marginal",
+    "best_window": [
+     "09:00",
+     "12:00"
+    ],
+    "limiting": "gusts",
+    "max_gust_kt": 16
+   },
+   {
+    "at": "22:00",
+    "generated_at": "2026-09-19T02:00:12Z",
+    "score": "favorable",
+    "best_window": [
+     "08:00",
+     "12:00"
+    ],
+    "limiting": null,
+    "max_gust_kt": 13
+   }
+  ],
+  "summary": "This morning (Sat): favorable 08:00-12:00. Wind 240/6 G9, no ceiling, vis 10. Fog risk until 08:00. Calmest water: Pontiac Lake 7 in, Union Lake 8 in. Improving since 20:00. Confidence medium: NWS and model wind differ by 6 kt.",
+  "home_water": {
+   "id": 797249953,
+   "name": "Big Fixture Lake",
+   "kind": "great_lake",
+   "score": "favorable",
+   "limiting": null,
+   "hs_in": 4,
+   "run_ft": 47640,
+   "region": "Sandy Bay",
+   "hs_open_in": 8,
+   "regions": [
+    {
+     "label": "Sandy Bay",
+     "hs_in": 4,
+     "run_ft": 47640,
+     "lat": 42.43371,
+     "lon": -83.22773,
+     "score": "favorable"
+    },
+    {
+     "label": "southeast side",
+     "hs_in": 4,
+     "run_ft": 22220,
+     "lat": 42.42822,
+     "lon": -83.11609,
+     "score": "marginal"
+    },
+    {
+     "label": "south end",
+     "hs_in": 5,
+     "run_ft": 51710,
+     "lat": 42.43371,
+     "lon": -83.13098,
+     "score": "marginal"
+    },
+    {
+     "label": "southwest side",
+     "hs_in": 5,
+     "run_ft": 54370,
+     "lat": 42.41724,
+     "lon": -83.18308,
+     "score": "unfavorable"
+    },
+    {
+     "label": "west end",
+     "hs_in": 5,
+     "run_ft": 22500,
+     "lat": 42.45018,
+     "lon": -83.25751,
+     "score": "unfavorable"
+    },
+    {
+     "label": "east end",
+     "hs_in": 7,
+     "run_ft": 39950,
+     "lat": 42.49959,
+     "lon": -83.03422,
+     "score": "unfavorable"
+    },
+    {
+     "label": "middle",
+     "hs_in": 7,
+     "run_ft": 50940,
+     "lat": 42.46116,
+     "lon": -83.19052,
+     "score": "unfavorable"
+    },
+    {
+     "label": "north end",
+     "hs_in": 7,
+     "run_ft": 44870,
+     "lat": 42.51058,
+     "lon": -83.16075,
+     "score": "unfavorable"
+    },
+    {
+     "label": "northeast side",
+     "hs_in": 7,
+     "run_ft": 46740,
+     "lat": 42.51607,
+     "lon": -83.03422,
+     "score": "unfavorable"
+    },
+    {
+     "label": "northwest side",
+     "hs_in": 7,
+     "run_ft": 44870,
+     "lat": 42.48862,
+     "lon": -83.19796,
+     "score": "unfavorable"
+    },
+    {
+     "label": "North Bay",
+     "hs_in": 8,
+     "run_ft": 50940,
+     "lat": 42.52156,
+     "lon": -83.13842,
+     "score": "unfavorable"
+    }
+   ],
+   "wind": {
+    "dir": 230,
+    "kt": 8,
+    "gust": 12
+   },
+   "distance_nm": 18.4,
+   "bearing_deg": 122,
+   "verdict": "clear",
+   "frozen": false
+  }
+ },
+ "alerts": [
+  {
+   "event": "Lake Wind Advisory",
+   "area": "Lake St. Clair and nearshore Michigan waters",
+   "ends": "2026-09-19T22:00:00Z"
+  }
+ ],
+ "lakes": [
+  {
+   "id": 368858589,
+   "name": "Pontiac Lake",
+   "score": "favorable",
+   "limiting": null,
+   "hs_in": 2,
+   "run_ft": 3860,
+   "wind": {
+    "dir": 260,
+    "kt": 11,
+    "gust": 16
+   },
+   "distance_nm": 1.7,
+   "bearing_deg": 310,
+   "verdict": "conditional",
+   "frozen": false,
+   "kind": "lake",
+   "region": "northwest side",
+   "hs_open_in": 4,
+   "regions": [
+    {
+     "label": "northwest side",
+     "hs_in": 2,
+     "run_ft": 3860,
+     "lat": 42.69141,
+     "lon": -83.45357,
+     "score": "favorable"
+    },
+    {
+     "label": "southwest side",
+     "hs_in": 2,
+     "run_ft": 4000,
+     "lat": 42.67728,
+     "lon": -83.45357,
+     "score": "marginal"
+    },
+    {
+     "label": "west end",
+     "hs_in": 2,
+     "run_ft": 3930,
+     "lat": 42.68535,
+     "lon": -83.45631,
+     "score": "marginal"
+    },
+    {
+     "label": "middle",
+     "hs_in": 3,
+     "run_ft": 3930,
+     "lat": 42.68737,
+     "lon": -83.45082,
+     "score": "unfavorable"
+    }
+   ]
   },
-  "links": {
-    "metar": "https://aviationweather.gov/data/metar/?ids=KPTK&hours=6",
-    "taf": "https://aviationweather.gov/data/taf/?ids=KPTK",
-    "forecast": "https://forecast.weather.gov/MapClick.php?lat=42.6655&lon=-83.4187"
+  {
+   "id": 314179109,
+   "name": "Union Lake",
+   "score": "favorable",
+   "limiting": null,
+   "hs_in": 2,
+   "run_ft": 4570,
+   "wind": {
+    "dir": 260,
+    "kt": 11,
+    "gust": 16
+   },
+   "distance_nm": 3.2,
+   "bearing_deg": 180,
+   "verdict": "clear",
+   "frozen": false,
+   "kind": "lake",
+   "region": "northwest side",
+   "hs_open_in": 5,
+   "regions": [
+    {
+     "label": "northwest side",
+     "hs_in": 2,
+     "run_ft": 4570,
+     "lat": 42.61551,
+     "lon": -83.42612,
+     "score": "favorable"
+    },
+    {
+     "label": "west end",
+     "hs_in": 2,
+     "run_ft": 5250,
+     "lat": 42.61072,
+     "lon": -83.43046,
+     "score": "marginal"
+    },
+    {
+     "label": "north end",
+     "hs_in": 3,
+     "run_ft": 3310,
+     "lat": 42.6171,
+     "lon": -83.42178,
+     "score": "marginal"
+    },
+    {
+     "label": "south end",
+     "hs_in": 3,
+     "run_ft": 2900,
+     "lat": 42.60753,
+     "lon": -83.42178,
+     "score": "unfavorable"
+    }
+   ]
   },
-  "errors": [
-    "nws: timeout after 8 s"
-  ]
+  {
+   "id": 461406506,
+   "name": "Lake Angelus",
+   "score": "favorable",
+   "limiting": null,
+   "hs_in": 2,
+   "run_ft": 3010,
+   "wind": {
+    "dir": 260,
+    "kt": 11,
+    "gust": 16
+   },
+   "distance_nm": 4.8,
+   "bearing_deg": 57,
+   "verdict": "conditional",
+   "frozen": false,
+   "kind": "lake",
+   "region": "northwest side",
+   "hs_open_in": 4,
+   "regions": [
+    {
+     "label": "northwest side",
+     "hs_in": 2,
+     "run_ft": 3010,
+     "lat": 42.71335,
+     "lon": -83.33438,
+     "score": "favorable"
+    },
+    {
+     "label": "south end",
+     "hs_in": 2,
+     "run_ft": 2620,
+     "lat": 42.70526,
+     "lon": -83.32888,
+     "score": "marginal"
+    },
+    {
+     "label": "southwest side",
+     "hs_in": 2,
+     "run_ft": 3520,
+     "lat": 42.70796,
+     "lon": -83.33254,
+     "score": "marginal"
+    },
+    {
+     "label": "west end",
+     "hs_in": 2,
+     "run_ft": 3800,
+     "lat": 42.70931,
+     "lon": -83.33621,
+     "score": "unfavorable"
+    }
+   ]
+  },
+  {
+   "id": 260200585,
+   "name": "Round Lake",
+   "score": "favorable",
+   "limiting": null,
+   "hs_in": 2,
+   "run_ft": 2500,
+   "wind": {
+    "dir": 260,
+    "kt": 11,
+    "gust": 16
+   },
+   "distance_nm": 6.4,
+   "bearing_deg": 326,
+   "verdict": "clear",
+   "frozen": false,
+   "kind": "lake",
+   "region": "northwest side",
+   "hs_open_in": 4,
+   "regions": [
+    {
+     "label": "northwest side",
+     "hs_in": 2,
+     "run_ft": 2500,
+     "lat": 42.75647,
+     "lon": -83.50443,
+     "score": "favorable"
+    },
+    {
+     "label": "southwest side",
+     "hs_in": 2,
+     "run_ft": 2600,
+     "lat": 42.75243,
+     "lon": -83.5026,
+     "score": "marginal"
+    },
+    {
+     "label": "west end",
+     "hs_in": 2,
+     "run_ft": 3180,
+     "lat": 42.75377,
+     "lon": -83.50443,
+     "score": "marginal"
+    },
+    {
+     "label": "middle",
+     "hs_in": 3,
+     "run_ft": 3180,
+     "lat": 42.75377,
+     "lon": -83.50076,
+     "score": "unfavorable"
+    }
+   ]
+  },
+  {
+   "id": 223057208,
+   "name": "Loon Lake",
+   "score": "favorable",
+   "limiting": null,
+   "hs_in": 2,
+   "run_ft": 2770,
+   "wind": {
+    "dir": 260,
+    "kt": 11,
+    "gust": 16
+   },
+   "distance_nm": 8.8,
+   "bearing_deg": 215,
+   "verdict": "clear",
+   "frozen": false,
+   "kind": "lake",
+   "region": "northwest side",
+   "hs_open_in": 4,
+   "regions": [
+    {
+     "label": "northwest side",
+     "hs_in": 2,
+     "run_ft": 2770,
+     "lat": 42.54761,
+     "lon": -83.5389,
+     "score": "favorable"
+    },
+    {
+     "label": "southwest side",
+     "hs_in": 2,
+     "run_ft": 2590,
+     "lat": 42.54357,
+     "lon": -83.53524,
+     "score": "marginal"
+    },
+    {
+     "label": "west end",
+     "hs_in": 2,
+     "run_ft": 3560,
+     "lat": 42.54492,
+     "lon": -83.54073,
+     "score": "marginal"
+    },
+    {
+     "label": "middle",
+     "hs_in": 3,
+     "run_ft": 3560,
+     "lat": 42.54357,
+     "lon": -83.53341,
+     "score": "unfavorable"
+    }
+   ]
+  },
+  {
+   "id": 460478574,
+   "name": "Cass Lake",
+   "score": "marginal",
+   "limiting": "waves",
+   "hs_in": 3,
+   "run_ft": 9770,
+   "wind": {
+    "dir": 260,
+    "kt": 11,
+    "gust": 16
+   },
+   "distance_nm": 4.8,
+   "bearing_deg": 135,
+   "verdict": "clear",
+   "frozen": false,
+   "kind": "lake",
+   "region": "northwest side",
+   "hs_open_in": 7,
+   "regions": [
+    {
+     "label": "northwest side",
+     "hs_in": 3,
+     "run_ft": 9770,
+     "lat": 42.61476,
+     "lon": -83.35292,
+     "score": "favorable"
+    },
+    {
+     "label": "west end",
+     "hs_in": 3,
+     "run_ft": 9780,
+     "lat": 42.60683,
+     "lon": -83.3601,
+     "score": "marginal"
+    },
+    {
+     "label": "southwest side",
+     "hs_in": 4,
+     "run_ft": 6870,
+     "lat": 42.60155,
+     "lon": -83.35651,
+     "score": "marginal"
+    },
+    {
+     "label": "middle",
+     "hs_in": 5,
+     "run_ft": 10720,
+     "lat": 42.60948,
+     "lon": -83.34933,
+     "score": "unfavorable"
+    }
+   ]
+  }
+ ],
+ "sources": {
+  "metar": "2026-09-19T12:53:00Z",
+  "taf": "2026-09-19T11:20:00Z",
+  "open_meteo": "2026-09-19T13:00:00Z",
+  "nws": null
+ },
+ "links": {
+  "metar": "https://aviationweather.gov/data/metar/?ids=KPTK&hours=6",
+  "taf": "https://aviationweather.gov/data/taf/?ids=KPTK",
+  "forecast": "https://forecast.weather.gov/MapClick.php?lat=42.6655&lon=-83.4187"
+ },
+ "errors": [
+  "nws: timeout after 8 s"
+ ],
+ "home_water": {
+  "id": 797249953,
+  "name": "Big Fixture Lake",
+  "kind": "great_lake",
+  "score": "favorable",
+  "limiting": null,
+  "hs_in": 7,
+  "run_ft": 53330,
+  "region": "Sandy Bay",
+  "hs_open_in": 11,
+  "regions": [
+   {
+    "label": "Sandy Bay",
+    "hs_in": 7,
+    "run_ft": 53330,
+    "lat": 42.43371,
+    "lon": -83.22773,
+    "score": "favorable"
+   },
+   {
+    "label": "southwest side",
+    "hs_in": 8,
+    "run_ft": 43800,
+    "lat": 42.41724,
+    "lon": -83.18308,
+    "score": "marginal"
+   },
+   {
+    "label": "west end",
+    "hs_in": 8,
+    "run_ft": 61700,
+    "lat": 42.45018,
+    "lon": -83.25751,
+    "score": "marginal"
+   },
+   {
+    "label": "northwest side",
+    "hs_in": 9,
+    "run_ft": 52690,
+    "lat": 42.50509,
+    "lon": -83.16075,
+    "score": "unfavorable"
+   },
+   {
+    "label": "south end",
+    "hs_in": 9,
+    "run_ft": 44810,
+    "lat": 42.43371,
+    "lon": -83.12353,
+    "score": "unfavorable"
+   },
+   {
+    "label": "southeast side",
+    "hs_in": 9,
+    "run_ft": 21310,
+    "lat": 42.42822,
+    "lon": -83.11609,
+    "score": "unfavorable"
+   },
+   {
+    "label": "north end",
+    "hs_in": 10,
+    "run_ft": 20620,
+    "lat": 42.51058,
+    "lon": -83.16075,
+    "score": "unfavorable"
+   },
+   {
+    "label": "North Bay",
+    "hs_in": 11,
+    "run_ft": 60720,
+    "lat": 42.52156,
+    "lon": -83.13842,
+    "score": "unfavorable"
+   },
+   {
+    "label": "east end",
+    "hs_in": 11,
+    "run_ft": 49940,
+    "lat": 42.49959,
+    "lon": -83.03422,
+    "score": "unfavorable"
+   },
+   {
+    "label": "middle",
+    "hs_in": 11,
+    "run_ft": 61160,
+    "lat": 42.44469,
+    "lon": -83.16819,
+    "score": "unfavorable"
+   },
+   {
+    "label": "northeast side",
+    "hs_in": 11,
+    "run_ft": 64130,
+    "lat": 42.51607,
+    "lon": -83.03422,
+    "score": "unfavorable"
+   }
+  ],
+  "wind": {
+   "dir": 250,
+   "kt": 11,
+   "gust": 16
+  },
+  "distance_nm": 18.4,
+  "bearing_deg": 122,
+  "verdict": "clear",
+  "frozen": false,
+  "observed": [
+   {
+    "station": "45147",
+    "name": "Big Fixture Lake buoy",
+    "kind": "buoy",
+    "at": "2026-09-19T13:00:00Z",
+    "wind": {
+     "dir": 245,
+     "kt": 12,
+     "gust": 16
+    },
+    "wave_ft": 1,
+    "distance_nm": 6.2
+   },
+   {
+    "station": "KFXR",
+    "name": "Fixture Shore AWOS",
+    "kind": "metar",
+    "at": "2026-09-19T12:53:00Z",
+    "wind": {
+     "dir": 260,
+     "kt": 9,
+     "gust": null
+    },
+    "wave_ft": null,
+    "distance_nm": 11.7
+   }
+  ],
+  "marine_hs_in": 12
+ }
 }

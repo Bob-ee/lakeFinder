@@ -11,6 +11,7 @@ import {
   anyCeilingUnknown,
   dayHeading,
   formatCeiling,
+  formatWind,
   formatWindow,
   limitingLabel,
   morningHeading,
@@ -26,6 +27,8 @@ import type {
   BriefingBlock,
   BriefingDay,
   BriefingLake,
+  BriefingObservation,
+  BriefingRegion,
   Health,
   Outlook,
   OutlookHour,
@@ -39,6 +42,8 @@ export interface BriefingCardDeps {
   lookupLake: (id: number) => Lake | null;
   /** The single selectLake(id) path. */
   onSelectLake: (id: number) => void;
+  /** Select the water body and frame one of its regions. */
+  onSelectRegion: (id: number, lat: number, lon: number) => void;
   onOpenSettings: () => void;
   onRefresh: () => void;
 }
@@ -69,6 +74,10 @@ export function renderBriefingCard(opts: BriefingCardOptions): HTMLElement {
   const leadsWithOutlook = b.outlook != null && outlookLeads(b.outlook, b.timezone);
 
   wrap.append(header(b, leadsWithOutlook, state.fromCache, opts));
+
+  // Home water leads the card: it is the one water body Bobby is on most days, and it is
+  // in every briefing regardless of the search radius, so it is not part of the ranked list.
+  if (b.home_water) wrap.append(homeWaterSection(b.home_water, b, opts, false));
 
   const sections = el("div", "brief-sections");
   const outlookNode = b.outlook ? outlookSection(b, b.outlook, today, opts) : outlookMissing();
@@ -203,6 +212,7 @@ function outlookSection(
     ),
   );
 
+  if (o.home_water) sec.append(homeWaterSection(o.home_water, b, opts, true));
   sec.append(lakesSection("Calmest water in the window", o.lakes, b, opts, true));
   return sec;
 }
@@ -355,15 +365,46 @@ function lakesSection(
   return sec;
 }
 
+/**
+ * "Notably higher" for the open-water contrast line. Two inches is the smallest step that
+ * is not rounding noise on a number the server already rounded to whole inches, and it is
+ * the difference between a bay you would land in and one you would not.
+ */
+const OPEN_WATER_GAP_IN = 2;
+
+/**
+ * Regions of the home water shown before the list folds; the rest are one tap away.
+ * `.brief-regions.is-clipped` in styles/waves.css hides the rows past this one, so the two
+ * numbers have to agree.
+ */
+const HOME_REGIONS_SHOWN = 6;
+
 function rankedLakeRow(row: BriefingLake, b: Briefing, opts: BriefingCardDeps): HTMLElement {
   const known = opts.lookupLake(row.id);
   const lake = known ?? standInLake(row);
 
-  // Two stacked lines in the trailing slot: water first, then where it is.
+  // No region of this water body has a long enough run into the wind. The api still names
+  // the calmest one and its ungated numbers, which must not be printed as if they were an
+  // answer, so the run figure is replaced by what is actually wrong with it.
+  const noUsableRun =
+    (row.regions?.length ?? 0) > 0 && row.regions!.every((r) => r.hs_in == null);
+
+  // Three stacked lines in the trailing slot: the region's water, the open water it is
+  // sheltered from when that is a real difference, then where the water body is.
   const trailing = el("span", "brief-trail");
   trailing.append(
-    el("span", "brief-trail-main", `${row.hs_in} in · ${formatThousands(row.run_ft)} ft`),
+    el(
+      "span",
+      "brief-trail-main",
+      noUsableRun ? `${row.hs_in} in` : `${row.hs_in} in · ${formatThousands(row.run_ft)} ft`,
+    ),
   );
+  if (noUsableRun) {
+    trailing.append(el("span", "brief-trail-sub", "run too short into this wind"));
+  }
+  if (row.hs_open_in != null && row.hs_open_in - row.hs_in >= OPEN_WATER_GAP_IN) {
+    trailing.append(el("span", "brief-trail-sub", `open water ${row.hs_open_in} in`));
+  }
   trailing.append(
     el("span", "brief-trail-sub", `${row.distance_nm} nm · ${pad3(row.bearing_deg)}°`),
   );
@@ -380,6 +421,8 @@ function rankedLakeRow(row: BriefingLake, b: Briefing, opts: BriefingCardDeps): 
 
   const element = lakeRow(lake, {
     onSelect: (id) => opts.onSelectLake(id),
+    // "Cass Lake · west end": the calmest region is what the row is actually about.
+    ...(row.region ? { nameSuffix: row.region } : {}),
     trailing,
     note,
   });
@@ -401,7 +444,7 @@ function standInLake(row: BriefingLake): Lake {
     id: row.id,
     name: row.name,
     name_norm: "",
-    kind: "lake",
+    kind: row.kind ?? "lake",
     county: "not in this data pack",
     township: null,
     lat: 0,
@@ -415,6 +458,131 @@ function standInLake(row: BriefingLake): Lake {
     restriction_ids: [],
     access: null,
   };
+}
+
+// -- home water ------------------------------------------------------------
+
+/**
+ * The home water block: one water body in full, every region ranked, with the second
+ * opinions beside the computed numbers rather than instead of them.
+ *
+ * It is not a lake row because the question is different. A ranked row answers "which lake
+ * today"; this answers "where on the water I am going anyway", which is a list of regions,
+ * a contrast with the open water, and whatever a real buoy is measuring right now.
+ */
+function homeWaterSection(
+  row: BriefingLake,
+  b: Briefing,
+  opts: BriefingCardDeps,
+  nested: boolean,
+): HTMLElement {
+  const sec = el("section", nested ? "brief-sub brief-home" : "brief-section brief-home");
+  sec.dataset["score"] = row.score;
+
+  const head = el("div", "brief-section-head");
+  const title = el("h3", "detail-h brief-home-name", row.name);
+  head.append(title);
+  head.append(el("span", "brief-section-sub", `home water · ${formatWind(row.wind)}`));
+  sec.append(head);
+
+  const lead = el("div", "brief-lead");
+  lead.append(
+    scorePill(
+      row.score,
+      row.limiting ? `${SCORE_WORD[row.score]} · ${limitingLabel(row.limiting)}` : undefined,
+    ),
+  );
+  if (row.hs_open_in != null) {
+    lead.append(el("span", "brief-lead-window", `open water ${row.hs_open_in} in`));
+  }
+  if (row.frozen) lead.append(el("span", "brief-home-frozen", "likely frozen, verify"));
+  sec.append(lead);
+
+  const regions = row.regions ?? [];
+  if (regions.length === 0) {
+    sec.append(el("p", "muted small", "No wave field for this water body yet."));
+  } else {
+    const list = el("div", "brief-regions");
+    list.setAttribute("role", "list");
+    for (const region of regions) list.append(homeRegionRow(row, region, opts));
+    sec.append(list);
+    // A big lake can have a dozen regions and the card has a briefing under it. The calm
+    // end is what gets read, so the rest folds away until asked for.
+    if (regions.length > HOME_REGIONS_SHOWN) {
+      const hidden = regions.length - HOME_REGIONS_SHOWN;
+      list.classList.add("is-clipped");
+      const more = el("button", "btn btn-quiet brief-regions-more", `Show ${hidden} rougher`);
+      more.type = "button";
+      more.addEventListener("click", () => {
+        const open = list.classList.toggle("is-clipped");
+        more.textContent = open ? `Show ${hidden} rougher` : "Show the calm end only";
+      });
+      sec.append(more);
+    }
+  }
+
+  const observed = row.observed ?? [];
+  if (observed.length > 0) {
+    sec.append(el("div", "brief-obs-head", "Observed"));
+    const list = el("ul", "brief-obs");
+    for (const station of observed) list.append(observationRow(station, b));
+    sec.append(list);
+  }
+  if (row.marine_hs_in != null) {
+    sec.append(
+      el(
+        "p",
+        "muted small brief-marine",
+        `Model forecast, open lake: ${row.marine_hs_in} in.`,
+      ),
+    );
+  }
+  return sec;
+}
+
+/** One region of the home water: score bar, label, wave height, run. Tapping frames it. */
+function homeRegionRow(
+  row: BriefingLake,
+  region: BriefingRegion,
+  opts: BriefingCardDeps,
+): HTMLElement {
+  const usable = region.hs_in != null;
+  const item = el("button", "brief-region");
+  item.type = "button";
+  item.setAttribute("role", "listitem");
+  if (region.score) item.dataset["score"] = region.score;
+  item.classList.toggle("is-unusable", !usable);
+
+  item.append(el("span", "brief-region-bar"));
+  item.append(el("span", "brief-region-label", region.label));
+
+  const trail = el("span", "brief-region-trail");
+  if (usable) {
+    trail.append(el("span", "brief-region-in", `${region.hs_in} in`));
+    if (region.run_ft != null) {
+      trail.append(el("span", "brief-region-run", `${formatThousands(region.run_ft)} ft`));
+    }
+  } else {
+    trail.append(el("span", "brief-region-run", "run too short into this wind"));
+  }
+  item.append(trail);
+
+  item.addEventListener("click", () => opts.onSelectRegion(row.id, region.lat, region.lon));
+  return item;
+}
+
+function observationRow(station: BriefingObservation, b: Briefing): HTMLElement {
+  const li = el("li", "brief-obs-row");
+  // Buoys and shore stations arrive without a name; the station id is what a pilot looks up.
+  li.append(el("span", "brief-obs-name", station.name ?? station.station));
+  const parts: string[] = [];
+  if (station.wind) parts.push(formatWind(station.wind));
+  if (station.wave_ft != null) parts.push(`${station.wave_ft} ft`);
+  parts.push(utcToZoneTime(station.at, b.timezone));
+  parts.push(`${station.distance_nm} nm`);
+  li.append(el("span", "brief-obs-detail", parts.join(" · ")));
+  li.title = `${station.kind} ${station.station} · reported ${formatRelative(station.at)}`;
+  return li;
 }
 
 // -- footer ----------------------------------------------------------------

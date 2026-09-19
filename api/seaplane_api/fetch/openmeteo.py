@@ -40,6 +40,33 @@ FORECAST_LINK = (
     "https://open-meteo.com/en/docs#latitude={lat}&longitude={lon}&hourly=wind_speed_10m,wind_gusts_10m"
 )
 
+MARINE_URL = "https://marine-api.open-meteo.com/v1/marine"
+
+
+async def fetch_marine(
+    c: httpx.AsyncClient, lat: float, lon: float, *, timezone: str
+) -> tuple[dict | None, str | None]:
+    """Hourly `wave_height` (metres) from the marine model, for the second opinion on big water.
+
+    Verified live on 2026-09-19. Two things the caller has to handle. **Nulls:** a point the marine
+    model does not cover comes back 200 with `wave_height` a list of `null` (42.60,-83.35, inland
+    Oakland County, returns 168 of them) rather than an error. **Snapping:** the response carries the
+    grid point it actually used, and it can be a long way from the request -- 42.60,-83.05 came back
+    as 42.625,-82.875, about 8 nm east, because that is the nearest wet cell. A caller that does not
+    check `latitude`/`longitude` will quietly print Lake Huron's waves for an inland lake.
+    """
+    return await get_json(
+        c,
+        MARINE_URL,
+        {
+            "latitude": f"{lat:.4f}",
+            "longitude": f"{lon:.4f}",
+            "hourly": "wave_height",
+            "timezone": timezone,
+        },
+        label="open_meteo_marine",
+    )
+
 
 async def fetch_points(
     c: httpx.AsyncClient,

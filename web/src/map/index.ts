@@ -1,13 +1,21 @@
 import * as maplibregl from "maplibre-gl";
 import type { LngLatBoundsLike, Map as MlMap, PaddingOptions } from "maplibre-gl";
 import { Protocol } from "pmtiles";
-import { DATA_FILES, FIXTURE_VIEW, HOME_VIEW, MAX_SELECT_ZOOM } from "../config";
+import {
+  DATA_FILES,
+  FIXTURE_VIEW,
+  HOME_VIEW,
+  MAX_SELECT_ZOOM,
+  MIN_SELECT_ZOOM,
+} from "../config";
 import { pmtilesExists } from "../pack";
 import type { Lake } from "../types";
 import type { LayerPrefs } from "../ui/controls";
 import type { ResolvedTheme } from "../ui/theme";
+import type { WaveGeo } from "../waves/geo";
 import {
   buildStyle,
+  EMPTY_FEATURES,
   LAYER,
   OVERLAY_GROUPS,
   NO_FEATURE,
@@ -59,6 +67,9 @@ export class MapController {
   private usableWaterOn: boolean;
   /** Reset on every style swap; see reapplyLayerState. */
   private layerStateApplied = false;
+  /** Latest wave field for the selected water body, or null when there is none. */
+  private waveGeo: WaveGeo | null = null;
+  private waveFrame: number | null = null;
 
   private constructor(
     container: HTMLElement,
@@ -178,7 +189,49 @@ export class MapController {
       this.setHighlight(this.selectedLake);
       this.startPulse();
     }
+    // A theme swap rebuilds the style from scratch, which empties the two GeoJSON sources.
+    this.paintWaves();
     this.layerStateApplied = true;
+  }
+
+  // -- wave field ----------------------------------------------------------
+
+  /**
+   * Draws the selected water body's wave field, or clears it with null.
+   *
+   * Calls are coalesced onto one animation frame: dragging the speed slider fires an input
+   * event per pixel, and only the last one of each frame is worth a `setData`. Nothing here
+   * starts a repeating animation, so the map still reaches `idle` (see startPulse).
+   */
+  setWaveField(geo: WaveGeo | null): void {
+    this.waveGeo = geo;
+    if (this.waveFrame != null) return;
+    this.waveFrame = requestAnimationFrame(() => {
+      this.waveFrame = null;
+      this.paintWaves();
+    });
+  }
+
+  private paintWaves(): void {
+    const points = this.map.getSource(SOURCE.wavePoints);
+    const regions = this.map.getSource(SOURCE.waveRegions);
+    if (!points || !regions) return;
+    try {
+      (points as maplibregl.GeoJSONSource).setData(this.waveGeo?.points ?? EMPTY_FEATURES);
+      (regions as maplibregl.GeoJSONSource).setData(this.waveGeo?.regions ?? EMPTY_FEATURES);
+    } catch (err) {
+      console.warn("[map] could not update the wave field", err);
+    }
+  }
+
+  /** Frames one region of the selected water body without zooming past what it can show. */
+  flyToRegion(lon: number, lat: number): void {
+    this.map.easeTo({
+      center: [lon, lat],
+      zoom: Math.max(this.map.getZoom(), 12),
+      padding: this.cb.padding(),
+      duration: 600,
+    });
   }
 
   // -- selection -----------------------------------------------------------
@@ -253,11 +306,21 @@ export class MapController {
       [lake.bbox[0], lake.bbox[1]],
       [lake.bbox[2], lake.bbox[3]],
     ];
-    this.map.fitBounds(bounds, {
-      padding: this.cb.padding(),
-      maxZoom: MAX_SELECT_ZOOM,
-      duration: 600,
-    });
+    const padding = this.cb.padding();
+    // `fitBounds` has a maxZoom but no floor, and a Great Lake's bbox fits at about z5,
+    // below where lakes.pmtiles has any tiles. Ask what the camera would be, and when it
+    // is under the floor frame the polygon's centroid at the floor instead.
+    let camera;
+    try {
+      camera = this.map.cameraForBounds(bounds, { padding, maxZoom: MAX_SELECT_ZOOM });
+    } catch (err) {
+      console.warn("[map] cameraForBounds failed; falling back to fitBounds", err);
+    }
+    if (camera && typeof camera.zoom === "number" && camera.zoom < MIN_SELECT_ZOOM) {
+      this.map.easeTo({ center: [lake.lon, lake.lat], zoom: MIN_SELECT_ZOOM, duration: 600 });
+    } else {
+      this.map.fitBounds(bounds, { padding, maxZoom: MAX_SELECT_ZOOM, duration: 600 });
+    }
     this.syncFallbackMarker(lake);
     // Re-check once the camera has settled and again once tiles have actually painted:
     // queryRenderedFeatures only sees what is on screen right now.
@@ -274,6 +337,7 @@ export class MapController {
     this.setHighlight(null);
     this.stopPulse();
     this.removeMarker();
+    this.setWaveField(null);
   }
 
   /**

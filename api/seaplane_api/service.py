@@ -6,8 +6,11 @@ The only place that mixes the pure algorithm with the filesystem and the network
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 
+from . import wavefield
 from .briefing import lakes as lakes_mod
 from .briefing.generate import build_briefing, collect_feeds
 from .fetch.http import client
@@ -18,19 +21,38 @@ from .settings import Settings
 log = logging.getLogger(__name__)
 
 MISSING_EXTENTS_ERROR = "lake_extents.json missing; using longest chord"
+MISSING_WAVE_POINTS_ERROR = "wave_points missing; lake-level waves only"
 
 
-def load_candidates(settings: Settings) -> tuple[list[lakes_mod.Candidate], list[str]]:
-    """Candidate lakes from `data/out/index.json` (+ `lake_extents.json` when the pipeline has it)."""
+@dataclass
+class LakeInputs:
+    """Everything `data/out` contributes to one run."""
+
+    candidates: list[lakes_mod.Candidate] = field(default_factory=list)
+    home_water: lakes_mod.Candidate | None = None
+    errors: list[str] = field(default_factory=list)
+
+
+def load_candidates(settings: Settings) -> LakeInputs:
+    """Candidate water from `data/out`: `index.json`, `lake_extents.json`, and the wave field.
+
+    Each of the two optional packs degrades on its own. Without `lake_extents.json` the run falls
+    back to the longest chord; without `wave_points.*` every water body is scored at lake level,
+    which is what the briefing did before the wave field existed.
+    """
     errors: list[str] = []
     index = read_json(index_path())
     if not isinstance(index, list):
-        return [], [f"index.json: unreadable at {index_path()}"]
+        return LakeInputs(errors=[f"index.json: unreadable at {index_path()}"])
 
     extents = read_json(lake_extents_path())
     if not isinstance(extents, dict):
         extents = None
         errors.append(MISSING_EXTENTS_ERROR)
+
+    wave_field = wavefield.load()
+    if wave_field is None:
+        errors.append(MISSING_WAVE_POINTS_ERROR)
 
     home = settings.home_airport
     candidates = lakes_mod.select_candidates(
@@ -41,20 +63,55 @@ def load_candidates(settings: Settings) -> tuple[list[lakes_mod.Candidate], list
         min_run_ft=settings.limits.min_run_ft,
         public_access_only=settings.public_access_only,
         extents=extents,
+        wave_field=wave_field,
     )
-    return candidates, errors
+
+    home_water = None
+    if settings.home_water is not None:
+        home_water = lakes_mod.find_candidate(
+            index,
+            settings.home_water.id,
+            home_lat=home.lat,
+            home_lon=home.lon,
+            extents=extents,
+            wave_field=wave_field,
+        )
+        if home_water is None:
+            errors.append(f"home_water: id {settings.home_water.id} is not in index.json")
+    return LakeInputs(candidates=candidates, home_water=home_water, errors=errors)
 
 
-async def run_briefing(settings: Settings, *, run_kind: str = "manual", run_at: str | None = None) -> dict:
+def index_has(lake_id: int) -> bool:
+    """Does `index.json` carry this water body? (`PUT /api/settings` validates `home_water.id`.)"""
+    index = read_json(index_path())
+    if not isinstance(index, list):
+        return False
+    return any(str(lake.get("id")) == str(lake_id) for lake in index)
+
+
+async def run_briefing(
+    settings: Settings,
+    *,
+    run_kind: str = "manual",
+    run_at: str | None = None,
+    out_path: Path | None = None,
+) -> dict:
     """Fetch everything, build the briefing, write it atomically, and push when configured."""
     started = datetime.now(UTC)
-    candidates, errors = load_candidates(settings)
-    log.info("briefing run (%s): %d candidate lakes", run_kind, len(candidates))
+    inputs = load_candidates(settings)
+    candidates, errors = inputs.candidates, inputs.errors
+    log.info(
+        "briefing run (%s): %d candidate water bodies, home water %s",
+        run_kind,
+        len(candidates),
+        inputs.home_water.name if inputs.home_water else "none",
+    )
 
     async with client() as c:
-        feeds = await collect_feeds(settings, candidates, client=c)
+        feeds = await collect_feeds(settings, candidates, client=c, home_water=inputs.home_water)
 
-    previous = read_json(briefing_path())
+    target = out_path or briefing_path()
+    previous = read_json(target)
     briefing = build_briefing(
         settings,
         feeds,
@@ -64,8 +121,9 @@ async def run_briefing(settings: Settings, *, run_kind: str = "manual", run_at: 
         run_at=run_at,
         previous=previous if isinstance(previous, dict) else None,
         extra_errors=errors,
+        home_water=inputs.home_water,
     )
-    write_json_atomic(briefing_path(), briefing)
+    write_json_atomic(target, briefing)
     log.info(
         "briefing written in %.1fs: %s",
         (datetime.now(UTC) - started).total_seconds(),

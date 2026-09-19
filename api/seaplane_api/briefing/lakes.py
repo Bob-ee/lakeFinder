@@ -1,12 +1,27 @@
-"""Candidate lakes and the per-lake water score (design 3.3).
+"""Candidate water bodies and the per-water-body score (design 3.3, plus the wave field).
 
-Candidate filter: verdict `clear` or `conditional`, `kind` lake (see below), within `radius_nm` of the
-home airport by great-circle distance, `chord_ft >= min_run_ft`, and (optionally) a non-null `access`.
+Candidate filter: verdict `clear` or `conditional`, within `radius_nm` of the home airport,
+`chord_ft >= min_run_ft`, and (optionally) a non-null `access`. Every `kind` is a candidate --
+`lake`, `river`, `great_lake`, `connecting_water` -- with one exception: a `river` or
+`connecting_water` **without** wave points is not, because a reach length says nothing about width,
+and ranking one on its longest reach put Otter Creek and Halfway Creek in the briefing the morning
+rivers landed. With points, its width is measured (`run[8]` is the straight line through the point
+inside its own usable water), so it ranks like anything else. A missing `kind` means lake.
 
-**Rivers are not ranked yet.** `index.json` carries `kind: "river"` polygons whose `chord_ft` is the longest
-straight reach, but says nothing about width: the first run after rivers landed ranked Otter Creek and Halfway
-Creek as nearby water. They come back with the per-point wave field (`docs/big-water-design.md`), where a
-point's `run_by_bearing` is measured through usable water. A missing `kind` means lake (older packs).
+**Two ways to score a water body** (data contract, "Briefing"):
+
+- *With* a wave field, by its **best region** for the wind at that water body: fetch is measured from
+  each sample point upwind to the first land, so Muscamoot Bay behind the delta islands is a
+  different number from the open lake in the same wind. The row carries the region's name and
+  numbers, the open-water figure for contrast, and the calmest four regions.
+- *Without* one, at lake level exactly as before: the extent along the wind from `lake_extents.json`
+  for the run, the widest of the three bins around the wind for the fetch.
+
+**Distance is to the water you would land on.** Lake St. Clair's centroid is 20+ nm from half its
+bays, so a water body with a wave field reports its distance and bearing to the **best region's
+point**, and ranks on that. The `radius_nm` gate uses the **nearest** point instead, so a water body
+that straddles the edge of the circle is a candidate whenever any of its water is inside it, even if
+today's calm end is beyond. Without a wave field both numbers are the centroid's, as before.
 
 **Forecast points are snapped to a 0.1 deg grid.** A 40 nm radius around Pontiac leaves ~310
 candidates, which would be seven Open-Meteo calls of 50 points; on a 0.1 deg grid (about 6 nm north-
@@ -14,36 +29,53 @@ south, 4.5 nm east-west at 42.7 deg) those collapse to ~78 cells, i.e. two calls
 cell share a forecast. That is well inside the resolution of the underlying model -- Open-Meteo's
 own response for Pontiac comes back snapped to its grid anyway (42.663, -83.402 for a request at
 42.6655, -83.4187) -- and it keeps the run polite. The alternative considered, "fetch only the
-nearest 150", was rejected because it silently drops the far half of the map.
+nearest 150", was rejected because it silently drops the far half of the map. One forecast per water
+body, taken at its centroid, is coarse for something the size of Lake St. Clair; the wave field
+already varies the *water* across it, and per-region wind is a later question.
 
-Usable run: the lake's extent along the wind bearing from `lake_extents.json`. That file is written
-by the pipeline's `build` stage and may not exist yet; the fallback is `chord_ft` in every direction,
-which is optimistic for run length and for fetch, so the caller records it as an error. Wave fetch
-uses a three-bin arc rather than the single wind bin -- see `Candidate.fetch_ft`.
+Usable run without a wave field: the lake's extent along the wind bearing from `lake_extents.json`.
+That file is written by the pipeline's `build` stage and may not exist yet; the fallback is
+`chord_ft` in every direction, which is optimistic for run length and for fetch, so the caller
+records it as an error. Wave fetch uses a three-bin arc rather than the single wind bin -- see
+`Candidate.fetch_ft`.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 
+from ..wavefield import WaveField, WavePoint
 from . import aero, wave
 from .scoring import FAVORABLE, MARGINAL, UNFAVORABLE, band, rank, worse
 
 GRID_DEG = 0.1
 LIGHT_WIND_KT = 5.0  # below this the wind sets no usable direction (design 3.3 step 2)
+MAX_ROW_REGIONS = 4  # the contract's cap on `lakes[].regions`
+NO_WAVE_FIELD_KINDS = frozenset({"river", "connecting_water"})
 
 
 @dataclass(frozen=True)
 class Candidate:
     id: int
     name: str
-    lat: float
+    lat: float  # centroid: the forecast point and the marine query point
     lon: float
     verdict: str
     chord_ft: float
     chord_bearing_deg: float
-    distance_nm: float
+    distance_nm: float  # home -> centroid
     bearing_deg: float
     extents_ft: tuple[int, ...] | None = None  # 16 bins, or None when lake_extents.json is missing
+    kind: str = "lake"
+    points: tuple[WavePoint, ...] = ()  # empty when this water body has no wave field
+    labels: tuple[str, ...] = ()
+    home: tuple[float, float] | None = None  # so a region's own distance can be measured
+    nearest_nm: float | None = None  # home -> nearest sample point; the radius gate uses this
+    bbox: tuple[float, float, float, float] | None = None  # west, south, east, north
+
+    @property
+    def has_wave_field(self) -> bool:
+        return bool(self.points)
 
     @property
     def cell(self) -> tuple[int, int]:
@@ -74,10 +106,19 @@ class Candidate:
         b = aero.extent_bin(wind_dir_deg)
         return float(max(self.extents_ft[(b + d) % 16] for d in (-1, 0, 1)))
 
+    def at_region(self, region: wave.Region | None) -> tuple[float, float]:
+        """`(distance_nm, bearing_deg)` to a region's point, or to the centroid without one."""
+        if region is None or self.home is None:
+            return self.distance_nm, self.bearing_deg
+        return (
+            aero.distance_nm(self.home[0], self.home[1], region.lat, region.lon),
+            aero.bearing_deg(self.home[0], self.home[1], region.lat, region.lon),
+        )
+
 
 @dataclass
 class LakeHour:
-    """One lake at one block/hour."""
+    """One water body at one block/hour."""
 
     hs_in: float
     tp_s: float
@@ -88,6 +129,14 @@ class LakeHour:
     xwind_kt: float | None
     level: str
     limiting: str | None
+    regions: tuple[wave.Region, ...] = ()  # calm to rough, unusable last; empty without a field
+    chosen: wave.Region | None = None  # the region `hs_in` / `run_ft` / the distance describe
+    hs_open_in: int | None = None  # roughest region's `hs_all_in`
+    when: datetime | None = None  # the block centre or hour this was scored for
+
+    @property
+    def region_label(self) -> str | None:
+        return None if self.chosen is None else self.chosen.label
 
 
 def select_candidates(
@@ -99,54 +148,131 @@ def select_candidates(
     min_run_ft: float,
     public_access_only: bool,
     extents: dict[str, list[int]] | None,
+    wave_field: WaveField | None = None,
 ) -> list[Candidate]:
-    """Apply the design 3.3 candidate filter to `data/out/index.json`."""
+    """Apply the design 3.3 candidate filter to `data/out/index.json`.
+
+    The cheap tests come first and the `bbox` pre-filter before them all, so a nationwide pack is
+    never unpacked for the water bodies in the next state: only a water body whose bounding box
+    reaches inside `radius_nm` has its sample points read at all.
+    """
     out: list[Candidate] = []
     for lake in index:
         if lake.get("verdict") not in ("clear", "conditional"):
             continue
-        if lake.get("kind", "lake") == "river":
+        has_points = wave_field is not None and wave_field.has_points(lake.get("id"))
+        if (lake.get("kind") or "lake") in NO_WAVE_FIELD_KINDS and not has_points:
             continue
-        chord = lake.get("chord_ft") or 0.0
-        if chord < min_run_ft:
+        if (lake.get("chord_ft") or 0.0) < min_run_ft:
             continue
         if public_access_only and not lake.get("access"):
             continue
-        lat, lon = lake.get("lat"), lake.get("lon")
-        if lat is None or lon is None:
+        if _bbox_distance_nm(lake, home_lat, home_lon) > radius_nm:
             continue
-        dist = aero.distance_nm(home_lat, home_lon, lat, lon)
-        if dist > radius_nm:
-            continue
-        ext = None
-        if extents is not None:
-            raw = extents.get(str(lake["id"]))
-            if raw and len(raw) == 16:
-                ext = tuple(int(v) for v in raw)
-        out.append(
-            Candidate(
-                id=int(lake["id"]),
-                name=lake.get("name") or f"Unnamed lake {lake['id']}",
-                lat=float(lat),
-                lon=float(lon),
-                verdict=lake["verdict"],
-                chord_ft=float(chord),
-                chord_bearing_deg=float(lake.get("chord_bearing_deg") or 0),
-                distance_nm=dist,
-                bearing_deg=aero.bearing_deg(home_lat, home_lon, lat, lon),
-                extents_ft=ext,
-            )
+        cand = _candidate(
+            lake, home_lat=home_lat, home_lon=home_lon, extents=extents, wave_field=wave_field
         )
+        if cand is None:
+            continue
+        if (cand.nearest_nm if cand.nearest_nm is not None else cand.distance_nm) > radius_nm:
+            continue
+        out.append(cand)
     out.sort(key=lambda c: c.distance_nm)
     return out
 
 
-def grid_points(candidates: list[Candidate]) -> list[tuple[float, float]]:
-    """Distinct 0.1 deg forecast points, nearest-first so a truncated fetch keeps the close lakes."""
+def _bbox_distance_nm(lake: dict, home_lat: float, home_lon: float) -> float:
+    """Distance from home to the nearest point of the water body's bounding box; 0 inside it.
+
+    A lower bound on the distance to any of its water, so anything it rules out is genuinely out of
+    range. An entry with no `bbox` (an older pack) is not pre-filtered.
+    """
+    bbox = lake.get("bbox")
+    if not bbox or len(bbox) != 4:
+        return 0.0
+    west, south, east, north = (float(v) for v in bbox)
+    lat = min(max(home_lat, south), north)
+    lon = min(max(home_lon, west), east)
+    return aero.distance_nm(home_lat, home_lon, lat, lon)
+
+
+def find_candidate(
+    index: list[dict],
+    lake_id: int,
+    *,
+    home_lat: float,
+    home_lon: float,
+    extents: dict[str, list[int]] | None,
+    wave_field: WaveField | None = None,
+) -> Candidate | None:
+    """One water body by id, with no radius, verdict, or kind filter: the home water (contract)."""
+    for lake in index:
+        if str(lake.get("id")) == str(lake_id):
+            return _candidate(lake, home_lat=home_lat, home_lon=home_lon, extents=extents, wave_field=wave_field)
+    return None
+
+
+def _candidate(
+    lake: dict,
+    *,
+    home_lat: float,
+    home_lon: float,
+    extents: dict[str, list[int]] | None,
+    wave_field: WaveField | None,
+) -> Candidate | None:
+    lat, lon = lake.get("lat"), lake.get("lon")
+    if lat is None or lon is None or lake.get("id") is None:
+        return None
+    lat, lon = float(lat), float(lon)
+    ext = None
+    if extents is not None:
+        raw = extents.get(str(lake["id"]))
+        if raw and len(raw) == 16:
+            ext = tuple(int(v) for v in raw)
+    points = wave_field.points(lake["id"]) if wave_field is not None else ()
+    labels = wave_field.labels if wave_field is not None else ()
+    nearest = None
+    if points:
+        nearest = min(aero.distance_nm(home_lat, home_lon, p.lat, p.lon) for p in points)
+    return Candidate(
+        id=int(lake["id"]),
+        name=lake.get("name") or f"Unnamed water {lake['id']}",
+        lat=lat,
+        lon=lon,
+        verdict=lake.get("verdict") or "unknown",
+        chord_ft=float(lake.get("chord_ft") or 0.0),
+        chord_bearing_deg=float(lake.get("chord_bearing_deg") or 0),
+        distance_nm=aero.distance_nm(home_lat, home_lon, lat, lon),
+        bearing_deg=aero.bearing_deg(home_lat, home_lon, lat, lon),
+        extents_ft=ext,
+        kind=lake.get("kind") or "lake",
+        points=points,
+        labels=labels,
+        home=(home_lat, home_lon),
+        nearest_nm=nearest,
+        bbox=_bbox(lake),
+    )
+
+
+def _bbox(lake: dict) -> tuple[float, float, float, float] | None:
+    raw = lake.get("bbox")
+    if not raw or len(raw) != 4:
+        return None
+    west, south, east, north = (float(v) for v in raw)
+    return (west, south, east, north)
+
+
+def grid_cells(candidates: list[Candidate]) -> dict[tuple[int, int], tuple[float, float]]:
+    """`{cell: forecast point}`, nearest-first so a truncated fetch keeps the close water."""
     seen: dict[tuple[int, int], tuple[float, float]] = {}
     for c in candidates:
         seen.setdefault(c.cell, c.cell_point)
-    return list(seen.values())
+    return seen
+
+
+def grid_points(candidates: list[Candidate]) -> list[tuple[float, float]]:
+    """Distinct 0.1 deg forecast points, in the order the cells were first seen."""
+    return list(grid_cells(candidates).values())
 
 
 def score_lake_hour(
@@ -156,12 +282,46 @@ def score_lake_hour(
     gust_kt: float | None,
     limits,
 ) -> LakeHour:
-    """Waves, usable run, and water crosswind for one lake at one hour (design 3.3 steps 2-6)."""
-    run = cand.run_ft(wind_dir_deg, wind_kt)
-    fetch_ft = cand.fetch_ft(wind_dir_deg, wind_kt)
+    """Waves, usable run, and water crosswind for one water body at one hour (design 3.3 steps 2-6).
+
+    The wave numbers are computed at the **gust** when there is one, as they have been since the
+    first build: the gust is what picks the water up, and the marginal band exists to catch exactly
+    that. The region aggregation is given the same wind, so a region row and a lake-level row mean
+    the same thing.
+    """
     gust_or_wind = gust_kt if gust_kt is not None else wind_kt
-    hs_in = wave.wave_height_in(gust_or_wind, fetch_ft)
-    tp_s = wave.peak_period_s(gust_or_wind, fetch_ft * wave.FT_TO_M)
+    regions: tuple[wave.Region, ...] = ()
+    chosen: wave.Region | None = None
+    hs_open_in: int | None = None
+
+    if cand.has_wave_field:
+        regions = tuple(
+            wave.regions(
+                cand.points,
+                cand.labels,
+                wind_dir_deg=wind_dir_deg,
+                wind_kt=gust_or_wind,
+                min_run_ft=limits.min_run_ft,
+            )
+        )
+        hs_open_in = wave.open_water_in(regions)
+        best = wave.best_region(regions)
+        if best is not None:
+            chosen = best
+            hs_in: float = float(best.hs_in or 0)
+            run = float(best.run_ft or 0)
+        else:
+            # No region has enough run into this wind. The row still names the calmest water so the
+            # pilot knows what he is being turned away from; `run` decides the score below.
+            chosen = min(regions, key=lambda r: (r.hs_all_in, r.label))
+            hs_in = float(chosen.hs_all_in)
+            run = float(chosen.run_all_ft)
+        tp_s = _region_tp_s(cand, chosen, wind_dir_deg, gust_or_wind)
+    else:
+        run = cand.run_ft(wind_dir_deg, wind_kt)
+        fetch_ft = cand.fetch_ft(wind_dir_deg, wind_kt)
+        hs_in = wave.wave_height_in(gust_or_wind, fetch_ft)
+        tp_s = wave.peak_period_s(gust_or_wind, fetch_ft * wave.FT_TO_M)
 
     factors: list[tuple[str, str]] = []
     factors.append(("waves", band(hs_in, limits.wave_ok_in, limits.wave_max_in)))
@@ -189,7 +349,25 @@ def score_lake_hour(
         xwind_kt=xw,
         level=level,
         limiting=limiting,
+        regions=regions,
+        chosen=chosen,
+        hs_open_in=hs_open_in,
     )
+
+
+def region_score(region: wave.Region, limits) -> str:
+    """One region's own level: the wave band, or unfavorable with no usable run into the wind."""
+    if region.hs_in is None:
+        return UNFAVORABLE
+    return band(region.hs_in, limits.wave_ok_in, limits.wave_max_in)
+
+
+def _region_tp_s(cand: Candidate, region: wave.Region | None, wind_dir_deg: float, wind_kt: float) -> float:
+    """Peak period at the region's own point. Not in the output; kept for the steep-chop rule."""
+    if region is None or region.point is None or not (0 <= region.point < len(cand.points)):
+        return 0.0
+    p = cand.points[region.point]
+    return wave.spm_wave(wind_kt, p.fetch_m[wave.wind_bin(wind_dir_deg)], p.depth_m)[1]
 
 
 @dataclass
@@ -201,25 +379,70 @@ class RankedLake:
     frozen: bool = False
     hours: list[LakeHour] = field(default_factory=list)
 
+    @property
+    def distance_nm(self) -> float:
+        """To the best region's point on a water body with a field; to the centroid without one."""
+        return self.cand.at_region(self.hour.chosen)[0]
+
     def to_row(self) -> dict:
         """The `lakes[]` row shape from the data contract; every number already rounded."""
+        distance, bearing = self.cand.at_region(self.hour.chosen)
         return {
             "id": self.cand.id,
             "name": self.cand.name,
+            "kind": self.cand.kind,
             "score": self.level,
             "limiting": self.limiting,
             "hs_in": round(self.hour.hs_in),
             "run_ft": round(self.hour.run_ft),
+            "region": self.hour.region_label,
+            "hs_open_in": self.hour.hs_open_in,
+            "regions": [r.to_row() for r in self.hour.regions[:MAX_ROW_REGIONS]],
             "wind": {
                 "dir": round(self.hour.wind_dir_deg),
                 "kt": round(self.hour.wind_kt),
                 "gust": None if self.hour.gust_kt is None else round(self.hour.gust_kt),
             },
-            "distance_nm": round(self.cand.distance_nm, 1),
-            "bearing_deg": round(self.cand.bearing_deg),
+            "distance_nm": round(distance, 1),
+            "bearing_deg": round(bearing),
             "verdict": self.cand.verdict,
             "frozen": self.frozen,
         }
+
+
+def score_over(
+    cand: Candidate,
+    forecasts: dict[tuple[int, int], object],
+    windows: list,
+    limits,
+    *,
+    frozen: bool,
+) -> RankedLake | None:
+    """One water body over `windows`, taking its worst hour. `None` when no forecast covers it."""
+    series = forecasts.get(cand.cell)
+    if series is None:
+        return None
+    hours: list[LakeHour] = []
+    for when in windows:
+        model = series.at(when)  # type: ignore[attr-defined]
+        if not model or model.get("wind_speed_10m") is None:
+            continue
+        hour = score_lake_hour(
+            cand,
+            float(model.get("wind_direction_10m") or 0.0),
+            float(model["wind_speed_10m"]),
+            None if model.get("wind_gusts_10m") is None else float(model["wind_gusts_10m"]),
+            limits,
+        )
+        hour.when = when
+        hours.append(hour)
+    if not hours:
+        return None
+    worst = max(hours, key=lambda h: (rank(h.level), h.hs_in, -h.run_ft))
+    level, limiting = worst.level, worst.limiting
+    if frozen:
+        level, limiting = UNFAVORABLE, "ice"
+    return RankedLake(cand=cand, level=level, limiting=limiting, hour=worst, frozen=frozen, hours=hours)
 
 
 def rank_lakes(
@@ -233,9 +456,10 @@ def rank_lakes(
 ) -> list[RankedLake]:
     """Score every candidate over `windows` (a list of datetimes) and return the best `n_lakes`.
 
-    Each lake takes its **worst** hour: the largest `Hs` and the smallest usable run across the
+    Each water body takes its **worst** hour: the largest `Hs` and the smallest usable run across the
     window, which is what design 3.4 asks for and is the conservative reading for the 3-hour blocks
-    too.
+    too. With a wave field, "largest Hs" is the largest *best-region* Hs -- the calmest water it
+    offers at its worst hour.
 
     `score` and `limiting` are **water only** -- waves, run, water crosswind, ice. The airport
     weather is not folded in: it is already the header, the block strip and the hour strip, and
@@ -252,31 +476,8 @@ def rank_lakes(
     """
     ranked: list[RankedLake] = []
     for cand in candidates:
-        series = forecasts.get(cand.cell)
-        if series is None:
-            continue
-        hours: list[LakeHour] = []
-        for when in windows:
-            model = series.at(when)  # type: ignore[attr-defined]
-            if not model or model.get("wind_speed_10m") is None:
-                continue
-            hours.append(
-                score_lake_hour(
-                    cand,
-                    float(model.get("wind_direction_10m") or 0.0),
-                    float(model["wind_speed_10m"]),
-                    None if model.get("wind_gusts_10m") is None else float(model["wind_gusts_10m"]),
-                    limits,
-                )
-            )
-        if not hours:
-            continue
-        worst = max(hours, key=lambda h: (rank(h.level), h.hs_in, -h.run_ft))
-        level, limiting = worst.level, worst.limiting
-        if frozen:
-            level, limiting = UNFAVORABLE, "ice"
-        ranked.append(
-            RankedLake(cand=cand, level=level, limiting=limiting, hour=worst, frozen=frozen, hours=hours)
-        )
-    ranked.sort(key=lambda r: (rank(r.level), r.cand.distance_nm, r.hour.hs_in))
+        scored = score_over(cand, forecasts, windows, limits, frozen=frozen)
+        if scored is not None:
+            ranked.append(scored)
+    ranked.sort(key=lambda r: (rank(r.level), r.distance_nm, r.hour.hs_in))
     return ranked[:n_lakes]

@@ -30,6 +30,8 @@ export interface BriefingHost {
   lookupLake(id: number): Lake | null;
   /** The single selectLake(id) path in state/index.ts. */
   selectLake(id: number): void;
+  /** Select a water body and frame one region of its wave field. */
+  selectRegion(id: number, lat: number, lon: number): void;
 }
 
 /**
@@ -124,6 +126,7 @@ export class BriefingController {
           refreshing: this.refreshing,
           lookupLake: (id) => this.host.lookupLake(id),
           onSelectLake: (id) => this.host.selectLake(id),
+          onSelectRegion: (id, lat, lon) => this.host.selectRegion(id, lat, lon),
           onOpenSettings: () => this.openSettings(),
           onRefresh: () => void this.runRefresh(),
         }),

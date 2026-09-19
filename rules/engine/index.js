@@ -230,9 +230,32 @@ export function renderNote(template, restriction) {
   return rendered.replace(/[ \t]{2,}/g, " ").trim();
 }
 
+// -- big-water cap ------------------------------------------------------------
+//
+// docs/data-contract.md "Water body kinds": on a great_lake or a connecting_water,
+// a restriction whose reach is unresolved can raise the verdict no higher than
+// conditional. A slow-no-wake zone at one creek mouth must not turn Lake St. Clair
+// red. The pipeline marks such a restriction `big_water_partial` in
+// restrictions.json (build.build_restrictions), which is the only input this needs,
+// so the pipeline's prebaked verdict and the client's re-run cannot drift.
+
+const BIG_WATER_CAP = "conditional";
+const BIG_WATER_CAP_NOTE = "(Covers part of this water; verdict limited to conditional.)";
+
+function capBigWater(result, restriction) {
+  if (restriction.big_water_partial !== true) return result;
+  if (VERDICT_ORDER.indexOf(result.verdict) >= VERDICT_ORDER.indexOf(BIG_WATER_CAP)) return result;
+  return {
+    ...result,
+    verdict: BIG_WATER_CAP,
+    note: `${result.note} ${BIG_WATER_CAP_NOTE}`.trim(),
+  };
+}
+
 /**
  * Evaluate a single restriction record against a compiled rules object.
  * First matching rule (in rules.json order) wins. No match -> unknown.
+ * A `big_water_partial` restriction is then capped at conditional (see above).
  *
  * @param {object} restriction
  * @param {object} rules compiled rules object from loadRules()
@@ -245,14 +268,20 @@ export function evaluateRestriction(restriction, rules) {
   }
   for (const rule of rules.rules) {
     if (matchesWhen(restriction, rule.when, rules.aircraft)) {
-      return {
-        matched_rule: rule.id,
-        verdict: rule.verdict,
-        note: renderNote(rule.note, restriction),
-      };
+      return capBigWater(
+        {
+          matched_rule: rule.id,
+          verdict: rule.verdict,
+          note: renderNote(rule.note, restriction),
+        },
+        restriction,
+      );
     }
   }
-  return { matched_rule: null, verdict: "unknown", note: "Unclassified restriction." };
+  return capBigWater(
+    { matched_rule: null, verdict: "unknown", note: "Unclassified restriction." },
+    restriction,
+  );
 }
 
 function worstOf(verdicts) {

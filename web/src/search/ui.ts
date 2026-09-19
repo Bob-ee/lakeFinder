@@ -1,7 +1,7 @@
 import { SEARCH } from "../config";
 import { lakeRow } from "../lists/row";
 import type { Lake } from "../types";
-import { el, formatFeet } from "../ui/format";
+import { el, formatDistanceFt } from "../ui/format";
 import { icon } from "../ui/icons";
 import type { SearchIndex } from "./index";
 import { listRecent } from "./recent";
@@ -144,7 +144,7 @@ export class SearchBox {
           onSelect: (id) => this.choose(id),
           // "Grand River" is 19 polygons: when the same name comes back more than once, the reach
           // length is what tells a landable stretch from a 900 ft one.
-          ...(repeated.has(lake.name ?? "") ? { trailing: formatFeet(lake.chord_ft) } : {}),
+          ...(repeated.has(lake.name ?? "") ? { trailing: formatDistanceFt(lake.chord_ft) } : {}),
         });
         this.results.append(row);
         this.rows.push(row);

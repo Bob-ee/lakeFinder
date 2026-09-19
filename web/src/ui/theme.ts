@@ -59,6 +59,18 @@ export class Theme {
   }
 }
 
+/**
+ * The theme the DOM is actually painted in, for the handful of places that build colours in
+ * JS rather than CSS (the wave ramp on the map and in the sheet). `Theme.apply` keeps
+ * `data-theme` on <html> in step, so reading it needs no reference to the Theme instance.
+ */
+export function currentTheme(): ResolvedTheme {
+  const attr = document.documentElement.dataset["theme"];
+  if (attr === "dark" || attr === "light") return attr;
+  if (typeof matchMedia !== "function") return "light";
+  return matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
 function readChoice(): ThemeChoice {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.theme);

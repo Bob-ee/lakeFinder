@@ -10,6 +10,7 @@ import {
   putSettings,
   refreshBriefing,
 } from "./api";
+import { homeWater } from "./home-water";
 import { isHhmm } from "./labels";
 import type { Briefing, HomeAirport, LimitKey, Settings } from "./types";
 
@@ -45,6 +46,9 @@ export function openBriefingSettings(opts: SettingsScreenOptions): void {
       );
       return;
     }
+    // Whoever opened this dialog now has the freshest settings; share them with the sheet's
+    // "Make this my home water" button rather than making it fetch again.
+    homeWater.adopt(settings);
     body.replaceChildren(form(settings, health.next_run_local, opts, close));
   })();
 }
@@ -120,6 +124,39 @@ function form(
     el("p", "muted small", "Runways come from the service; their headings drive the crosswind check."),
   );
   wrap.append(airportSection);
+
+  // --- home water ---------------------------------------------------------
+  // Set from a water body's sheet ("Make this my home water"), cleared here: choosing one
+  // needs the map and the search, clearing one only needs a button.
+  const home = section("Home water");
+  const homeCard = el("div", "brief-airport-card brief-home-card");
+  const drawHome = (): void => {
+    homeCard.replaceChildren();
+    if (draft.home_water) {
+      homeCard.append(el("div", "brief-airport-id", draft.home_water.name));
+      homeCard.append(el("div", "muted small", `id ${draft.home_water.id}`));
+      const clear = el("button", "btn", "Clear home water");
+      clear.type = "button";
+      clear.addEventListener("click", () => {
+        draft.home_water = null;
+        drawHome();
+      });
+      homeCard.append(clear);
+    } else {
+      homeCard.append(el("div", "muted", "No home water set."));
+    }
+  };
+  drawHome();
+  home.append(homeCard);
+  home.append(
+    el(
+      "p",
+      "muted small",
+      "Your home water is briefed on every run whatever the search radius says. Set it from " +
+        'a water body\'s sheet with "Make this my home water".',
+    ),
+  );
+  wrap.append(home);
 
   // --- candidate lakes ----------------------------------------------------
   const lakes = section("Candidate lakes");
@@ -210,7 +247,7 @@ function form(
       save.disabled = true;
       save.textContent = "Saving…";
       try {
-        await putSettings(draft);
+        homeWater.adopt(await putSettings(draft));
         hideProblems(problems);
         toast("Settings saved; a new run is starting");
         close();

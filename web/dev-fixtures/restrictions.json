@@ -1,4 +1,33 @@
 {
+  "af5df247310f": {
+    "restriction_id": "af5df247310f",
+    "rule_id": "R 281.799.4",
+    "county": null,
+    "township": null,
+    "lake_name_raw": "Fixture Channel",
+    "lake_name_norm": "fixture channel",
+    "plss": [],
+    "restriction_type": "slow_no_wake",
+    "scope": "lakewide",
+    "scope_description": null,
+    "hours": null,
+    "season": null,
+    "speed_mph": null,
+    "status": "active",
+    "clause": null,
+    "signage_required": false,
+    "related_rule_ids": [],
+    "raw_text": "It is unlawful for the operator of a vessel to exceed a slow, no wake speed upon the waters of the Fixture Channel within the marked channel between buoy 12 and the highway bridge.",
+    "source_url": "https://www.michigan.gov/dnr/managing-resources/laws/controls/localcontrols/oakland/local-watercraft-controls",
+    "fetched_at": "2026-09-15T18:30:00Z",
+    "parser": "regex",
+    "needs_review": false,
+    "lake_ids": [
+      1126253882
+    ],
+    "reach_unresolved": true,
+    "big_water_partial": true
+  },
   "5df35ea27c29": {
     "restriction_id": "5df35ea27c29",
     "rule_id": "R 281.763.21",

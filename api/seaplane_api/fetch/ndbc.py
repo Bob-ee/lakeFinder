@@ -1,13 +1,17 @@
-"""NDBC `latest_obs.txt`: Great Lakes buoy observations. Optional, and fetched last.
+"""NDBC `latest_obs.txt`: buoy and shore-station observations. Optional, and fetched last.
 
-Design 2 lists this as "only for lakes flagged shoreline". `index.json` carries no shoreline flag
-today, so nothing in the briefing consumes it yet; the parser is here (and tested) so that wiring it
-up is a one-line change once the pipeline tags Great Lakes shoreline water.
+Read by the home water's `observed` list (data contract, "Briefing"): the stations within 15 nm of
+the water that report wind or wave height, newest observation only, stale ones dropped.
 
-The file is a whitespace-aligned table of every buoy on earth (~900 rows, ~90 KB) with two header
-lines and `MM` for missing values. Units: `WDIR` degrees true, `WSPD`/`GST` m/s, `WVHT` metres.
+The file is a whitespace-aligned table of every station on earth (~900 rows, ~90 KB) with two header
+lines and `MM` for missing values. Units: `WDIR` degrees true, `WSPD`/`GST` m/s, `WVHT` metres. The
+`YYYY MM DD hh mm` columns are UTC and are the only timestamp the file carries, so `at` is built from
+them; a row whose date does not parse gets `at: None` and the caller treats it as unusable rather
+than as fresh.
 """
 from __future__ import annotations
+
+from datetime import UTC, datetime
 
 import httpx
 
@@ -52,6 +56,7 @@ def parse_latest_obs(text: str, bbox: tuple[float, float, float, float]) -> list
                 "source": "ndbc",
                 "lat": lat,
                 "lon": lon,
+                "at": _observed_at(row),
                 "dir_deg": _num(row["wdir"]),
                 "speed_kt": None if wspd is None else round(wspd * MS_TO_KT, 1),
                 "gust_kt": None if gst is None else round(gst * MS_TO_KT, 1),
@@ -59,6 +64,16 @@ def parse_latest_obs(text: str, bbox: tuple[float, float, float, float]) -> list
             }
         )
     return out
+
+
+def _observed_at(row: dict[str, str]) -> datetime | None:
+    """The row's UTC observation time, or `None` when the date columns are missing or junk."""
+    try:
+        return datetime(
+            int(row["yy"]), int(row["mm"]), int(row["dd"]), int(row["hh"]), int(row["mi"]), tzinfo=UTC
+        )
+    except (ValueError, KeyError):
+        return None
 
 
 def _num(value: str) -> float | None:

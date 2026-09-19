@@ -51,18 +51,55 @@ def window_phrase(score: str, window: list[str] | None, when: str) -> str:
 
 
 def lakes_phrase(rows: list[dict], limit: int = 4) -> str:
-    """`Best water: Cass Lake 6 in chop with 4,100 ft run into the wind; Orchard Lake 5 in.`"""
+    """`Best water: <the calmest water on each, and where on it>.`
+
+    Without a wave field a row reads as it always has -- `Cass Lake 6 in chop with 4,100 ft run into
+    the wind; Orchard Lake 5 in`. With one it names the place, because that is the whole point:
+    `Lake St. Clair, Big Muscamoot Bay 2 in (open lake 14 in); Cass Lake west end 3 in`.
+    """
     if not rows:
         return "No candidate lakes."
     parts = []
     for i, row in enumerate(rows[:limit]):
+        region = row.get("region")
         if row.get("frozen"):
             parts.append(f"{row['name']} likely frozen, verify")
+        elif region and i == 0:
+            parts.append(f"{row['name']}, {region} {row['hs_in']} in{_open_water_suffix(row)}")
+        elif region:
+            parts.append(f"{row['name']} {region} {row['hs_in']} in")
         elif i == 0:
             parts.append(f"{row['name']} {row['hs_in']} in chop with {row['run_ft']:,} ft run into the wind")
         else:
             parts.append(f"{row['name']} {row['hs_in']} in")
     return "Best water: " + "; ".join(parts) + "."
+
+
+def home_water_phrase(home_water: dict | None, limit: int = 3) -> str | None:
+    """`Lake St. Clair: Big Muscamoot Bay 2 in, Anchor Bay 5 in, open lake 14 in.`
+
+    The calmest few regions with a usable run, then the open-water figure so the contrast between
+    "where I would go" and "what the lake is doing" is in one sentence. `None` when there is no home
+    water, or when it has no wave field and so has no regions to name.
+    """
+    if not home_water:
+        return None
+    usable = [r for r in home_water.get("regions") or [] if r.get("hs_in") is not None]
+    bits = [f"{r['label']} {r['hs_in']} in" for r in usable[:limit]]
+    open_in = home_water.get("hs_open_in")
+    if open_in is not None and (not bits or open_in != usable[0].get("hs_in")):
+        bits.append(f"open lake {open_in} in")
+    if not bits:
+        return None
+    return f"{home_water['name']}: " + ", ".join(bits) + "."
+
+
+def _open_water_suffix(row: dict) -> str:
+    """` (open lake 14 in)` when the open water is rougher than the region being recommended."""
+    open_in = row.get("hs_open_in")
+    if open_in is None or open_in == row.get("hs_in"):
+        return ""
+    return f" (open lake {open_in} in)"
 
 
 def summary(
@@ -120,6 +157,7 @@ def outlook_summary(
     previous_at: str | None,
     confidence: str,
     confidence_reasons: list[str],
+    home_water: dict | None = None,
 ) -> str:
     """The `outlook.summary` line."""
     when = "Tomorrow morning" if target > now_local.date() else "This morning"
@@ -140,6 +178,9 @@ def outlook_summary(
     if fog_until:
         bits.append(f"Fog risk until {fog_until}.")
     bits.append(lakes_phrase(lake_rows, limit=3))
+    home = home_water_phrase(home_water)
+    if home:
+        bits.append(home)
     if trend:
         bits.append(f"{sentence_case(trend)}" + (f" since {previous_at}." if previous_at else "."))
     reason = f": {confidence_reasons[0]}" if confidence_reasons else ""

@@ -203,3 +203,51 @@ test("evaluateLake floors an unnamed lake's verdict at unknown but never downgra
 test("normalizeName is re-exported and usable directly from the engine", () => {
   assert.equal(normalizeName("Mud Lake"), "mud");
 });
+
+test("big_water_partial caps a restriction at conditional and annotates the note", () => {
+  const rules = loadRules({
+    ...baseRulesJson,
+    rules: [
+      { id: "restricted-rule", when: { restriction_type: "restricted_type" }, verdict: "restricted", note: "No landing." },
+      { id: "clear-rule", when: { restriction_type: "clear_type" }, verdict: "clear", note: "Fine." },
+    ],
+  });
+
+  const capped = evaluateRestriction(
+    { restriction_type: "restricted_type", big_water_partial: true },
+    rules,
+  );
+  assert.equal(capped.verdict, "conditional");
+  assert.equal(capped.matched_rule, "restricted-rule");
+  assert.match(capped.note, /Covers part of this water; verdict limited to conditional\./);
+
+  // Without the flag the same rule is untouched...
+  assert.equal(evaluateRestriction({ restriction_type: "restricted_type" }, rules).verdict, "restricted");
+  // ...and the cap only ever improves a verdict: clear and unknown stay put.
+  assert.equal(
+    evaluateRestriction({ restriction_type: "clear_type", big_water_partial: true }, rules).verdict,
+    "clear",
+  );
+  const unclassified = evaluateRestriction(
+    { restriction_type: "nothing_matches_this", big_water_partial: true },
+    rules,
+  );
+  assert.equal(unclassified.verdict, "unknown");
+  assert.equal(unclassified.note, "Unclassified restriction.");
+});
+
+test("the big-water cap flows through evaluateLake's aggregate verdict and reasons", () => {
+  const rules = loadRules({
+    ...baseRulesJson,
+    rules: [
+      { id: "restricted-rule", when: { restriction_type: "restricted_type" }, verdict: "restricted", note: "No landing." },
+    ],
+  });
+  const result = evaluateLake(
+    { id: 9, name: "Lake St. Clair", chord_ft: 100000, public_access: true },
+    [{ restriction_id: "r1", restriction_type: "restricted_type", big_water_partial: true }],
+    rules,
+  );
+  assert.equal(result.verdict, "conditional");
+  assert.equal(result.reasons[0].verdict, "conditional");
+});

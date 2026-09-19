@@ -12,9 +12,11 @@ from seaplane_api import service
 from seaplane_api.briefing.generate import build_briefing
 from seaplane_api.fetch import aviationweather
 from seaplane_api.scheduler import Scheduler
-from seaplane_api.settings import Settings
+from seaplane_api.settings import HomeWater, Settings
 
-from .conftest import DETROIT, load, make_feeds
+from .conftest import DETROIT, load, make_feeds, pack_wave_points, wave_point
+
+CASS_LAKE = 1900195525
 
 NOW = datetime(2026, 9, 19, 18, 0, tzinfo=DETROIT)
 
@@ -79,7 +81,7 @@ def test_refresh_writes_a_briefing_and_health_then_reports_it(client):
 def test_get_settings_returns_the_contract_object(client):
     body = client.get("/api/settings").json()
     assert set(body) == {
-        "home_airport", "timezone", "radius_nm", "n_lakes", "public_access_only",
+        "home_airport", "timezone", "radius_nm", "n_lakes", "public_access_only", "home_water",
         "schedule", "outlook", "notify", "limits",
     }
     assert body["home_airport"]["id"] == "KPTK"
@@ -101,6 +103,33 @@ def test_put_settings_validates_writes_and_triggers_a_run(client, tmp_path):
 def test_put_settings_rejects_unknown_keys_with_422(client):
     payload = client.get("/api/settings").json()
     payload["mystery"] = True
+    assert client.put("/api/settings", json=payload).status_code == 422
+
+
+def test_put_settings_accepts_a_home_water_that_is_in_the_index(client, tmp_path):
+    (tmp_path / "out" / "index.json").write_text(json.dumps(load("index_sample.json")))
+    payload = client.get("/api/settings").json()
+    payload["home_water"] = {"id": 1900195525, "name": "Cass Lake"}
+    r = client.put("/api/settings", json=payload)
+    assert r.status_code == 200
+    assert r.json()["home_water"] == {"id": 1900195525, "name": "Cass Lake"}
+    assert client.get("/api/settings").json()["home_water"]["name"] == "Cass Lake"
+
+
+def test_put_settings_rejects_a_home_water_id_that_is_not_in_the_index(client, tmp_path):
+    (tmp_path / "out" / "index.json").write_text(json.dumps(load("index_sample.json")))
+    payload = client.get("/api/settings").json()
+    payload["home_water"] = {"id": 1, "name": "Nowhere"}
+    r = client.put("/api/settings", json=payload)
+    assert r.status_code == 422
+    assert "index.json" in r.json()["detail"]
+    assert client.get("/api/settings").json()["home_water"] is None  # nothing was saved
+
+
+def test_put_settings_rejects_an_unknown_key_inside_home_water(client, tmp_path):
+    (tmp_path / "out" / "index.json").write_text(json.dumps(load("index_sample.json")))
+    payload = client.get("/api/settings").json()
+    payload["home_water"] = {"id": 1900195525, "name": "Cass Lake", "mystery": True}
     assert client.put("/api/settings", json=payload).status_code == 422
 
 
@@ -142,21 +171,55 @@ def test_the_wind_proxy_slot_is_not_mounted_yet(client):
 def test_load_candidates_flags_a_missing_extents_file(tmp_path, monkeypatch):
     monkeypatch.setenv("SEAPLANE_DATA_OUT", str(tmp_path))
     (tmp_path / "index.json").write_text(json.dumps(load("index_sample.json")))
-    candidates, errors = service.load_candidates(Settings())
-    assert errors == [service.MISSING_EXTENTS_ERROR]
-    assert candidates and all(c.extents_ft is None for c in candidates)
+    inputs = service.load_candidates(Settings())
+    assert inputs.errors == [service.MISSING_EXTENTS_ERROR, service.MISSING_WAVE_POINTS_ERROR]
+    assert inputs.candidates and all(c.extents_ft is None for c in inputs.candidates)
+    assert all(not c.has_wave_field for c in inputs.candidates)
 
 
 def test_load_candidates_uses_the_extents_file_when_it_is_there(tmp_path, monkeypatch):
     monkeypatch.setenv("SEAPLANE_DATA_OUT", str(tmp_path))
     (tmp_path / "index.json").write_text(json.dumps(load("index_sample.json")))
     (tmp_path / "lake_extents.json").write_text(json.dumps(load("lake_extents_sample.json")))
-    candidates, errors = service.load_candidates(Settings())
-    assert errors == []
-    assert all(c.extents_ft is not None and len(c.extents_ft) == 16 for c in candidates)
+    inputs = service.load_candidates(Settings())
+    assert inputs.errors == [service.MISSING_WAVE_POINTS_ERROR]
+    assert all(c.extents_ft is not None and len(c.extents_ft) == 16 for c in inputs.candidates)
+
+
+def test_load_candidates_attaches_the_wave_field_when_the_pack_is_there(tmp_path, monkeypatch):
+    monkeypatch.setenv("SEAPLANE_DATA_OUT", str(tmp_path))
+    (tmp_path / "index.json").write_text(json.dumps(load("index_sample.json")))
+    index, blob = pack_wave_points(
+        {CASS_LAKE: [wave_point(-83.37, 42.607, label=0, fetch_m=[700.0] * 16, run_ft=[4100.0] * 8)]},
+        ["west end"],
+    )
+    (tmp_path / "wave_points.json").write_text(json.dumps(index))
+    (tmp_path / "wave_points.bin").write_bytes(blob)
+    inputs = service.load_candidates(Settings())
+    assert service.MISSING_WAVE_POINTS_ERROR not in inputs.errors
+    cass = next(c for c in inputs.candidates if c.id == CASS_LAKE)
+    assert cass.has_wave_field and cass.labels == ("west end",)
+    assert all(not c.has_wave_field for c in inputs.candidates if c.id != CASS_LAKE)
+
+
+def test_load_candidates_resolves_a_home_water_outside_the_radius(tmp_path, monkeypatch):
+    monkeypatch.setenv("SEAPLANE_DATA_OUT", str(tmp_path))
+    (tmp_path / "index.json").write_text(json.dumps(load("index_sample.json")))
+    settings = Settings(radius_nm=1, home_water=HomeWater(id=CASS_LAKE, name="Cass Lake"))
+    inputs = service.load_candidates(settings)
+    assert inputs.candidates == []  # nothing is within a mile of KPTK
+    assert inputs.home_water is not None and inputs.home_water.id == CASS_LAKE
+
+
+def test_load_candidates_reports_a_home_water_that_is_not_in_the_index(tmp_path, monkeypatch):
+    monkeypatch.setenv("SEAPLANE_DATA_OUT", str(tmp_path))
+    (tmp_path / "index.json").write_text(json.dumps(load("index_sample.json")))
+    inputs = service.load_candidates(Settings(home_water=HomeWater(id=1, name="Nowhere")))
+    assert inputs.home_water is None
+    assert any("home_water" in e and "index.json" in e for e in inputs.errors)
 
 
 def test_load_candidates_reports_a_missing_index(tmp_path, monkeypatch):
     monkeypatch.setenv("SEAPLANE_DATA_OUT", str(tmp_path))
-    candidates, errors = service.load_candidates(Settings())
-    assert candidates == [] and errors and "index.json" in errors[0]
+    inputs = service.load_candidates(Settings())
+    assert inputs.candidates == [] and inputs.errors and "index.json" in inputs.errors[0]

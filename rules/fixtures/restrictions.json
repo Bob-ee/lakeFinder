@@ -798,5 +798,59 @@
       "lake_ids": [16]
     },
     "expect": {"matched_rule": "no-motorboats", "verdict": "restricted"}
+  },
+  {
+    "name": "big_water_partial caps a restricted rule at conditional (Detroit River reach)",
+    "restriction": {
+      "restriction_id": "aaaaaaaaab31",
+      "rule_id": "R 281.766.1",
+      "county": "Wayne",
+      "township": "City of Wyandotte",
+      "lake_name_raw": "Detroit River",
+      "lake_name_norm": "detroit river",
+      "plss": [],
+      "restriction_type": "slow_no_wake",
+      "scope": "lakewide",
+      "scope_description": null,
+      "hours": null,
+      "season": null,
+      "speed_mph": null,
+      "raw_text": "Slow-no wake speed on the waters of the Detroit river, city of Wyandotte, Wayne county.",
+      "source_url": "https://www.michigan.gov/dnr/managing-resources/laws/controls/localcontrols/wayne/local-watercraft-controls",
+      "fetched_at": "2026-09-01T00:00:00Z",
+      "parser": "regex",
+      "needs_review": false,
+      "lake_ids": [17],
+      "reach_unresolved": true,
+      "big_water_partial": true
+    },
+    "expect": {"matched_rule": "slow-no-wake-lakewide", "verdict": "conditional"}
+  },
+  {
+    "name": "big_water_partial leaves a verdict that is already no worse than conditional alone",
+    "restriction": {
+      "restriction_id": "aaaaaaaaab32",
+      "rule_id": "R 281.766.2",
+      "county": "Emmet",
+      "township": "West Traverse Township",
+      "lake_name_raw": "Little Traverse Bay",
+      "lake_name_norm": "little traverse bay",
+      "plss": [{"township": "35N", "range": "6W", "sections": [24]}],
+      "restriction_type": "no_towing",
+      "scope": "lakewide",
+      "scope_description": null,
+      "hours": null,
+      "season": null,
+      "speed_mph": null,
+      "raw_text": "Towing of persons is prohibited in a marked area of Little Traverse bay.",
+      "source_url": "https://www.michigan.gov/dnr/managing-resources/laws/controls/localcontrols/emmet/local-watercraft-controls",
+      "fetched_at": "2026-09-01T00:00:00Z",
+      "parser": "regex",
+      "needs_review": false,
+      "lake_ids": [18],
+      "reach_unresolved": true,
+      "big_water_partial": true
+    },
+    "expect": {"matched_rule": "no-towing", "verdict": "clear"}
   }
 ]

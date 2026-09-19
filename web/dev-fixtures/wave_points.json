@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "record_bytes": 60,
+  "fetch_unit_m": 10,
+  "run_unit_ft": 10,
+  "labels": [
+    "south end",
+    "southwest side",
+    "middle",
+    "southeast side",
+    "west end",
+    "east end",
+    "northeast side",
+    "northwest side",
+    "north end",
+    "Sandy Bay",
+    "North Bay"
+  ],
+  "lakes": {
+    "223057208": [
+      226,
+      30
+    ],
+    "260200585": [
+      256,
+      28
+    ],
+    "314179109": [
+      58,
+      56
+    ],
+    "368858589": [
+      0,
+      58
+    ],
+    "460478574": [
+      169,
+      57
+    ],
+    "461406506": [
+      114,
+      55
+    ],
+    "797249953": [
+      284,
+      393
+    ],
+    "1126253882": [
+      677,
+      59
+    ]
+  }
+}

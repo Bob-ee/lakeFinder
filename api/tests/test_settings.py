@@ -69,6 +69,35 @@ def test_bad_values_are_rejected(payload):
         settings_from_dict(payload)
 
 
+def test_home_water_is_optional_and_an_older_file_without_it_still_loads():
+    """`home_water` landed after Bobby's settings file was written; its absence means none set."""
+    assert Settings().home_water is None
+    old = settings_from_dict({"radius_nm": 30, "limits": {"wind_ok": 11}})
+    assert old.home_water is None and old.radius_nm == 30
+
+
+def test_home_water_takes_an_id_and_a_name():
+    s = settings_from_dict({"home_water": {"id": 7654321, "name": "Lake St. Clair"}})
+    assert s.home_water.id == 7654321 and s.home_water.name == "Lake St. Clair"
+    assert settings_from_dict({"home_water": None}).home_water is None
+    # The name is only a label for the client; the id is what the briefing resolves.
+    assert settings_from_dict({"home_water": {"id": 42}}).home_water.name == ""
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"home_water": {"id": 42, "mystery": 1}},
+        {"home_water": {"name": "No id"}},
+        {"home_water": {"id": "not a number"}},
+        {"home_water": 42},
+    ],
+)
+def test_a_malformed_home_water_is_rejected(payload):
+    with pytest.raises(ValidationError):
+        settings_from_dict(payload)
+
+
 def test_morning_start_accepts_an_explicit_time():
     assert settings_from_dict({"outlook": {"morning_start": "06:30"}}).outlook.morning_start == "06:30"
 
@@ -89,9 +118,10 @@ def test_load_creates_the_file_with_defaults_on_first_start(tmp_path, monkeypatc
     on_disk = json.loads(paths.settings_path().read_text())
     assert on_disk["timezone"] == "America/Detroit"
     assert set(on_disk) == {
-        "home_airport", "timezone", "radius_nm", "n_lakes", "public_access_only",
+        "home_airport", "timezone", "radius_nm", "n_lakes", "public_access_only", "home_water",
         "schedule", "outlook", "notify", "limits",
     }
+    assert on_disk["home_water"] is None
 
 
 def test_save_is_atomic_and_leaves_no_temp_files(tmp_path, monkeypatch):

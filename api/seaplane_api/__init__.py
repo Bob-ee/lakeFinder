@@ -7,7 +7,9 @@ Two halves, deliberately separated so the algorithm is testable without a networ
 - `seaplane_api.fetch.*` -- one module per upstream feed. Every call returns either a payload or
   `None` plus an error string; a failure degrades exactly one input.
 
-`briefing.generate.run_briefing` glues them together, `scheduler` decides when, `app` serves it.
+`service.run_briefing` glues them together, `scheduler` decides when, `app` serves it. `wavefield`
+sits with `paths` and `settings` on the file-reading side: it turns the pipeline's `wave_points`
+pack into the sample points that `briefing.wave` aggregates into regions.
 """
 
 __all__ = ["__version__"]

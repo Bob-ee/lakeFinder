@@ -81,6 +81,31 @@ async def test_fetch_airport_404s_into_an_error():
     assert data is None and "ZZZZ" in err
 
 
+@pytest.mark.anyio
+async def test_the_bbox_metar_query_sends_min_lat_min_lon_max_lat_max_lon():
+    """Verified live: `bbox=42.2,-83.2,42.8,-82.2` returns KMTC, KDET, KVLL and CYQG."""
+    seen = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen["bbox"] = request.url.params["bbox"]
+        return httpx.Response(200, json=[{"icaoId": "KMTC", "lat": 42.6045, "lon": -82.8353}])
+
+    async with _client(handler) as c:
+        rows, err = await aviationweather.fetch_metar_bbox(c, (42.2, -83.2, 42.8, -82.2))
+    assert err is None and rows[0]["icaoId"] == "KMTC"
+    assert seen["bbox"] == "42.200,-83.200,42.800,-82.200"
+
+
+@pytest.mark.anyio
+async def test_a_bbox_metar_failure_is_an_error_string_not_an_exception():
+    async def boom(_request):
+        raise httpx.ConnectError("nope")
+
+    async with _client(boom) as c:
+        rows, err = await aviationweather.fetch_metar_bbox(c, (42.0, -83.0, 43.0, -82.0))
+    assert rows is None and err == "metar_bbox: ConnectError"
+
+
 # --- Open-Meteo ----------------------------------------------------------------------------
 
 @pytest.mark.anyio
@@ -126,6 +151,33 @@ async def test_a_single_point_response_is_normalised_to_a_list():
     async with _client(handler) as c:
         out, errors = await openmeteo.fetch_points(c, [(42.0, -83.0)], timezone="America/Detroit")
     assert len(out) == 1 and errors == []
+
+
+@pytest.mark.anyio
+async def test_the_marine_request_asks_one_point_for_wave_height():
+    seen = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(dict(request.url.params))
+        assert "marine-api" in str(request.url)
+        return httpx.Response(200, json={"latitude": 42.46, "longitude": -82.71,
+                                         "hourly": {"time": ["2026-09-19T12:00"], "wave_height": [0.3]}})
+
+    async with _client(handler) as c:
+        payload, err = await openmeteo.fetch_marine(c, 42.45, -82.70, timezone="America/Detroit")
+    assert err is None and payload["hourly"]["wave_height"] == [0.3]
+    assert seen["hourly"] == "wave_height" and seen["timezone"] == "America/Detroit"
+    assert (seen["latitude"], seen["longitude"]) == ("42.4500", "-82.7000")
+
+
+@pytest.mark.anyio
+async def test_a_marine_failure_degrades_to_an_error_string():
+    async def down(_request):
+        return httpx.Response(503)
+
+    async with _client(down) as c:
+        payload, err = await openmeteo.fetch_marine(c, 42.45, -82.70, timezone="America/Detroit")
+    assert payload is None and err == "open_meteo_marine: HTTP 503"
 
 
 def test_the_request_asks_for_pressure_msl():
@@ -223,7 +275,15 @@ def test_ndbc_rows_are_filtered_by_bbox_and_converted_to_knots():
     assert all(-88.0 <= r["lon"] <= -82.0 and 41.0 <= r["lat"] <= 46.5 for r in rows)
     with_wind = [r for r in rows if r["speed_kt"] is not None]
     assert with_wind and all(0 <= r["speed_kt"] < 100 for r in with_wind)
-    assert all(set(r) == {"id", "source", "lat", "lon", "dir_deg", "speed_kt", "gust_kt", "wave_height_m"} for r in rows)
+    assert all(
+        set(r) == {"id", "source", "lat", "lon", "at", "dir_deg", "speed_kt", "gust_kt", "wave_height_m"}
+        for r in rows
+    )
+    # `at` is built from the file's own UTC date columns: the home water's `observed` list drops
+    # anything older than 90 minutes, and it has no other timestamp to do that with.
+    assert all(r["at"] is None or r["at"].tzinfo is not None for r in rows)
+    buoy = next(r for r in rows if r["id"] == "45147")
+    assert buoy["at"].isoformat() == "2026-09-19T13:00:00+00:00"
 
 
 def test_ndbc_missing_values_become_none():

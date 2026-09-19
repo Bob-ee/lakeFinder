@@ -6,6 +6,7 @@
  *
  * Writes (all conforming to docs/data-contract.md):
  *   index.json  restrictions.json  rules.json  pack.json      <- committed
+ *   wave_points.json  wave_points.bin                          <- committed
  *   geojson/*.geojson                                          <- intermediate, gitignored
  *   lakes.pmtiles  usable_water.pmtiles  overlays.pmtiles      <- gitignored binaries
  *
@@ -13,6 +14,12 @@
  * are hand-maintained and must survive a regeneration: basemap.pmtiles and briefing.json
  * (the api service writes the real briefing, so the pipeline has nothing to derive it
  * from). If you ever add a clean step here, keep both.
+ *
+ * briefing.json is the one exception to "hand-maintained means untouched": its wave-field
+ * fields (`kind`, `region`, `hs_in`, `run_ft`, `hs_open_in`, `regions`, and the whole
+ * `home_water` block) are recomputed here from the wave points this script just generated,
+ * so the card's region names always match the field the map is drawing. Everything else in
+ * that file is left exactly as it was.
  *
  * basemap.pmtiles is NOT produced here; it is a one-off Protomaps extract, see
  * `npm run fixtures -- --print-basemap-cmd` or the README.
@@ -25,6 +32,14 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+// The binary layout is written by the same module the client reads it with, so the fixture
+// can never drift from the decoder. Hand-written bytes would only be a second guess at it.
+import {
+  DEPTH_UNKNOWN,
+  encodeWavePoints,
+  openWaterInches,
+  regionsForWind,
+} from "../../rules/waves/index.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const webDir = path.resolve(here, "..");
@@ -205,6 +220,183 @@ function ringMetrics(ring, lat0) {
 }
 
 // ---------------------------------------------------------------------------
+// wave field (docs/data-contract.md, "Wave field")
+// ---------------------------------------------------------------------------
+
+/** Position descriptors, in the contract's order: index 0 is north, then clockwise. */
+const SECTOR_LABELS = [
+  "north end",
+  "northeast side",
+  "east end",
+  "southeast side",
+  "south end",
+  "southwest side",
+  "west end",
+  "northwest side",
+];
+
+/** A ring in metres relative to `origin`, so every ray cast is plain plane geometry. */
+function localRing(ring, origin, mLon) {
+  const out = new Array(ring.length);
+  for (let i = 0; i < ring.length; i++) {
+    out[i] = [
+      (ring[i][0] - origin[0]) * mLon,
+      (ring[i][1] - origin[1]) * M_PER_DEG_LAT,
+    ];
+  }
+  return out;
+}
+
+/**
+ * Distance from the origin to the first crossing of `ring` along `bearingDeg` (0 = north,
+ * clockwise). The ring is closed, so a ray from inside it always hits.
+ */
+function rayToRing(ring, bearingDeg, capM = 100_000) {
+  const t = (bearingDeg * Math.PI) / 180;
+  const dx = Math.sin(t);
+  const dy = Math.cos(t);
+  let best = capM;
+  for (let i = 0; i < ring.length - 1; i++) {
+    const [ax, ay] = ring[i];
+    const [bx, by] = ring[i + 1];
+    const ex = bx - ax;
+    const ey = by - ay;
+    const det = ex * dy - dx * ey;
+    if (Math.abs(det) < 1e-9) continue;
+    const hit = (ex * ay - ax * ey) / det;
+    const along = (dx * ay - ax * dy) / det;
+    if (hit > 0 && hit < best && along >= 0 && along <= 1) best = hit;
+  }
+  return best;
+}
+
+/** Ray crossing count; `ring` is closed (last point repeats the first). */
+function insideRing(ring, lon, lat) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 2; i < ring.length - 1; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    if (yi > lat !== yj > lat && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+function metresBetween(aLon, aLat, bLon, bLat, mLon) {
+  return Math.hypot((aLon - bLon) * mLon, (aLat - bLat) * M_PER_DEG_LAT);
+}
+
+/**
+ * Sample points for one water body, following the contract: a regular grid inside the
+ * usable water, `fetch[16]` as the mean of five rays across the whole polygon, `run[8]`
+ * through the usable water in both directions, a label per point, and depth where the
+ * fixture pretends to have a survey.
+ *
+ * The fetch rays run against the *full* ring, not the eroded one, because fetch is how far
+ * the wind has had to work on the water; the run rays use the eroded ring, because that is
+ * where you can actually put an aircraft.
+ */
+function waveFieldFor(lake, ring, eroded, metrics) {
+  if (!eroded || metrics.areaAcres < 100) return [];
+  const areaM2 = metrics.areaAcres * ACRE_M2;
+  const target = metrics.areaAcres >= 10_000 ? 400 : 60;
+  const spacing = Math.min(2000, Math.max(150, Math.sqrt(areaM2 / target)));
+  const mLon = mPerDegLon(lake.lat);
+  const dLon = spacing / mLon;
+  const dLat = spacing / M_PER_DEG_LAT;
+
+  const lons = eroded.map((p) => p[0]);
+  const lats = eroded.map((p) => p[1]);
+  // Anchored on a whole number of cells from the origin, so regenerating moves nothing.
+  const startLon = Math.ceil(Math.min(...lons) / dLon) * dLon;
+  const startLat = Math.ceil(Math.min(...lats) / dLat) * dLat;
+  const maxLon = Math.max(...lons);
+  const maxLat = Math.max(...lats);
+
+  const points = [];
+  for (let lat = startLat; lat <= maxLat; lat += dLat) {
+    for (let lon = startLon; lon <= maxLon; lon += dLon) {
+      if (!insideRing(eroded, lon, lat)) continue;
+      const origin = [lon, lat];
+      const full = localRing(ring, origin, mLon);
+      const usable = localRing(eroded, origin, mLon);
+
+      const fetch = [];
+      for (let bin = 0; bin < 16; bin++) {
+        let sum = 0;
+        for (const offset of [-12, -6, 0, 6, 12]) sum += rayToRing(full, bin * 22.5 + offset);
+        fetch.push(Math.min(0xffff, Math.round(sum / 5 / 10)));
+      }
+      const run = [];
+      for (let bin = 0; bin < 8; bin++) {
+        const length =
+          rayToRing(usable, bin * 22.5) + rayToRing(usable, bin * 22.5 + 180);
+        run.push(Math.min(0xffff, Math.round((length * FT_PER_M) / 10)));
+      }
+
+      points.push({
+        lon: Number(lon.toFixed(6)),
+        lat: Number(lat.toFixed(6)),
+        depth_dm: depthAt(lake, ring, origin, mLon, metrics),
+        label: labelAt(lake, ring, origin, mLon, metrics),
+        fetch,
+        run,
+      });
+    }
+  }
+  return points;
+}
+
+/**
+ * A plausible bowl: deepest in the middle, shallowing to the shore. Only the water bodies
+ * that declare `maxDepthM` get one, so the client exercises both the known-depth and the
+ * unknown-depth branch of the formula.
+ */
+function depthAt(lake, ring, origin, mLon, metrics) {
+  if (!lake.maxDepthM) return DEPTH_UNKNOWN;
+  const bearing =
+    (Math.atan2(
+      (origin[0] - metrics.centroid[0]) * mLon,
+      (origin[1] - metrics.centroid[1]) * M_PER_DEG_LAT,
+    ) *
+      180) /
+    Math.PI;
+  const fromCentre = metresBetween(
+    origin[0],
+    origin[1],
+    metrics.centroid[0],
+    metrics.centroid[1],
+    mLon,
+  );
+  const toShore = rayToRing(localRing(ring, metrics.centroid, mLon), bearing);
+  const frac = toShore > 0 ? Math.min(1, fromCentre / toShore) : 1;
+  const depth = Math.max(0.6, lake.maxDepthM * Math.sqrt(Math.max(0, 1 - frac * frac)));
+  return Math.min(0xfffe, Math.round(depth * 10));
+}
+
+/**
+ * A named bay when the point is in one, otherwise a position descriptor: "middle" for the
+ * open water in the centre, and a sector name for everything closer to one shore than the
+ * other. The share of the way to the shore, rather than a flat distance, is what makes the
+ * same rule work on a round pond and on a long channel.
+ */
+function labelAt(lake, ring, origin, mLon, metrics) {
+  for (const bay of lake.bays ?? []) {
+    if (metresBetween(origin[0], origin[1], bay.lon, bay.lat, mLon) <= bay.radiusM) {
+      return bay.name;
+    }
+  }
+  const dx = (origin[0] - metrics.centroid[0]) * mLon;
+  const dy = (origin[1] - metrics.centroid[1]) * M_PER_DEG_LAT;
+  const bearing = (Math.atan2(dx, dy) * 180) / Math.PI;
+  const toShore = rayToRing(localRing(ring, metrics.centroid, mLon), bearing);
+  const frac = toShore > 0 ? Math.hypot(dx, dy) / toShore : 1;
+  if (frac < 0.45) return "middle";
+  return SECTOR_LABELS[Math.round(((bearing % 360) + 360) % 360 / 45) % 8];
+}
+
+// ---------------------------------------------------------------------------
 // the fixture dataset: plausible Oakland County, Michigan lakes
 // ---------------------------------------------------------------------------
 
@@ -358,10 +550,71 @@ const LAKES = [
     rot: 80,
     access: null,
   },
+  // Big water. Deliberately fictional names in a fictional place: the real Great Lakes
+  // polygons come from a different source than this county hydrography, and a fixture that
+  // said "Lake St. Clair" while drawing a blob in Oakland County would be a lie the first
+  // time somebody looked at it. What matters is that the two kinds exist, that `county` is
+  // null on them the way the contract says it may be, and that they are big enough to carry
+  // a real wave field.
+  {
+    key: "MIGF-BIGWATER-0200001",
+    name: "Big Fixture Lake",
+    kind: "great_lake",
+    county: null,
+    counties: ["Oakland", "Wayne", "Macomb"],
+    township: null,
+    lon: -83.14,
+    lat: 42.47,
+    majorM: 17000,
+    minorM: 11000,
+    rot: 30,
+    access: "Big Fixture Lake Metropark BAS",
+    // Shallow, like the water this feature was built for: depth is what keeps a big fetch
+    // from turning into a big wave, and the sheet has to show that branch.
+    maxDepthM: 3.6,
+    bays: [
+      { name: "North Bay", lon: -83.10, lat: 42.515, radiusM: 3400 },
+      { name: "Sandy Bay", lon: -83.205, lat: 42.437, radiusM: 2800 },
+    ],
+  },
+  {
+    key: "MIGF-BIGWATER-0200002",
+    name: "Fixture Channel",
+    kind: "connecting_water",
+    county: null,
+    counties: ["Oakland", "Wayne"],
+    township: null,
+    lon: -83.30,
+    lat: 42.43,
+    majorM: 9000,
+    minorM: 900,
+    rot: 200,
+    access: null,
+    maxDepthM: 8.0,
+    // index.json carries `federal_unit` on the ~170 entries inside one; the client names it
+    // on the chip and in the Federal fact row instead of saying "a federal unit".
+    federalUnit: "Fixture National Wildlife Refuge",
+  },
 ];
 
 /** `lake` is the fixture key above; the pipeline would fill lake_ids via the match stage. */
 const RESTRICTIONS = [
+  {
+    // Big water: a rule that covers part of it, which the shared engine caps at conditional.
+    lake: "MIGF-BIGWATER-0200002",
+    reach_unresolved: true,
+    big_water_partial: true,
+    rule_id: "R 281.799.4",
+    restriction_type: "slow_no_wake",
+    scope: "lakewide",
+    scope_description: null,
+    hours: null,
+    season: null,
+    speed_mph: null,
+    plss: [],
+    raw_text:
+      "It is unlawful for the operator of a vessel to exceed a slow, no wake speed upon the waters of the Fixture Channel within the marked channel between buoy 12 and the highway bridge.",
+  },
   {
     lake: "MIGF-HYDRO-0100011",
     also: ["MIGF-HYDRO-0100012"],
@@ -592,6 +845,9 @@ function fixtureVerdict(restrictions, hasName) {
     } else if (r.restriction_type === "no_towing" || r.restriction_type === "no_pwc") {
       v = "clear";
     }
+    // Same cap the shared engine applies: a rule that covers part of a Great Lake or a
+    // connecting water cannot turn the whole thing red.
+    if (r.big_water_partial && v === "restricted") v = "conditional";
     if (VERDICT_RANK[v] > VERDICT_RANK[worst]) worst = v;
   }
   return worst;
@@ -649,6 +905,7 @@ function main() {
       needs_review: false,
       lake_ids: keys.map(lakeId),
       ...(r.reach_unresolved ? { reach_unresolved: true } : {}),
+      ...(r.big_water_partial ? { big_water_partial: true } : {}),
     };
     restrictionsOut[id] = record;
     for (const key of keys) {
@@ -662,6 +919,8 @@ function main() {
   const index = [];
   const lakeFeatures = [];
   const usableFeatures = [];
+  /** id -> sample points, in the order they go into wave_points.bin. */
+  const waveFields = new Map();
   for (const lake of LAKES) {
     const id = lakeId(lake.key);
     const ring = lakeRing(lake.lon, lake.lat, lake.majorM, lake.minorM, lake.rot, id);
@@ -671,6 +930,7 @@ function main() {
 
     const flags = [];
     if (restrictions.some((r) => r.reach_unresolved)) flags.push("reach_unresolved");
+    if (lake.federalUnit) flags.push("federal_overlay");
     if (!lake.access) flags.push("no_public_access");
     if (m.chordFt < FALLBACK_RULES.aircraft.min_chord_ft) flags.push("chord_below_minimum");
     if (!lake.name) flags.push("needs_review");
@@ -680,7 +940,8 @@ function main() {
       name: lake.name,
       name_norm: normalizeName(lake.name),
       kind: lake.kind ?? "lake",
-      county: lake.county,
+      county: lake.county ?? null,
+      ...(lake.counties ? { counties: lake.counties } : {}),
       township: lake.township,
       lat: m.centroid[1],
       lon: m.centroid[0],
@@ -692,6 +953,7 @@ function main() {
       flags,
       restriction_ids: restrictions.map((r) => r.restriction_id),
       access: lake.access,
+      ...(lake.federalUnit ? { federal_unit: lake.federalUnit } : {}),
     });
 
     lakeFeatures.push(
@@ -711,6 +973,9 @@ function main() {
         feature(id, { type: "Polygon", coordinates: [eroded] }, { id }),
       );
     }
+
+    const points = waveFieldFor(lake, ring, eroded, m);
+    if (points.length > 0) waveFields.set(id, points);
   }
   index.sort((a, b) => (a.name_norm || "￿").localeCompare(b.name_norm || "￿"));
 
@@ -760,6 +1025,10 @@ function main() {
   // --- json files ---------------------------------------------------------
   writeJson("index.json", index);
   writeJson("restrictions.json", restrictionsOut);
+
+  // --- wave field ---------------------------------------------------------
+  const waveIndex = writeWaveField(waveFields);
+  updateBriefingFixture(index, waveFields, waveIndex);
 
   const sharedRules = path.join(repoRoot, "rules/rules.json");
   if (existsSync(sharedRules)) {
@@ -813,6 +1082,8 @@ function main() {
     "index.json",
     "restrictions.json",
     "rules.json",
+    "wave_points.json",
+    "wave_points.bin",
     "lakes.pmtiles",
     "usable_water.pmtiles",
     "overlays.pmtiles",
@@ -851,6 +1122,168 @@ function main() {
         `  cd ${outDir} && pmtiles extract https://build.protomaps.com/<YYYYMMDD>.pmtiles basemap.pmtiles --bbox=${BASEMAP_BBOX} --maxzoom=14`,
     );
   }
+}
+
+/**
+ * Writes `wave_points.bin` and its index. Labels are pooled across every water body, which
+ * is what the contract's shared `labels` array is for, and records of one water body stay
+ * contiguous so the client can fetch them with a single Range request.
+ */
+function writeWaveField(waveFields) {
+  const labels = [];
+  const labelIndex = new Map();
+  const records = [];
+  const lakes = {};
+
+  for (const [id, points] of waveFields) {
+    lakes[String(id)] = [records.length, points.length];
+    for (const p of points) {
+      let at = labelIndex.get(p.label);
+      if (at == null) {
+        at = labels.length;
+        labels.push(p.label);
+        labelIndex.set(p.label, at);
+      }
+      records.push({ ...p, label: at });
+    }
+  }
+
+  const index = {
+    version: 1,
+    record_bytes: 60,
+    fetch_unit_m: 10,
+    run_unit_ft: 10,
+    labels,
+    lakes,
+  };
+  writeJson("wave_points.json", index);
+  writeFileSync(path.join(outDir, "wave_points.bin"), encodeWavePoints(records));
+  console.log(
+    `wave field: ${records.length} points over ${waveFields.size} water bodies, ` +
+      `${labels.length} labels, ${records.length * 60} bytes`,
+  );
+  return { index, records };
+}
+
+/**
+ * Refreshes the wave-field parts of the hand-maintained briefing fixture from the field
+ * just generated, so the card's regions, the sheet's list and the map overlay all name the
+ * same places. Rows whose water body has no wave field keep their lake-level numbers, which
+ * is exactly what the api does.
+ */
+function updateBriefingFixture(index, waveFields, wave) {
+  const file = path.join(outDir, "briefing.json");
+  if (!existsSync(file)) {
+    console.warn("note: briefing.json absent, wave-field fields not written");
+    return;
+  }
+  const briefing = JSON.parse(readFileSync(file, "utf8"));
+  const byId = new Map(index.map((l) => [l.id, l]));
+
+  const pointsFor = (id) => {
+    const entry = wave.index.lakes[String(id)];
+    return entry ? wave.records.slice(entry[0], entry[0] + entry[1]) : null;
+  };
+
+  /** Rank stands in for the api's scoring: the fixture only exercises the colour bar. */
+  const shapeRegion = (region, pts, rank) => {
+    const point = pts[region.point ?? 0];
+    return {
+      label: region.label,
+      hs_in: region.hs_in,
+      run_ft: region.run_ft,
+      lat: Number(point.lat.toFixed(5)),
+      lon: Number(point.lon.toFixed(5)),
+      score:
+        region.hs_in == null ? "unfavorable" : rank === 0 ? "favorable" : rank <= 2 ? "marginal" : "unfavorable",
+    };
+  };
+
+  /** Fills one ranked row from its own wind; `maxRegions` is 4 per the contract. */
+  const fillRow = (row, maxRegions) => {
+    const lake = byId.get(row.id);
+    if (lake) row.kind = lake.kind;
+    const pts = pointsFor(row.id);
+    if (!pts) return;
+    const regions = regionsForWind(pts, wave.index.labels, row.wind.dir, row.wind.kt, 2000);
+    const best = regions.find((r) => r.hs_in != null);
+    row.region = best ? best.label : null;
+    row.hs_open_in = openWaterInches(regions);
+    if (best) {
+      row.hs_in = best.hs_in;
+      row.run_ft = best.run_ft;
+    }
+    row.regions = regions.slice(0, maxRegions).map((r, i) => shapeRegion(r, pts, i));
+  };
+
+  for (const row of briefing.lakes ?? []) fillRow(row, 4);
+  for (const row of briefing.outlook?.lakes ?? []) fillRow(row, 4);
+
+  /** Home water lists every region, and the live one carries the second opinions. */
+  const homeWaterRow = (lake, wind, withObserved) => {
+    const pts = pointsFor(lake.id) ?? [];
+    const regions = regionsForWind(pts, wave.index.labels, wind.dir, wind.kt, 2000);
+    const best = regions.find((r) => r.hs_in != null);
+    const calm = best != null && best.hs_in <= 8;
+    const row = {
+      id: lake.id,
+      name: lake.name,
+      kind: lake.kind,
+      score: calm ? "favorable" : "marginal",
+      limiting: calm ? null : "waves",
+      hs_in: best ? best.hs_in : 0,
+      run_ft: best ? best.run_ft : 0,
+      region: best ? best.label : null,
+      hs_open_in: openWaterInches(regions),
+      regions: regions.map((r, i) => shapeRegion(r, pts, i)),
+      wind,
+      distance_nm: 18.4,
+      bearing_deg: 122,
+      verdict: lake.verdict,
+      frozen: false,
+    };
+    if (withObserved) {
+      row.observed = [
+        {
+          station: "45147",
+          name: "Big Fixture Lake buoy",
+          kind: "buoy",
+          at: "2026-09-19T13:00:00Z",
+          wind: { dir: 245, kt: 12, gust: 16 },
+          wave_ft: 1.0,
+          distance_nm: 6.2,
+        },
+        {
+          station: "KFXR",
+          name: "Fixture Shore AWOS",
+          kind: "metar",
+          at: "2026-09-19T12:53:00Z",
+          wind: { dir: 260, kt: 9, gust: null },
+          wave_ft: null,
+          distance_nm: 11.7,
+        },
+      ];
+      row.marine_hs_in = 12;
+    }
+    return row;
+  };
+
+  // The biggest field is the great_lake fixture, which is the one worth briefing whole.
+  const homeId = [...waveFields.keys()].sort(
+    (a, b) => (waveFields.get(b)?.length ?? 0) - (waveFields.get(a)?.length ?? 0),
+  )[0];
+  const home = homeId == null ? null : byId.get(homeId);
+  if (home) {
+    briefing.home_water = homeWaterRow(home, { dir: 250, kt: 11, gust: 16 }, true);
+    if (briefing.outlook) {
+      briefing.outlook.home_water = homeWaterRow(home, { dir: 230, kt: 8, gust: 12 }, false);
+    }
+  }
+
+  writeFileSync(file, JSON.stringify(briefing, null, 1) + "\n");
+  console.log(
+    `briefing.json refreshed with wave-field fields${home ? ` and home water "${home.name}"` : ""}`,
+  );
 }
 
 function circle(lon, lat, radiusM, points = 48) {

@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Shared rules engine for the Michigan seaplane lake map (see docs/data-contract.md).",
   "scripts": {
-    "test": "node --test engine/test/*.test.js"
+    "test": "node --test engine/test/*.test.js waves/test/*.test.js"
   },
   "dependencies": {}
 }

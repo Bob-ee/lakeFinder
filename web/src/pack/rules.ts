@@ -56,7 +56,13 @@ export class RulesRunner {
             chord_ft: lake.chord_ft,
             area_acres: lake.area_acres,
             public_access: lake.access != null,
-            federal_unit: lake.flags.includes("federal_overlay") ? lake.county : null,
+            // The engine only needs a truthy name to re-raise `federal_overlay`. index.json
+            // now carries the real unit name on the entries inside one; before that field
+            // existed the county stood in for it, and on big water the county is null, so
+            // the name is the last fallback rather than dropping the flag entirely.
+            federal_unit: lake.flags.includes("federal_overlay")
+              ? (lake.federal_unit ?? lake.county ?? lake.name ?? "federal unit")
+              : null,
           },
           restrictions,
           this.compiled,
@@ -125,5 +131,7 @@ export function describeRestriction(r: Restriction): string {
   parts.push(r.scope === "zone" ? (r.scope_description ?? "in a marked zone") : "lakewide");
   if (r.hours) parts.push(r.hours.text);
   if (r.season) parts.push(r.season.text);
+  // Said here as well as by the engine, because this path runs when the engine is absent.
+  if (r.big_water_partial) parts.push("covers part of this water");
   return parts.join(" · ");
 }

@@ -5,33 +5,43 @@
   "files": [
     {
       "name": "index.json",
-      "bytes": 6111,
-      "sha256": "c280a7631ae63c7ddbbf54babfcaf5a7a82527d0c01c0c925bffe938e8eef68b"
+      "bytes": 7345,
+      "sha256": "0bb420add05742d19a21da5cac123924da1d9f35b417e92fb40c2e8593fb45b5"
     },
     {
       "name": "restrictions.json",
-      "bytes": 8412,
-      "sha256": "2981397204817af3194f0f907188537163fd531f3a9b67f3ce6215a0cc0deede"
+      "bytes": 9430,
+      "sha256": "19eaddfe0ea0cf034cad76f7086ac081b38af5c7e971119607205e53b3d4a827"
     },
     {
       "name": "rules.json",
-      "bytes": 6274,
-      "sha256": "8feffcd7498dadf71a14c74a1e591e55f3c5a89ab39fdc8ba68970bd1b0a27ba"
+      "bytes": 6266,
+      "sha256": "9b328c62543fe331f1d870c45aa2c86d91df3c69087ccd86f017b6516c2c0249"
+    },
+    {
+      "name": "wave_points.json",
+      "bytes": 688,
+      "sha256": "45ebb1f8981e7e9ab381bb90dac216e3df3f31f7cd00b3ec44c507c634ffbd3c"
+    },
+    {
+      "name": "wave_points.bin",
+      "bytes": 44160,
+      "sha256": "aa40ef0ff303a2e01af99d57ddab414fb4647bb02f93e302f64adf432bb200dd"
     },
     {
       "name": "lakes.pmtiles",
-      "bytes": 27103,
-      "sha256": "4d3adc10da4f554f5590396a480fbf3f1f57980211d8f3f8c44b02e6efa2dd07"
+      "bytes": 46967,
+      "sha256": "6477662e79a41fead968232a1201c1c627f4a60b08126a7769db8ca0d31328e1"
     },
     {
       "name": "usable_water.pmtiles",
-      "bytes": 11985,
-      "sha256": "47c4084d68f3eba7bb09ec2a4c1baaa6c645d63c775844b8964a2456b5ba3807"
+      "bytes": 21305,
+      "sha256": "ec2e16dc695efa89a460218c44aaf269d3588808fec839719125e3e965fc39c1"
     },
     {
       "name": "overlays.pmtiles",
-      "bytes": 24377,
-      "sha256": "788d510f8e0a8625504d54196690e8b3416fa1c8a0204b528cf4ecde04b9c82e"
+      "bytes": 25220,
+      "sha256": "2a015d726709324b8b347dd645cb719325ae099b621619c790273dd90dd75b13"
     },
     {
       "name": "basemap.pmtiles",
@@ -40,8 +50,8 @@
     }
   ],
   "counts": {
-    "lakes": 12,
-    "restrictions": 7,
+    "lakes": 14,
+    "restrictions": 8,
     "needs_review": 1
   },
   "mac_record_loaded": false

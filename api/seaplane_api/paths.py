@@ -39,6 +39,14 @@ def lake_extents_path() -> Path:
     return data_out() / "lake_extents.json"
 
 
+def wave_points_index_path() -> Path:
+    return data_out() / "wave_points.json"
+
+
+def wave_points_bin_path() -> Path:
+    return data_out() / "wave_points.bin"
+
+
 def write_json_atomic(path: Path, payload: Any) -> None:
     """Write via a sibling temp file + `os.replace`, so a reader never sees a half-written file.
 

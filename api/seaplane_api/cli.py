@@ -3,6 +3,7 @@
     seaplane-api                      uvicorn on 127.0.0.1:8000, scheduler in-process
     seaplane-api --host 0.0.0.0 --port 8080
     seaplane-api briefing --once      one run, no server (for launchd or cron)
+    seaplane-api briefing --once --out /tmp/try.json    write somewhere other than data/out
 
 Mirrors the pipeline's `seaplane` CLI: a bare invocation is the normal thing, subcommands are the
 exceptions.
@@ -23,6 +24,11 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="command")
     b = sub.add_parser("briefing", help="Generate the briefing")
     b.add_argument("--once", action="store_true", help="Run once and exit (no server)")
+    b.add_argument(
+        "--out",
+        metavar="PATH",
+        help="Write the briefing here instead of data/out/briefing.json (a trial run)",
+    )
     return p
 
 
@@ -37,7 +43,7 @@ def main(argv: list[str] | None = None) -> int:
         if not args.once:
             print("seaplane-api briefing needs --once (the server runs the schedule)", file=sys.stderr)
             return 2
-        return _run_once()
+        return _run_once(args.out)
 
     import uvicorn
 
@@ -45,14 +51,17 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def _run_once() -> int:
+def _run_once(out: str | None = None) -> int:
+    from pathlib import Path
+
     from .paths import briefing_path
     from .service import run_briefing
     from .settings import load_settings
 
+    target = Path(out).expanduser().resolve() if out else briefing_path()
     settings = load_settings()
-    briefing = asyncio.run(run_briefing(settings, run_kind="manual"))
-    print(f"wrote {briefing_path()}")
+    briefing = asyncio.run(run_briefing(settings, run_kind="manual", out_path=target))
+    print(f"wrote {target}")
     print(briefing["summary"])
     if briefing.get("outlook"):
         print(briefing["outlook"]["summary"])

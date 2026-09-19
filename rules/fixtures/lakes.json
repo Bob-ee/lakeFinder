@@ -115,5 +115,23 @@
     ],
     "options": {"mac_record_loaded": false},
     "expect": {"verdict": "restricted", "flags": ["no_public_access", "chord_below_minimum", "federal_overlay", "needs_review", "mac_pending"]}
+  },
+  {
+    "name": "big water: an unresolved reach caps the water body at conditional, not restricted",
+    "lake": {"id": 115, "name": "Lake St. Clair", "chord_ft": 100000, "area_acres": 284000, "public_access": true, "federal_unit": null},
+    "restrictions": [
+      {"restriction_id": "b13", "rule_id": "R 281.734.1", "restriction_type": "slow_no_wake", "scope": "lakewide", "scope_description": null, "hours": null, "season": null, "speed_mph": null, "needs_review": false, "reach_unresolved": true, "big_water_partial": true}
+    ],
+    "options": {},
+    "expect": {"verdict": "conditional", "flags": []}
+  },
+  {
+    "name": "the same rule on an inland lake is still restricted (the cap is big water only)",
+    "lake": {"id": 116, "name": "Saint Clair Lake", "chord_ft": 2500, "area_acres": 60, "public_access": true, "federal_unit": null},
+    "restrictions": [
+      {"restriction_id": "b14", "rule_id": "R 281.734.1", "restriction_type": "slow_no_wake", "scope": "lakewide", "scope_description": null, "hours": null, "season": null, "speed_mph": null, "needs_review": false}
+    ],
+    "options": {},
+    "expect": {"verdict": "restricted", "flags": []}
   }
 ]

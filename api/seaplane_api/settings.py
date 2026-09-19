@@ -83,6 +83,17 @@ class Outlook(_Base):
         return v
 
 
+class HomeWater(_Base):
+    """The one water body briefed on every run whatever `radius_nm` says (contract, "Briefing").
+
+    `id` is an `index.json` water-body id; the PUT endpoint checks it resolves there (422 when it
+    does not), which is a filesystem question and so cannot live in this model.
+    """
+
+    id: int
+    name: str = ""
+
+
 class Notify(_Base):
     ntfy_url: str | None = None
 
@@ -123,6 +134,7 @@ class Settings(_Base):
     radius_nm: float = 40
     n_lakes: int = 8
     public_access_only: bool = False
+    home_water: HomeWater | None = None  # absent in older files, which is the same as "none set"
     schedule: Schedule = Field(default_factory=Schedule)
     outlook: Outlook = Field(default_factory=Outlook)
     notify: Notify = Field(default_factory=Notify)

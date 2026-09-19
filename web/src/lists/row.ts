@@ -5,6 +5,11 @@ import { el } from "../ui/format";
 export interface LakeRowOptions {
   onSelect: (id: number) => void;
   /**
+   * Appended to the name in a quieter weight: the briefing uses it for the calmest region,
+   * so a row reads "Cass Lake · west end" without the region looking like part of the name.
+   */
+  nameSuffix?: string;
+  /**
    * Right-hand slot. A string is the usual one-liner (distance, bearing); the briefing
    * passes an element so it can stack wave height and run over distance and bearing.
    */
@@ -28,11 +33,18 @@ export function lakeRow(lake: Lake, opts: LakeRowOptions): HTMLElement {
   dot.setAttribute("aria-hidden", "true");
 
   const text = el("span", "row-text");
-  text.append(el("span", "row-name", lake.name ?? "Unnamed waterbody"));
+  const name = el("span", "row-name", lake.name ?? "Unnamed waterbody");
+  if (opts.nameSuffix) {
+    // The region is the point of a briefing row ("where on this lake"), so it is allowed to
+    // wrap onto a second line rather than be the first thing an ellipsis eats.
+    name.classList.add("has-suffix");
+    name.append(el("span", "row-name-suffix", ` · ${opts.nameSuffix}`));
+  }
+  text.append(name);
   // "River · Ionia · Lyons Township": a river is digitized as several same-name polygons, so the
   // place line is what tells two search hits apart (the reach length is added by the caller when
-  // even that is not enough).
-  const place = [KIND_LABEL[lake.kind], lake.county, lake.township].filter(Boolean).join(" · ");
+  // even that is not enough). Big water has no single county and carries `counties` instead.
+  const place = [KIND_LABEL[lake.kind], placeOf(lake), lake.township].filter(Boolean).join(" · ");
   text.append(el("span", "row-place", place));
   if (opts.note != null) text.append(slot("row-note", opts.note));
 
@@ -41,6 +53,14 @@ export function lakeRow(lake: Lake, opts: LakeRowOptions): HTMLElement {
 
   row.addEventListener("click", () => opts.onSelect(lake.id));
   return row;
+}
+
+/** One county, or the first of the many a Great Lake touches. */
+function placeOf(lake: Lake): string {
+  if (lake.county) return lake.county;
+  const counties = lake.counties ?? [];
+  if (counties.length === 0) return "";
+  return counties.length === 1 ? counties[0]! : `${counties[0]!} +${counties.length - 1}`;
 }
 
 function slot(className: string, content: string | HTMLElement): HTMLElement {

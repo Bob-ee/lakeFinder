@@ -5,6 +5,22 @@ export function formatFeet(ft: number | null | undefined): string {
   return `${Math.round(ft).toLocaleString("en-US")} ft`;
 }
 
+/**
+ * Feet, switching to miles past five: a Great Lake's longest chord is 1,272,480 ft, which
+ * is a number nobody can read. Runway-scale figures stay in feet, because that is what they
+ * are compared against.
+ */
+const MILE_FT = 5280;
+const FEET_LIMIT = 5 * MILE_FT;
+
+export function formatDistanceFt(ft: number | null | undefined): string {
+  if (ft == null || !Number.isFinite(ft)) return "—";
+  if (Math.abs(ft) < FEET_LIMIT) return formatFeet(ft);
+  const miles = ft / MILE_FT;
+  const rounded = miles >= 100 ? Math.round(miles) : Math.round(miles * 10) / 10;
+  return `${rounded.toLocaleString("en-US")} mi`;
+}
+
 export function formatAcres(acres: number | null | undefined): string {
   if (acres == null || !Number.isFinite(acres)) return "—";
   const rounded = acres >= 100 ? Math.round(acres) : Math.round(acres * 10) / 10;

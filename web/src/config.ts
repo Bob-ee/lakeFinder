@@ -1,4 +1,5 @@
-import type { RestrictionType, Verdict } from "./types";
+import type { RestrictionType, Verdict, WaterbodyKind } from "./types";
+import { isBigWater } from "./types";
 
 /** Everything is served under /data/ by the dev server and by Caddy in production. */
 export const DATA_BASE = "/data";
@@ -14,6 +15,9 @@ export const DATA_FILES = {
   overlays: `${DATA_BASE}/overlays.pmtiles`,
   /** Written by the api service, read as a plain static file. Not part of pack.json. */
   briefing: `${DATA_BASE}/briefing.json`,
+  /** Wave field: a small index, then one HTTP Range request per water body. */
+  wavePointsIndex: `${DATA_BASE}/wave_points.json`,
+  wavePoints: `${DATA_BASE}/wave_points.bin`,
 } as const;
 
 /** The api service (settings, refresh, health). Caddy and the Vite dev server proxy this. */
@@ -31,6 +35,13 @@ export const HOME_VIEW = { center: [-84.5, 43.6] as [number, number], zoom: 6.4 
 export const FIXTURE_VIEW = { center: [-83.45, 42.67] as [number, number], zoom: 10.2 };
 
 export const MAX_SELECT_ZOOM = 15;
+/**
+ * Floor on how far selecting a water body may zoom out. Lake Michigan's bbox spans the
+ * state, and fitting it would drop the camera below z6, where `lakes.pmtiles` has no tiles
+ * at all: the lake would vanish and only the fallback marker would remain. Staying just
+ * above the archive's minzoom keeps the shore on screen even if the far end is off it.
+ */
+export const MIN_SELECT_ZOOM = 6.2;
 export const USABLE_WATER_MIN_ZOOM = 12;
 
 export const VERDICT_ORDER: Record<Verdict, number> = {
@@ -79,17 +90,57 @@ export const FLAG_LABEL: Record<string, string> = {
 };
 
 /**
+ * On a Great Lake or a connecting water a flag never describes the whole thing: a federal
+ * unit, a missing launch or an unresolved rule covers *part* of it. Same flag ids, different
+ * wording, so a pilot does not read "no public access" as "you cannot get onto Lake Huron".
+ *
+ * The pipeline owns which flags it actually sets on these kinds; anything not overridden here
+ * falls back to FLAG_LABEL, so adding a flag on that side needs no change here.
+ */
+export const BIG_WATER_FLAG_LABEL: Record<string, string> = {
+  no_public_access: "Parts have no known public access",
+  federal_overlay: "Part of this water is in a federal unit",
+  reach_unresolved: "Rule covers part of this water",
+  chord_below_minimum: "Parts are below the minimum run",
+  airspace: "Part of this water is inside controlled airspace",
+};
+
+/**
+ * Label for one flag, worded for the kind of water it sits on, and named where the data
+ * names it: `index.json` carries `federal_unit` on the entries that are inside one.
+ */
+export function flagLabel(
+  flag: string,
+  kind: WaterbodyKind,
+  federalUnit?: string | null,
+): string {
+  if (flag === "federal_overlay" && federalUnit) {
+    return isBigWater(kind) ? `Part of this water is inside ${federalUnit}` : `Inside ${federalUnit}`;
+  }
+  if (isBigWater(kind)) return BIG_WATER_FLAG_LABEL[flag] ?? FLAG_LABEL[flag] ?? flag;
+  return FLAG_LABEL[flag] ?? flag;
+}
+
+/**
  * Word for a waterbody's `kind`. Only shown when it is not the default "lake", so the map keeps
- * reading as a lake map. Unknown future kinds (great_lake, connecting_water) fall back to "".
+ * reading as a lake map. "Great Lakes water" rather than "Great Lake" because Lake St. Clair is
+ * served as `great_lake` and is not one of the five; the generic phrase is true of both.
+ * An unknown future kind falls back to "".
  */
 export const KIND_LABEL: Record<string, string> = {
   river: "River",
+  great_lake: "Great Lakes water",
+  connecting_water: "Connecting water",
 };
 
-/** Shown next to the restriction list when a river rule could not be narrowed to a reach. */
-export const REACH_UNRESOLVED_NOTICE =
-  "At least one rule below covers part of this river, not all of it. " +
-  "The DNR order names the reach; read the rule text before relying on it.";
+/** Shown next to the restriction list when a rule could not be narrowed to a reach. */
+export function reachUnresolvedNotice(kind: WaterbodyKind): string {
+  const what = isBigWater(kind) ? "this water" : "this river";
+  return (
+    `At least one rule below covers part of ${what}, not all of it. ` +
+    "The DNR order names the reach; read the rule text before relying on it."
+  );
+}
 
 /** Disclaimer from design.md section 13. `{version}` is substituted from pack.json. */
 export const DISCLAIMER =
@@ -135,3 +186,26 @@ export const SEARCH = {
   maxRows: 8,
   maxRecent: 8,
 } as const;
+
+export const WAVES = {
+  /** Contract default when `/api/settings` is not reachable (`limits.min_run_ft`). */
+  defaultMinRunFt: 2000,
+  /** Last-resort wind when the briefing has nothing to say: contract "Client". */
+  fallbackWind: { dir: 270, kt: 10 },
+  /** Cockpit-usable range for the speed control. Above this nobody is landing. */
+  maxWindKt: 35,
+  /** Region labels appear on the map from here up; below it they collide. */
+  labelMinZoom: 10.5,
+} as const;
+
+/**
+ * The honest limits of the number, said once and in one line. Every part of it is true of
+ * every water body, so it never has to be tuned per lake.
+ */
+export const WAVE_CAVEAT =
+  "Computed from this wind and the fetch to the nearest land, not a forecast.";
+/** Shown while the speed control is still on the briefing's gust, which is what it scores. */
+export const WAVE_CAVEAT_GUST = "Speed is the forecast gust, as in the briefing.";
+export const WAVE_CAVEAT_NO_DEPTH =
+  "No depth data here, so shallow water reads rougher than it is.";
+export const WAVE_CAVEAT_DEPTH = "Depth is included where the survey covers it.";
