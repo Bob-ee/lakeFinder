@@ -330,10 +330,53 @@ const LAKES = [
     rot: 60,
     access: null,
   },
+  // Two `kind: "river"` polygons sharing one name, so fixture mode exercises the river label,
+  // the repeated-name search rows and the reach_unresolved notice.
+  {
+    key: "MIGF-HYDRO-0100011",
+    name: "Huron River",
+    kind: "river",
+    county: "Oakland",
+    township: "Milford Township",
+    lon: -83.6008,
+    lat: 42.5773,
+    majorM: 1400,
+    minorM: 110,
+    rot: 115,
+    access: null,
+  },
+  {
+    key: "MIGF-HYDRO-0100012",
+    name: "Huron River",
+    kind: "river",
+    county: "Oakland",
+    township: "Commerce Township",
+    lon: -83.5120,
+    lat: 42.5622,
+    majorM: 900,
+    minorM: 90,
+    rot: 80,
+    access: null,
+  },
 ];
 
 /** `lake` is the fixture key above; the pipeline would fill lake_ids via the match stage. */
 const RESTRICTIONS = [
+  {
+    lake: "MIGF-HYDRO-0100011",
+    also: ["MIGF-HYDRO-0100012"],
+    reach_unresolved: true,
+    rule_id: "R 281.763.21",
+    restriction_type: "slow_no_wake",
+    scope: "lakewide",
+    scope_description: null,
+    hours: null,
+    season: null,
+    speed_mph: null,
+    plss: [],
+    raw_text:
+      "It is unlawful for the operator of a vessel to exceed a slow, no wake speed upon the waters of the Huron River from the Commerce Road bridge downstream to the Oakland County line, Oakland County.",
+  },
   {
     lake: "MIGF-HYDRO-0100001",
     rule_id: "R 281.763.3",
@@ -576,6 +619,8 @@ function main() {
   const byLakeKey = new Map();
   const restrictionsOut = {};
   for (const r of RESTRICTIONS) {
+    // `also` is the waterway case: one river rule covering several same-name polygons.
+    const keys = [r.lake, ...(r.also ?? [])];
     const lake = LAKES.find((l) => l.key === r.lake);
     if (!lake) throw new Error(`restriction references unknown lake ${r.lake}`);
     const id = restrictionId(lake.county, lake.name, lake.township, r.raw_text);
@@ -602,12 +647,15 @@ function main() {
       fetched_at: BUILT_AT,
       parser: "regex",
       needs_review: false,
-      lake_ids: [lakeId(lake.key)],
+      lake_ids: keys.map(lakeId),
+      ...(r.reach_unresolved ? { reach_unresolved: true } : {}),
     };
     restrictionsOut[id] = record;
-    const list = byLakeKey.get(lake.key) ?? [];
-    list.push(record);
-    byLakeKey.set(lake.key, list);
+    for (const key of keys) {
+      const list = byLakeKey.get(key) ?? [];
+      list.push(record);
+      byLakeKey.set(key, list);
+    }
   }
 
   // --- lakes --------------------------------------------------------------
@@ -622,6 +670,7 @@ function main() {
     const verdict = fixtureVerdict(restrictions, Boolean(lake.name));
 
     const flags = [];
+    if (restrictions.some((r) => r.reach_unresolved)) flags.push("reach_unresolved");
     if (!lake.access) flags.push("no_public_access");
     if (m.chordFt < FALLBACK_RULES.aircraft.min_chord_ft) flags.push("chord_below_minimum");
     if (!lake.name) flags.push("needs_review");
@@ -630,6 +679,7 @@ function main() {
       id,
       name: lake.name,
       name_norm: normalizeName(lake.name),
+      kind: lake.kind ?? "lake",
       county: lake.county,
       township: lake.township,
       lat: m.centroid[1],
@@ -648,6 +698,7 @@ function main() {
       feature(id, { type: "Polygon", coordinates: [ring] }, {
         id,
         name: lake.name,
+        kind: lake.kind ?? "lake",
         verdict,
         flags: flags.join(","),
         county: lake.county,

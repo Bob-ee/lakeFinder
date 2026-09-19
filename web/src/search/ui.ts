@@ -1,7 +1,7 @@
 import { SEARCH } from "../config";
 import { lakeRow } from "../lists/row";
 import type { Lake } from "../types";
-import { el } from "../ui/format";
+import { el, formatFeet } from "../ui/format";
 import { icon } from "../ui/icons";
 import type { SearchIndex } from "./index";
 import { listRecent } from "./recent";
@@ -37,7 +37,7 @@ export class SearchBox {
     this.input = document.createElement("input");
     this.input.type = "search";
     this.input.className = "search-input";
-    this.input.placeholder = "Search Michigan lakes";
+    this.input.placeholder = "Search lakes and rivers";
     this.input.autocomplete = "off";
     this.input.autocapitalize = "off";
     this.input.spellcheck = false;
@@ -138,8 +138,14 @@ export class SearchBox {
       this.results.append(el("div", "search-empty", emptyMessage));
     } else {
       if (heading) this.results.append(el("div", "search-heading", heading));
+      const repeated = repeatedNames(lakes);
       for (const lake of lakes) {
-        const row = lakeRow(lake, { onSelect: (id) => this.choose(id) });
+        const row = lakeRow(lake, {
+          onSelect: (id) => this.choose(id),
+          // "Grand River" is 19 polygons: when the same name comes back more than once, the reach
+          // length is what tells a landable stretch from a 900 ft one.
+          ...(repeated.has(lake.name ?? "") ? { trailing: formatFeet(lake.chord_ft) } : {}),
+        });
         this.results.append(row);
         this.rows.push(row);
         this.ids.push(lake.id);
@@ -186,4 +192,17 @@ export class SearchBox {
       if (on) row.scrollIntoView({ block: "nearest" });
     });
   }
+}
+
+/** Display names that appear more than once in a result set (rivers, and same-name lakes). */
+function repeatedNames(lakes: Lake[]): Set<string> {
+  const seen = new Set<string>();
+  const repeated = new Set<string>();
+  for (const lake of lakes) {
+    const name = lake.name ?? "";
+    if (!name) continue;
+    if (seen.has(name)) repeated.add(name);
+    seen.add(name);
+  }
+  return repeated;
 }

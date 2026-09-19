@@ -1,6 +1,8 @@
 import {
   FLAG_LABEL,
+  KIND_LABEL,
   MAC_NOT_LOADED_NOTICE,
+  REACH_UNRESOLVED_NOTICE,
   RESTRICTION_LABEL,
   VERDICT_PHRASE,
 } from "../config";
@@ -29,7 +31,9 @@ export function renderPeek(input: DetailInput, into: HTMLElement): void {
   const text = el("div", "peek-text");
   const title = el("div", "peek-title", lake.name ?? "Unnamed waterbody");
   const sub = el("div", "peek-sub");
-  sub.append(el("span", "peek-county", [lake.county, lake.township].filter(Boolean).join(" · ")));
+  sub.append(
+    el("span", "peek-county", [placeLabel(lake), lake.township].filter(Boolean).join(" · ")),
+  );
   const phrase = el("span", "peek-verdict", VERDICT_PHRASE[evaluation.verdict]);
   phrase.dataset["verdict"] = evaluation.verdict;
   sub.append(phrase);
@@ -56,7 +60,9 @@ export function renderDetail(input: DetailInput): HTMLElement {
 
   // -- half ---------------------------------------------------------------
   const facts = el("dl", "fact-grid");
-  addFact(facts, "Longest chord", chordText(lake));
+  // On a river the chord is the longest straight reach of open water, so say so: "chord" on a
+  // 30-mile river reads as the whole river.
+  addFact(facts, lake.kind === "river" ? "Longest reach" : "Longest chord", chordText(lake));
   addFact(facts, "Area", formatAcres(lake.area_acres));
   addFact(facts, "Public access", lake.access ?? "No known public access");
   if (evaluation.flags.includes("federal_overlay")) {
@@ -76,9 +82,13 @@ export function renderDetail(input: DetailInput): HTMLElement {
 
   const restrictionSection = el("section", "detail-section");
   restrictionSection.append(el("h3", "detail-h", "Restrictions"));
+  if (restrictions.some((r) => r.reach_unresolved)) {
+    const notice = el("div", "notice notice--warn", REACH_UNRESOLVED_NOTICE);
+    restrictionSection.append(notice);
+  }
   if (restrictions.length === 0) {
     restrictionSection.append(
-      el("p", "muted", "No DNR watercraft control matched to this lake."),
+      el("p", "muted", `No DNR watercraft control matched to this ${nounFor(lake)}.`),
     );
   } else {
     const list = el("ul", "restriction-list");
@@ -137,6 +147,15 @@ export function renderDetail(input: DetailInput): HTMLElement {
 
   wrap.append(full);
   return wrap;
+}
+
+/** "Oakland" for a lake, "River · Oakland" for a river. `kind` leads because it is the surprise. */
+export function placeLabel(lake: Lake): string {
+  return [KIND_LABEL[lake.kind], lake.county].filter(Boolean).join(" · ");
+}
+
+function nounFor(lake: Lake): string {
+  return lake.kind === "river" ? "river" : "lake";
 }
 
 function chordText(lake: Lake): string {
@@ -203,10 +222,11 @@ async function copyReport(input: DetailInput): Promise<void> {
   const { lake, evaluation, restrictions } = input;
   const lines = [
     `${lake.name ?? "Unnamed waterbody"} (id ${lake.id})`,
-    `${lake.county}${lake.township ? ` · ${lake.township}` : ""}`,
+    `${placeLabel(lake)}${lake.township ? ` · ${lake.township}` : ""}`,
     `Verdict: ${VERDICT_PHRASE[evaluation.verdict]} (${evaluation.verdict})`,
-    `Chord ${chordText(lake)} · ${formatAcres(lake.area_acres)}`,
+    `${lake.kind === "river" ? "Reach" : "Chord"} ${chordText(lake)} · ${formatAcres(lake.area_acres)}`,
   ];
+  if (restrictions.some((r) => r.reach_unresolved)) lines.push(REACH_UNRESOLVED_NOTICE);
   if (restrictions.length > 0) {
     lines.push("Restrictions:");
     for (const r of restrictions) {

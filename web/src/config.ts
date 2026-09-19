@@ -72,10 +72,24 @@ export const FLAG_LABEL: Record<string, string> = {
   federal_overlay: "Federal overlay",
   needs_review: "Needs review",
   mac_pending: "MAC record pending",
+  reach_unresolved: "Rule covers part of the river",
   user_verified: "Verified",
   user_note: "Has note",
   saved: "Saved",
 };
+
+/**
+ * Word for a waterbody's `kind`. Only shown when it is not the default "lake", so the map keeps
+ * reading as a lake map. Unknown future kinds (great_lake, connecting_water) fall back to "".
+ */
+export const KIND_LABEL: Record<string, string> = {
+  river: "River",
+};
+
+/** Shown next to the restriction list when a river rule could not be narrowed to a reach. */
+export const REACH_UNRESOLVED_NOTICE =
+  "At least one rule below covers part of this river, not all of it. " +
+  "The DNR order names the reach; read the rule text before relying on it.";
 
 /** Disclaimer from design.md section 13. `{version}` is substituted from pack.json. */
 export const DISCLAIMER =

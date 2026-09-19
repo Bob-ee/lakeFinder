@@ -401,6 +401,7 @@ function standInLake(row: BriefingLake): Lake {
     id: row.id,
     name: row.name,
     name_norm: "",
+    kind: "lake",
     county: "not in this data pack",
     township: null,
     lat: 0,

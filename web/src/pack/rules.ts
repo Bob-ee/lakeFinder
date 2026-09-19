@@ -67,7 +67,9 @@ export class RulesRunner {
             id: lake.id,
             verdict: result.verdict,
             reasons: Array.isArray(result.reasons) ? result.reasons : [],
-            flags: Array.isArray(result.flags) ? result.flags : [...lake.flags],
+            flags: Array.isArray(result.flags)
+              ? mergePipelineFlags(result.flags, lake.flags)
+              : [...lake.flags],
             fromEngine: true,
           };
         }
@@ -99,6 +101,19 @@ export class RulesRunner {
       fromEngine: false,
     };
   }
+}
+
+/**
+ * Flags the pipeline adds after the engine has run, so a client-side engine pass does not lose
+ * them. They are labels, never inputs to a verdict; the engine has no business knowing about them.
+ */
+const PIPELINE_ONLY_FLAGS = ["reach_unresolved"];
+
+function mergePipelineFlags(engineFlags: string[], lakeFlags: string[]): string[] {
+  const extra = PIPELINE_ONLY_FLAGS.filter(
+    (f) => lakeFlags.includes(f) && !engineFlags.includes(f),
+  );
+  return extra.length ? [...engineFlags, ...extra] : engineFlags;
 }
 
 /** A plain-language line built from the restriction record itself, no rules involved. */

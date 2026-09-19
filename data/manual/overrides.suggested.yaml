@@ -6,7 +6,9 @@
 # confirm_low_confidence: matches the pipeline applied with a score under 0.8. They are live already; to
 #   reject one, copy its `reject` line under `unmatch:` in overrides.yaml.
 #
-# Rivers, creeks, channels, and bays are not listed: they have no lake polygon.
+# Unmatched waterways are not listed: what is left after the river track has run is creeks, channels, canals
+# and bays with no polygon in the hydrography layer, plus the Great Lakes and their connecting waters, which
+# that layer does not contain at all. `data/work/unmatched.json` has them, with `kind: "waterway"`.
 suggested_matches:
 - restriction_id: 6f6c527a373c
   lake_name_raw: Mccollum Lake
@@ -53,6 +55,14 @@ suggested_matches:
     score: 0.367
     how: name match near the cited section
     km_from_section: 14.4
+  - lake_id: 1452603144
+    name: Torch River
+    county: Antrim
+    township: Milton Township
+    area_acres: 77.2
+    score: 0.357
+    how: name match near the cited section
+    km_from_section: 0.2
   paste: '- {restriction_id: 7a0b7c3ce1fe, lake_id: 1599536398, note: "Torch Lake Adjacent to Its Mouth -> Torch Lake (name
     match near the cited section)"}'
 - restriction_id: 3ad2a858a505
@@ -137,6 +147,25 @@ suggested_matches:
     km_from_section: 0.9
   paste: '- {restriction_id: d410244d5e66, lake_id: 1240478490, note: "Big Guernsey Lake''s South West -> Guernsey Lake (name
     match near the cited section)"}'
+- restriction_id: efea9278051a
+  lake_name_raw: Cuddy Drain to Gun Lake
+  county: Barry
+  township: Yankee Springs Township
+  rule_id: R 281.708.3
+  restriction_type: slow_no_wake
+  plss: T3N R10W s19,30
+  hints: []
+  candidates:
+  - lake_id: 57080057
+    name: Gun Lake
+    county: Barry
+    township: Yankee Springs Township
+    area_acres: 2763.0
+    score: 0.4
+    how: name match near the cited section
+    km_from_section: 2.7
+  paste: '- {restriction_id: efea9278051a, lake_id: 57080057, note: "Cuddy Drain to Gun Lake -> Gun Lake (name match near
+    the cited section)"}'
 - restriction_id: 93814b2d9677
   lake_name_raw: Guernsey Lakes, Big and Little
   county: Barry
@@ -252,6 +281,33 @@ suggested_matches:
     km_from_section: 2.0
   paste: '- {restriction_id: e41c04bbfe10, lake_id: 98316469, note: "Mud Lake -> Mud Lake (same or similar name elsewhere
     in the county)"}'
+- restriction_id: 9334d2447fdc
+  lake_name_raw: Cobb's Channel Connected to Goguac Lake
+  county: Calhoun
+  township: Battle Creek Township
+  rule_id: R 281.713.5
+  restriction_type: slow_no_wake
+  plss: T2S R8W s22
+  hints: []
+  candidates:
+  - lake_id: 243522431
+    name: Goguac Lake
+    county: Calhoun
+    township: City of Battle Creek
+    area_acres: 340.2
+    score: 0.367
+    how: name match near the cited section
+    km_from_section: 1.6
+  - lake_id: 153495723
+    name: Minges Channel
+    county: Calhoun
+    township: City of Battle Creek
+    area_acres: 14.8
+    score: 0.357
+    how: name match near the cited section
+    km_from_section: 0.8
+  paste: '- {restriction_id: 9334d2447fdc, lake_id: 243522431, note: "Cobb''s Channel Connected to Goguac Lake -> Goguac Lake
+    (name match near the cited section)"}'
 - restriction_id: 3e319325138d
   lake_name_raw: Little Nottawasseppee Lake
   county: Calhoun
@@ -292,6 +348,52 @@ suggested_matches:
   hints: []
   candidates: []
   paste: null
+- restriction_id: 7126a0274ab5
+  lake_name_raw: Welch's Channel Connected to Goguac Lake
+  county: Calhoun
+  township: Battle Creek Township
+  rule_id: R 281.713.6
+  restriction_type: slow_no_wake
+  plss: T2S R8W s22
+  hints: []
+  candidates:
+  - lake_id: 243522431
+    name: Goguac Lake
+    county: Calhoun
+    township: City of Battle Creek
+    area_acres: 340.2
+    score: 0.367
+    how: name match near the cited section
+    km_from_section: 1.6
+  - lake_id: 153495723
+    name: Minges Channel
+    county: Calhoun
+    township: City of Battle Creek
+    area_acres: 14.8
+    score: 0.357
+    how: name match near the cited section
+    km_from_section: 0.8
+  paste: '- {restriction_id: 7126a0274ab5, lake_id: 243522431, note: "Welch''s Channel Connected to Goguac Lake -> Goguac
+    Lake (name match near the cited section)"}'
+- restriction_id: 897416ec1329
+  lake_name_raw: Diamond Lake (Sail Bay)
+  county: Cass
+  township: Calvin Township
+  rule_id: WC-14-04-001
+  restriction_type: slow_no_wake
+  plss: T7S R14W s6
+  hints: []
+  candidates:
+  - lake_id: 450744252
+    name: Diamond Lake
+    county: Cass
+    township: Penn Township
+    area_acres: 1039.8
+    score: 1.0
+    how: name match near the cited section
+    km_from_section: 1.3
+  paste: '- {restriction_id: 897416ec1329, lake_id: 450744252, note: "Diamond Lake (Sail Bay) -> Diamond Lake (name match
+    near the cited section)"}'
 - restriction_id: 88a9def7b674
   lake_name_raw: Finch Lake
   county: Cass
@@ -503,6 +605,25 @@ suggested_matches:
     km_from_section: 2.8
   paste: '- {restriction_id: 710e03e8ee81, lake_id: 1346910014, note: "Crooked Lake/Pickerel Lake -> Crooked Lake (name match
     near the cited section)"}'
+- restriction_id: 3a9965be6c60
+  lake_name_raw: Smallwood Lake (Tittabawassee River)
+  county: Gladwin
+  township: Hay Township
+  rule_id: WC-26-94-001
+  restriction_type: slow_no_wake
+  plss: T17N R1E s9
+  hints: []
+  candidates:
+  - lake_id: 162923556
+    name: Smallwood Lake
+    county: Gladwin
+    township: Hay Township
+    area_acres: 253.5
+    score: 1.0
+    how: same or similar name elsewhere in the county
+    km_from_section: 9.8
+  paste: '- {restriction_id: 3a9965be6c60, lake_id: 162923556, note: "Smallwood Lake (Tittabawassee River) -> Smallwood Lake
+    (same or similar name elsewhere in the county)"}'
 - restriction_id: dc26a4084079
   lake_name_raw: Wiggins Lake, Grout and Sage Townships
   county: Gladwin
@@ -620,24 +741,35 @@ suggested_matches:
     score: 1.0
     how: same or similar name elsewhere in the county
     km_from_section: 5.9
-  - lake_id: 626299033
-    name: Keystone Pond
+  - lake_id: 516082000
+    name: Boardman River
     county: Grand Traverse
     township: Garfield Township
-    area_acres: 82.1
-    score: 0.0
-    how: lake inside the cited section (no name match)
-    km_from_section: 0.2
-  - lake_id: 7620600
-    name: Sabin Pond
-    county: Grand Traverse
-    township: Garfield Township
-    area_acres: 38.2
-    score: 0.0
-    how: lake inside the cited section (no name match)
-    km_from_section: 1.2
+    area_acres: 24.2
+    score: 0.3
+    how: name match near the cited section
+    km_from_section: 3.1
   paste: '- {restriction_id: e7e64b840b8a, lake_id: 307056415, note: "Boardman Pond -> Boardman Lake (same or similar name
     elsewhere in the county)"}'
+- restriction_id: 4b37b8525fe8
+  lake_name_raw: Channel Connecting Mickey Lake
+  county: Grand Traverse
+  township: Long Lake Township
+  rule_id: WC-28-88-002
+  restriction_type: slow_no_wake
+  plss: T27N R12W s16
+  hints: []
+  candidates:
+  - lake_id: 1814439318
+    name: Mickey Lake
+    county: Grand Traverse
+    township: Long Lake Township
+    area_acres: 58.8
+    score: 0.433
+    how: name match near the cited section
+    km_from_section: 1.0
+  paste: '- {restriction_id: 4b37b8525fe8, lake_id: 1814439318, note: "Channel Connecting Mickey Lake -> Mickey Lake (name
+    match near the cited section)"}'
 - restriction_id: eb78930e5358
   lake_name_raw: Lake Michigan
   county: Grand Traverse
@@ -1157,6 +1289,14 @@ suggested_matches:
     score: 0.267
     how: name match near the cited section
     km_from_section: 14.4
+  - lake_id: 1452603144
+    name: Torch River
+    county: Antrim
+    township: Milton Township
+    area_acres: 77.2
+    score: 0.257
+    how: name match near the cited section
+    km_from_section: 0.2
   paste: '- {restriction_id: 9e37fc685da5, lake_id: 1599536398, note: "Torch Lake Adjacent to Its Mouth -> Torch Lake (name
     match near the cited section)"}'
 - restriction_id: 02caf0165b13
@@ -1722,6 +1862,14 @@ suggested_matches:
   plss: T19N R18W s20; T19N R18W s17
   hints: []
   candidates:
+  - lake_id: 1374941272
+    name: Big Sable River
+    county: Mason
+    township: Hamlin Township
+    area_acres: 15.8
+    score: 0.0
+    how: lake inside the cited section (no name match)
+    km_from_section: 0.9
   - lake_id: 665005890
     name: Big Sable River
     county: Mason
@@ -1815,6 +1963,16 @@ suggested_matches:
     km_from_section: 1.7
   paste: '- {restriction_id: d155965a5c1f, lake_id: 903912301, note: "Avery Lake -> Avery Lake (PLSS range direction flipped
     (T29N R2W s3,4,9 -> T29N R2E s3,4,9))"}'
+- restriction_id: 5c89011e31ac
+  lake_name_raw: Channel From Bear Lake
+  county: Muskegon
+  township: null
+  rule_id: R 281.761.2
+  restriction_type: slow_no_wake
+  plss: null
+  hints: []
+  candidates: []
+  paste: null
 - restriction_id: bafbd7aa1e18
   lake_name_raw: Crystal Lake
   county: Muskegon
@@ -1830,6 +1988,35 @@ suggested_matches:
   county: Muskegon
   township: Blue Lake Township
   rule_id: WC-61-94-006
+  restriction_type: slow_no_wake
+  plss: null
+  hints: []
+  candidates: []
+  paste: null
+- restriction_id: 86c34dc53d98
+  lake_name_raw: Government Channel and White Lake
+  county: Muskegon
+  township: null
+  rule_id: WC-61-92-001
+  restriction_type: slow_no_wake
+  plss: T11N R18W s2
+  hints: []
+  candidates:
+  - lake_id: 288543649
+    name: White Lake
+    county: Muskegon
+    township: Fruitland Township
+    area_acres: 2465.9
+    score: 0.4
+    how: name match near the cited section
+    km_from_section: 3.4
+  paste: '- {restriction_id: 86c34dc53d98, lake_id: 288543649, note: "Government Channel and White Lake -> White Lake (name
+    match near the cited section)"}'
+- restriction_id: bea293556bb9
+  lake_name_raw: Channel Between Sylvan and Emerald Lake
+  county: Newaygo
+  township: null
+  rule_id: R 281.762.3
   restriction_type: slow_no_wake
   plss: null
   hints: []
@@ -1888,6 +2075,14 @@ suggested_matches:
     score: 0.0
     how: lake inside the cited section (no name match)
     km_from_section: 1.0
+  - lake_id: 435488775
+    name: Penover Creek
+    county: Newaygo
+    township: Brooks Township
+    area_acres: 10.8
+    score: 0.0
+    how: lake inside the cited section (no name match)
+    km_from_section: 1.1
   - lake_id: 448394277
     name: Pickerel Lake
     county: Newaygo
@@ -2012,6 +2207,14 @@ suggested_matches:
     score: 0.0
     how: lake inside the cited section (no name match)
     km_from_section: 1.0
+  - lake_id: 435488775
+    name: Penover Creek
+    county: Newaygo
+    township: Brooks Township
+    area_acres: 10.8
+    score: 0.0
+    how: lake inside the cited section (no name match)
+    km_from_section: 1.1
   - lake_id: 448394277
     name: Pickerel Lake
     county: Newaygo
@@ -2256,6 +2459,52 @@ suggested_matches:
     km_from_section: 1.5
   paste: '- {restriction_id: 056fb6012c17, lake_id: 1575391771, note: "Lower Long Lake -> Long Lake (same or similar name
     elsewhere in the county)"}'
+- restriction_id: a23e6ee2d66b
+  lake_name_raw: Mickelson Lake (canal)
+  county: Oakland
+  township: Oxford Township
+  rule_id: WC-63-96-001
+  restriction_type: slow_no_wake
+  plss: T5N R10E s29
+  hints: []
+  candidates:
+  - lake_id: 1591983938
+    name: Lake Michelson
+    county: Oakland
+    township: Oxford Township
+    area_acres: 37.9
+    score: 0.744
+    how: name match near the cited section
+    km_from_section: 0.7
+  paste: '- {restriction_id: a23e6ee2d66b, lake_id: 1591983938, note: "Mickelson Lake (canal) -> Lake Michelson (name match
+    near the cited section)"}'
+- restriction_id: 1b5636746222
+  lake_name_raw: Middle Straits Lake
+  county: Oakland
+  township: West Bloomfield Township
+  rule_id: WC-63-99-003
+  restriction_type: slow_no_wake
+  plss: T2N R9E s16
+  hints: []
+  candidates:
+  - lake_id: 77831181
+    name: Middle Straits Lake
+    county: Oakland
+    township: West Bloomfield Township
+    area_acres: 180.2
+    score: 1.0
+    how: same or similar name elsewhere in the county
+    km_from_section: 3.3
+  - lake_id: 83093571
+    name: Upper Straits Lake
+    county: Oakland
+    township: City of Orchard Lake Village
+    area_acres: 345.1
+    score: 0.45
+    how: name match near the cited section
+    km_from_section: 0.5
+  paste: '- {restriction_id: 1b5636746222, lake_id: 77831181, note: "Middle Straits Lake -> Middle Straits Lake (same or similar
+    name elsewhere in the county)"}'
 - restriction_id: 35b95f262502
   lake_name_raw: Pine Lake
   county: Oakland
@@ -2360,6 +2609,14 @@ suggested_matches:
     score: 1.0
     how: same or similar name elsewhere in the county
     km_from_section: 167.7
+  - lake_id: 188838446
+    name: Coldwater River
+    county: Kent
+    township: Bowne Township
+    area_acres: 106.7
+    score: 0.0
+    how: lake inside the cited section (no name match)
+    km_from_section: 2.9
   paste: '- {restriction_id: d7e553ad701e, lake_id: 942102286, note: "Seymour Lake -> Seymour Lake (PLSS range direction flipped
     (T5N R9W s27,34 -> T5N R9E s27,34))"}'
 - restriction_id: 9843d41d8360
@@ -2389,6 +2646,14 @@ suggested_matches:
     score: 1.0
     how: same or similar name elsewhere in the county
     km_from_section: 167.7
+  - lake_id: 188838446
+    name: Coldwater River
+    county: Kent
+    township: Bowne Township
+    area_acres: 106.7
+    score: 0.0
+    how: lake inside the cited section (no name match)
+    km_from_section: 2.9
   paste: '- {restriction_id: 9843d41d8360, lake_id: 942102286, note: "Seymour Lake -> Seymour Lake (PLSS range direction flipped
     (T5N R9W s27,34 -> T5N R9E s27,34))"}'
 - restriction_id: a4be402af912
@@ -2613,6 +2878,14 @@ suggested_matches:
   plss: T42N R16W s35
   hints: []
   candidates:
+  - lake_id: 1556676312
+    name: Indian River
+    county: Schoolcraft
+    township: Hiawatha Township
+    area_acres: 91.9
+    score: 0.4
+    how: name match near the cited section
+    km_from_section: 1.4
   - lake_id: 1591213955
     name: Indian Lake
     county: Schoolcraft
@@ -2621,7 +2894,7 @@ suggested_matches:
     score: 0.233
     how: name match near the cited section
     km_from_section: 4.7
-  paste: '- {restriction_id: 2cc483daa2bf, lake_id: 1591213955, note: "Portion Near Indian Lake -> Indian Lake (name match
+  paste: '- {restriction_id: 2cc483daa2bf, lake_id: 1556676312, note: "Portion Near Indian Lake -> Indian River (name match
     near the cited section)"}'
 - restriction_id: 04710580cc05
   lake_name_raw: Lake St. Clair
@@ -2633,6 +2906,25 @@ suggested_matches:
   hints: []
   candidates: []
   paste: null
+- restriction_id: 23d9d324bcaa
+  lake_name_raw: Channel Between Big and Little Omena Lake
+  county: St. Joseph
+  township: Sherman Township
+  rule_id: WC-75-97-001
+  restriction_type: slow_no_wake
+  plss: T7S R10W s24
+  hints: []
+  candidates:
+  - lake_id: 241497392
+    name: Omena Lake
+    county: St. Joseph
+    township: Sherman Township
+    area_acres: 125.2
+    score: 0.367
+    how: name match near the cited section
+    km_from_section: 1.0
+  paste: '- {restriction_id: 23d9d324bcaa, lake_id: 241497392, note: "Channel Between Big and Little Omena Lake -> Omena Lake
+    (name match near the cited section)"}'
 - restriction_id: 3243e450d382
   lake_name_raw: Little Three Mile Lake and Portion of Three Mile Lake
   county: Van Buren
@@ -2768,6 +3060,14 @@ suggested_matches:
   plss: T1S R8E s23
   hints: []
   candidates:
+  - lake_id: 1846232660
+    name: Middle River Rouge
+    county: Wayne
+    township: Plymouth Township
+    area_acres: 14.6
+    score: 0.0
+    how: lake inside the cited section (no name match)
+    km_from_section: 0.4
   - lake_id: 1697063160
     name: Middle Rouge River
     county: Wayne
@@ -2786,54 +3086,6 @@ suggested_matches:
     km_from_section: 0.9
   paste: null
 confirm_low_confidence:
-- restriction_id: b4fcb161b418
-  lake_name_raw: Torch River
-  county: Antrim
-  township: Milton Township
-  rule_id: R 281.705.2
-  plss: T28N R8W s6,7,18; T28N R8W s18
-  matched:
-    lake_id: 1599536398
-    name: Torch Lake
-    county: Antrim
-    township: Milton Township
-    area_acres: 18713.7
-    score: 0.5
-    how: tokens+plss
-    km_from_section: null
-  reject: '- {restriction_id: b4fcb161b418, lake_id: 1599536398}'
-- restriction_id: '836260427419'
-  lake_name_raw: Thornapple River
-  county: Barry
-  township: Hastings Township
-  rule_id: R 281.708.2
-  plss: T3N R8W s25,26
-  matched:
-    lake_id: 877978748
-    name: Thornapple Lake
-    county: Barry
-    township: Castleton Township
-    area_acres: 415.9
-    score: 0.5
-    how: tokens+plss
-    km_from_section: null
-  reject: '- {restriction_id: 836260427419, lake_id: 877978748}'
-- restriction_id: 9ae846328a5b
-  lake_name_raw: Coldwater River
-  county: Branch
-  township: Ovid Township
-  rule_id: R 281.712.15
-  plss: T7S R6W s27
-  matched:
-    lake_id: 1011515634
-    name: Coldwater Lake
-    county: Branch
-    township: Ovid Township
-    area_acres: 1579.2
-    score: 0.5
-    how: tokens+plss
-    km_from_section: null
-  reject: '- {restriction_id: 9ae846328a5b, lake_id: 1011515634}'
 - restriction_id: 4b700bfc5a8b
   lake_name_raw: Hog Lake (Michiana)
   county: Branch
@@ -2850,22 +3102,6 @@ confirm_low_confidence:
     how: tokens+plss
     km_from_section: null
   reject: '- {restriction_id: 4b700bfc5a8b, lake_id: 2060018677}'
-- restriction_id: 1bb042c0e5ba
-  lake_name_raw: Nottawa Creek
-  county: Calhoun
-  township: Fredonia Township
-  rule_id: WC-13-92-001
-  plss: T3S R6W s34
-  matched:
-    lake_id: 1586438704
-    name: Nottawa Lake
-    county: Calhoun
-    township: Tekonsha Township
-    area_acres: 148.9
-    score: 0.5
-    how: tokens+plss
-    km_from_section: null
-  reject: '- {restriction_id: 1bb042c0e5ba, lake_id: 1586438704}'
 - restriction_id: 1e98bc6bd05f
   lake_name_raw: Lime Lake
   county: Cass
@@ -2930,22 +3166,6 @@ confirm_low_confidence:
     how: tokens+plss
     km_from_section: null
   reject: '- {restriction_id: ffab081e08d9, lake_id: 1626500875}'
-- restriction_id: 5221935c6039
-  lake_name_raw: Lake Margrethe Channel in Harbor Beach Subdivision
-  county: Crawford
-  township: Grayling Township
-  rule_id: R 281.720.1
-  plss: T26N R4W s8
-  matched:
-    lake_id: 1049986827
-    name: Lake Margrethe
-    county: Crawford
-    township: Grayling Township
-    area_acres: 1919.8
-    score: 0.5
-    how: tokens-trimmed+plss
-    km_from_section: null
-  reject: '- {restriction_id: 5221935c6039, lake_id: 1049986827}'
 - restriction_id: 881b305561bb
   lake_name_raw: Bobby Allen Lake
   county: Hillsdale
@@ -3026,38 +3246,22 @@ confirm_low_confidence:
     how: tokens+plss
     km_from_section: null
   reject: '- {restriction_id: 4f7231618f13, lake_id: 2072442533}'
-- restriction_id: 412a00cf2914
-  lake_name_raw: Manistee River
-  county: Manistee
-  township: Manistee Township
-  rule_id: R 281.751.5
-  plss: T22N R16W s31; T22N R17W s36
+- restriction_id: 0a82972bbf13
+  lake_name_raw: Fox River, East Branch
+  county: Luce
+  township: Columbus Township
+  rule_id: R 281.748.2
+  plss: T46N R12W s33; T46N R12W s18
   matched:
-    lake_id: 150701855
-    name: Manistee Lake
-    county: Manistee
-    township: Manistee Township
-    area_acres: 1062.1
+    lake_id: 128703111
+    name: East Branch Fox River
+    county: Luce
+    township: Lakefield Township
+    area_acres: 0.3
     score: 0.5
-    how: tokens+plss
+    how: tokens+river-county
     km_from_section: null
-  reject: '- {restriction_id: 412a00cf2914, lake_id: 150701855}'
-- restriction_id: 4fd148ddfb8f
-  lake_name_raw: Sable River Outlet
-  county: Mason
-  township: Hamlin Township
-  rule_id: R 281.753.4
-  plss: T19N R18W s20; T19N R18W s17
-  matched:
-    lake_id: 665005890
-    name: Big Sable River
-    county: Mason
-    township: Hamlin Township
-    area_acres: 4664.7
-    score: 0.5
-    how: tokens+plss
-    km_from_section: null
-  reject: '- {restriction_id: 4fd148ddfb8f, lake_id: 665005890}'
+  reject: '- {restriction_id: 0a82972bbf13, lake_id: 128703111}'
 - restriction_id: 0ba4544d5ddd
   lake_name_raw: Tubbs Lake (canals)
   county: Mecosta
@@ -3106,22 +3310,6 @@ confirm_low_confidence:
     how: tokens+plss
     km_from_section: null
   reject: '- {restriction_id: e09e7ca96333, lake_id: 1444808484}'
-- restriction_id: 4a2a5e7d874b
-  lake_name_raw: Stony Creek
-  county: Oceana
-  township: Benona Township
-  rule_id: WC-64-99-001
-  plss: T14N R18W s32; T13N R13W s6
-  matched:
-    lake_id: 366839893
-    name: Stony Lake
-    county: Oceana
-    township: Benona Township
-    area_acres: 270.2
-    score: 0.5
-    how: tokens+plss
-    km_from_section: null
-  reject: '- {restriction_id: 4a2a5e7d874b, lake_id: 366839893}'
 - restriction_id: 8aafd021fc20
   lake_name_raw: Perch Lake
   county: Otsego
@@ -3183,7 +3371,7 @@ confirm_low_confidence:
     township: Seney Township
     area_acres: 0.8
     score: 0.5
-    how: tokens+plss
+    how: tokens+river-plss
     km_from_section: null
   reject: '- {restriction_id: 5b03de61a6e7, lake_id: 296185386}'
 - restriction_id: f0262ed3263f
@@ -3199,7 +3387,7 @@ confirm_low_confidence:
     township: Seney Township
     area_acres: 0.8
     score: 0.5
-    how: tokens+county
+    how: tokens+river-county
     km_from_section: null
   reject: '- {restriction_id: f0262ed3263f, lake_id: 296185386}'
 - restriction_id: d96833f8f13c
@@ -3215,7 +3403,7 @@ confirm_low_confidence:
     township: Seney Township
     area_acres: 0.8
     score: 0.5
-    how: tokens+county
+    how: tokens+river-county
     km_from_section: null
   reject: '- {restriction_id: d96833f8f13c, lake_id: 296185386}'
 - restriction_id: 41a8a727b29e
@@ -3231,9 +3419,41 @@ confirm_low_confidence:
     township: Seney Township
     area_acres: 0.8
     score: 0.5
-    how: tokens+plss
+    how: tokens+river-plss
     km_from_section: null
   reject: '- {restriction_id: 41a8a727b29e, lake_id: 296185386}'
+- restriction_id: 6704317a43df
+  lake_name_raw: Fox River, East Branch and Tributaries
+  county: Schoolcraft
+  township: null
+  rule_id: WC-77-90-005
+  plss: T46N R13W s24
+  matched:
+    lake_id: 296185386
+    name: East Branch Fox River
+    county: Schoolcraft
+    township: Seney Township
+    area_acres: 0.8
+    score: 0.5
+    how: tokens-trimmed+river-plss
+    km_from_section: null
+  reject: '- {restriction_id: 6704317a43df, lake_id: 296185386}'
+- restriction_id: 5d6bd8d9eb20
+  lake_name_raw: Fox River, East Branch and Tributaries
+  county: Schoolcraft
+  township: null
+  rule_id: WC-77-90-005
+  plss: T46N R13W s24
+  matched:
+    lake_id: 296185386
+    name: East Branch Fox River
+    county: Schoolcraft
+    township: Seney Township
+    area_acres: 0.8
+    score: 0.5
+    how: tokens-trimmed+river-plss
+    km_from_section: null
+  reject: '- {restriction_id: 5d6bd8d9eb20, lake_id: 296185386}'
 - restriction_id: b214574f7602
   lake_name_raw: Muskelonge Lake
   county: Montcalm
@@ -3250,22 +3470,6 @@ confirm_low_confidence:
     how: fuzzy+county
     km_from_section: null
   reject: '- {restriction_id: b214574f7602, lake_id: 975302826}'
-- restriction_id: 795590a8217a
-  lake_name_raw: Thunder Bay River
-  county: Montmorency
-  township: Montmorency Township
-  rule_id: R 281.760.7
-  plss: T32N R3E s21,28,29,32; T32N R3E s21
-  matched:
-    lake_id: 2136304234
-    name: North Branch Thunder Bay River
-    county: Montmorency
-    township: Montmorency Township
-    area_acres: 13.2
-    score: 0.54
-    how: tokens+plss
-    km_from_section: null
-  reject: '- {restriction_id: 795590a8217a, lake_id: 2136304234}'
 - restriction_id: 29a791a4dab4
   lake_name_raw: Allens Lake
   county: Lenawee
@@ -3298,6 +3502,22 @@ confirm_low_confidence:
     how: fuzzy+county
     km_from_section: null
   reject: '- {restriction_id: 62de8130fb2c, lake_id: 362042189}'
+- restriction_id: d0f2a85df104
+  lake_name_raw: Vase Creek
+  county: Macomb
+  township: Chesterfield Township
+  rule_id: R 281.750.7
+  plss: T3N R14E s22,23,26,27,28,29
+  matched:
+    lake_id: 1042965961
+    name: Auvase Creek
+    county: Macomb
+    township: Chesterfield Township
+    area_acres: 4.7
+    score: 0.555
+    how: fuzzy+river-plss
+    km_from_section: null
+  reject: '- {restriction_id: d0f2a85df104, lake_id: 1042965961}'
 - restriction_id: 66ccc9dc3a13
   lake_name_raw: Miller Lake
   county: Lapeer
@@ -3314,22 +3534,86 @@ confirm_low_confidence:
     how: fuzzy+county
     km_from_section: null
   reject: '- {restriction_id: 66ccc9dc3a13, lake_id: 1002015490}'
-- restriction_id: 4e5667f6a9b6
-  lake_name_raw: PÈRe Marquette River
-  county: Mason
-  township: null
-  rule_id: R 281.753.8
-  plss: T18N R16W s23; T18N R18W s26
+- restriction_id: 22e0a173d52e
+  lake_name_raw: Muniscong River
+  county: Chippewa
+  township: Pickford Township
+  rule_id: R 281.717.10
+  plss: T44N R1E s13,14,15
   matched:
-    lake_id: 2092524898
-    name: Pere Marquette Lake
-    county: Mason
-    township: Pere Marquette Township
-    area_acres: 590.4
+    lake_id: 1974217446
+    name: Munuscong River
+    county: Chippewa
+    township: Rudyard Township
+    area_acres: 2.1
     score: 0.567
-    how: tokens+plss
+    how: fuzzy+river-county
     km_from_section: null
-  reject: '- {restriction_id: 4e5667f6a9b6, lake_id: 2092524898}'
+  reject: '- {restriction_id: 22e0a173d52e, lake_id: 1974217446}'
+- restriction_id: 22e0a173d52e
+  lake_name_raw: Muniscong River
+  county: Chippewa
+  township: Pickford Township
+  rule_id: R 281.717.10
+  plss: T44N R1E s13,14,15
+  matched:
+    lake_id: 1152929515
+    name: Munuscong River
+    county: Chippewa
+    township: Rudyard Township
+    area_acres: 1.8
+    score: 0.567
+    how: fuzzy+river-county
+    km_from_section: null
+  reject: '- {restriction_id: 22e0a173d52e, lake_id: 1152929515}'
+- restriction_id: 22e0a173d52e
+  lake_name_raw: Muniscong River
+  county: Chippewa
+  township: Pickford Township
+  rule_id: R 281.717.10
+  plss: T44N R1E s13,14,15
+  matched:
+    lake_id: 872915269
+    name: Munuscong River
+    county: Chippewa
+    township: Rudyard Township
+    area_acres: 0.6
+    score: 0.567
+    how: fuzzy+river-county
+    km_from_section: null
+  reject: '- {restriction_id: 22e0a173d52e, lake_id: 872915269}'
+- restriction_id: 22e0a173d52e
+  lake_name_raw: Muniscong River
+  county: Chippewa
+  township: Pickford Township
+  rule_id: R 281.717.10
+  plss: T44N R1E s13,14,15
+  matched:
+    lake_id: 1822392608
+    name: Munuscong River
+    county: Chippewa
+    township: Rudyard Township
+    area_acres: 0.6
+    score: 0.567
+    how: fuzzy+river-county
+    km_from_section: null
+  reject: '- {restriction_id: 22e0a173d52e, lake_id: 1822392608}'
+- restriction_id: 22e0a173d52e
+  lake_name_raw: Muniscong River
+  county: Chippewa
+  township: Pickford Township
+  rule_id: R 281.717.10
+  plss: T44N R1E s13,14,15
+  matched:
+    lake_id: 1231247086
+    name: Munuscong River
+    county: Chippewa
+    township: Kinross Township
+    area_acres: 0.3
+    score: 0.567
+    how: fuzzy+river-county
+    km_from_section: null
+  reject: '- {restriction_id: 22e0a173d52e, lake_id: 1231247086}'
 - restriction_id: 5c4c4892360b
   lake_name_raw: Little Bass (Dawes) Lake
   county: Montcalm
@@ -3346,6 +3630,22 @@ confirm_low_confidence:
     how: tokens+plss
     km_from_section: null
   reject: '- {restriction_id: 5c4c4892360b, lake_id: 435151294}'
+- restriction_id: 95998f247f81
+  lake_name_raw: Christiann Creek
+  county: Cass
+  township: Ontwa Township
+  rule_id: R 281.714.2
+  plss: T8S R15W s1,12; T8S R15W s12
+  matched:
+    lake_id: 1720594516
+    name: Christiana Creek
+    county: Cass
+    township: Ontwa Township
+    area_acres: 40.4
+    score: 0.569
+    how: fuzzy+river-plss
+    km_from_section: null
+  reject: '- {restriction_id: 95998f247f81, lake_id: 1720594516}'
 - restriction_id: 5c5a4739a337
   lake_name_raw: Blue Gill Lake
   county: Clare
@@ -3554,6 +3854,38 @@ confirm_low_confidence:
     how: fuzzy+county
     km_from_section: null
   reject: '- {restriction_id: d87a66accca6, lake_id: 1597223255}'
+- restriction_id: bba8138a7e5a
+  lake_name_raw: Autrain River
+  county: Alger
+  township: AuTrain Township
+  rule_id: R 281.702.1
+  plss: T47N R20W s32,33; T46N R20W s5
+  matched:
+    lake_id: 1199255962
+    name: Au Train River
+    county: Alger
+    township: Au Train Township
+    area_acres: 184.9
+    score: 0.581
+    how: fuzzy+river-plss
+    km_from_section: null
+  reject: '- {restriction_id: bba8138a7e5a, lake_id: 1199255962}'
+- restriction_id: 50f0b44e3e29
+  lake_name_raw: Autrain River
+  county: Alger
+  township: null
+  rule_id: R 281.702.3
+  plss: T45N R21W s25,36; T45N R20W s30,31
+  matched:
+    lake_id: 1671918489
+    name: Au Train River
+    county: Alger
+    township: Au Train Township
+    area_acres: 1489.1
+    score: 0.581
+    how: fuzzy+river-plss
+    km_from_section: null
+  reject: '- {restriction_id: 50f0b44e3e29, lake_id: 1671918489}'
 - restriction_id: 7dd83779f406
   lake_name_raw: Laplaisance Creek
   county: Monroe
@@ -3567,25 +3899,41 @@ confirm_low_confidence:
     township: Monroe Township
     area_acres: 26.9
     score: 0.586
-    how: fuzzy+county
+    how: fuzzy+river-township
     km_from_section: null
   reject: '- {restriction_id: 7dd83779f406, lake_id: 779578452}'
-- restriction_id: d56c00540b7d
-  lake_name_raw: Black River
-  county: Cheboygan
-  township: Grant Township, Aloha Township, Benton Township
-  rule_id: R 281.716.4
-  plss: T36N R1E s; T27N R1W s
+- restriction_id: 1004459e6da3
+  lake_name_raw: Pottawatomie Bayou
+  county: Ottawa
+  township: Grand Haven Township
+  rule_id: R 281.770.8
+  plss: T8N R16W s36
   matched:
-    lake_id: 1450049604
-    name: Little Black River
-    county: Cheboygan
-    township: Beaugrand Township
-    area_acres: 0.1
-    score: 0.7
-    how: qualifier+county
+    lake_id: 1660635291
+    name: Pottawattomie Bayou
+    county: Ottawa
+    township: Grand Haven Township
+    area_acres: 190.1
+    score: 0.586
+    how: fuzzy+river-plss
     km_from_section: null
-  reject: '- {restriction_id: d56c00540b7d, lake_id: 1450049604}'
+  reject: '- {restriction_id: 1004459e6da3, lake_id: 1660635291}'
+- restriction_id: 768912e2b449
+  lake_name_raw: Fox River and Tributaries
+  county: Alger
+  township: Burt Township
+  rule_id: WC-02-90-001
+  plss: null
+  matched:
+    lake_id: 2049502680
+    name: Little Fox River
+    county: Alger
+    township: Burt Township
+    area_acres: 1.0
+    score: 0.7
+    how: qualifier-trimmed+river-township
+    km_from_section: null
+  reject: '- {restriction_id: 768912e2b449, lake_id: 2049502680}'
 - restriction_id: b09157899754
   lake_name_raw: Big Blue Lake
   county: Kalkaska

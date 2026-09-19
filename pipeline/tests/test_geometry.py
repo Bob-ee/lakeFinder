@@ -11,6 +11,7 @@ import json
 import math
 
 import geopandas as gpd
+import numpy as np
 import pytest
 import shapely
 from shapely.geometry import LineString, Polygon
@@ -170,16 +171,21 @@ def test_largest_part_picks_the_biggest_polygon():
     assert geometry.largest_part(multi).equals(a)
 
 
-def test_load_lakes_filters_type_names_and_small_unnamed(fixtures_dir):
-    """The GIS sample has 2 named lakes, 1 tiny unnamed lake, a river and a swamp."""
+def test_load_lakes_keeps_lakes_and_rivers_and_drops_swamps(fixtures_dir):
+    """The GIS sample has 2 named lakes, 1 tiny unnamed lake, a named river and a swamp."""
     sample = fixtures_dir / "gis" / "hydrography_polygons.sample.json"
     kept = geometry.load_lakes(sample, min_unnamed_acres=20.0)
-    assert sorted(n for n in kept["name"] if n) == ["Hidden Lake", "Lake Ahmik"]
-    assert len(kept) == 2  # the 1.9-acre unnamed lake, the river and the swamp are all dropped
+    assert sorted(n for n in kept["name"] if n) == ["Hidden Lake", "Lake Ahmik", "Siskiwit River"]
+    assert len(kept) == 3  # the 1.9-acre unnamed lake and the swamp are dropped
     assert kept["name"].notna().all()
+    assert dict(zip(kept["name"], kept["kind"], strict=True)) == {
+        "Hidden Lake": "lake",
+        "Lake Ahmik": "lake",
+        "Siskiwit River": "river",  # a 3-acre named river polygon is kept, like a named lake
+    }
 
     with_small = geometry.load_lakes(sample, min_unnamed_acres=0.5)
-    assert len(with_small) == 3
+    assert len(with_small) == 4
     assert with_small["name"].isna().sum() == 1  # padded " " became None, not the string " "
 
 
@@ -225,3 +231,83 @@ def test_run_writes_both_parquets(lake_fixtures, tmp_path, monkeypatch):
     circle_id = int(lakes[lakes["name"] == "circle"].iloc[0]["id"])
     assert circle_id in set(usable["id"])
     assert int(rect["id"]) not in set(usable["id"])
+
+
+# --- rivers -------------------------------------------------------------------
+#
+# `river_meander.geojson` is a hand-built 80 m wide channel: a 600 m amplitude sine meander, then a
+# dead-straight 5,000 m east-west limb, then a quarter turn into a 4,000 m north-south limb, with
+# bank noise on both sides so no stretch of boundary is a straight edge. 1,500 vertices.
+
+
+@pytest.fixture
+def meander_river(fixtures_dir):
+    gdf = gpd.read_file(fixtures_dir / "lakes" / "river_meander.geojson").to_crs(geometry.MEASURE_CRS)
+    return gdf.geometry.iloc[0]
+
+
+def test_sweep_finds_the_straight_reach_of_a_sinuous_river(meander_river):
+    """The answer a pilot needs is the 5,000 m straight limb, plus a little into the bends."""
+    length_m, a, b = geometry.sweep_longest_reach(meander_river)
+    assert 5000 <= length_m <= 6000
+    assert geometry._covers_segment(meander_river, np.asarray(a), np.asarray(b))
+
+
+def test_vertex_pair_chord_collapses_on_a_river_but_the_sweep_does_not(meander_river):
+    """Why rivers need their own measurement.
+
+    `longest_chord` ranks pairs of *simplified boundary vertices*. On a meander nothing survives
+    along a reach, so the answer is a cliff: it depends on which handful of vertices Douglas-Peucker
+    happened to keep, and one step of thinning takes it from 5,525 m to 275 m. The scan-line sweep
+    does not use boundary vertices at all, so it is flat across the same range -- which is what makes
+    it safe on the real 14,000-vertex Muskegon River polygon at the production budget of 200.
+    """
+    sweep = geometry.sweep_longest_reach(meander_river)[0]
+    chords = [geometry.longest_chord(meander_river, mv, 1000)[0] for mv in (200, 120, 80, 40)]
+    sweeps = [geometry.sweep_longest_reach(meander_river)[0] for _ in range(2)]
+
+    assert min(chords) < 0.1 * sweep  # at least one budget collapses to under a tenth
+    assert max(chords) <= sweep * 1.01
+    assert sweeps[0] == sweeps[1]
+    for mv in (200, 120, 80, 40):
+        _, a, b = geometry.longest_chord(meander_river, mv, 1000)
+        assert meander_river.covers(LineString([a, b]))  # never over land, only short
+
+
+def test_longest_reach_takes_whichever_measurement_is_longer(meander_river, lake_fixtures):
+    directory, expected = lake_fixtures
+    assert geometry.longest_reach(meander_river)[0] == pytest.approx(
+        geometry.sweep_longest_reach(meander_river)[0]
+    )
+    # On a convex lake the vertex-pair chord is exact and wins; the sweep must not drag it down.
+    circle = _load_projected(directory / "circle.geojson")
+    assert geometry.longest_reach(circle)[0] * FT_PER_M == pytest.approx(
+        expected["circle"]["chord_ft"], rel=TOL
+    )
+
+
+def test_scan_longest_run_matches_the_shapely_sampler_on_a_rectangle(lake_fixtures):
+    """The scan-line primitive and the shapely intersection must measure the same thing."""
+    directory, _ = lake_fixtures
+    rect = geometry.largest_part(_load_projected(directory / "rect30.geojson"))
+    edges = geometry.part_edges(rect)
+    minx, miny, maxx, maxy = rect.bounds
+    run = geometry.scan_longest_run(edges, spacing=5.0)[0]
+    assert run == pytest.approx(geometry._longest_segment(rect.intersection(
+        LineString([(minx - 1, (miny + maxy) / 2), (maxx + 1, (miny + maxy) / 2)])
+    )), rel=0.05)
+
+
+def test_extent_by_bearing_needs_river_spacing_on_a_river(meander_river):
+    """40 lines across a 17 km bounding box is one line per 425 m; an 80 m channel falls between them."""
+    convergence = float(geometry.meridian_convergence_deg(-84.659, 43.235))
+    default = geometry.extent_by_bearing(meander_river, convergence)
+    adaptive = geometry.extent_by_bearing(
+        meander_river, convergence, spacing_m=geometry.scan_spacing(geometry.largest_part(meander_river))
+    )
+    assert len(adaptive) == 16 and adaptive[:8] == adaptive[8:]
+    # Both limbs show up only with river spacing; the fixed-count sampler reads them as nearly dry.
+    assert adaptive[0] > 3000 and adaptive[4] > 3000        # north-south limb, east-west limb
+    assert max(adaptive) > 3 * max(default[0], default[4])
+    # It is the same measurement, so a denser grid can only find longer runs, never shorter ones.
+    assert all(a >= d - 1 for a, d in zip(adaptive, default, strict=True))

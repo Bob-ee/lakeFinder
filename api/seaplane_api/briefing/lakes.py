@@ -1,7 +1,12 @@
 """Candidate lakes and the per-lake water score (design 3.3).
 
-Candidate filter: verdict `clear` or `conditional`, within `radius_nm` of the home airport by
-great-circle distance, `chord_ft >= min_run_ft`, and (optionally) a non-null `access`.
+Candidate filter: verdict `clear` or `conditional`, `kind` lake (see below), within `radius_nm` of the
+home airport by great-circle distance, `chord_ft >= min_run_ft`, and (optionally) a non-null `access`.
+
+**Rivers are not ranked yet.** `index.json` carries `kind: "river"` polygons whose `chord_ft` is the longest
+straight reach, but says nothing about width: the first run after rivers landed ranked Otter Creek and Halfway
+Creek as nearby water. They come back with the per-point wave field (`docs/big-water-design.md`), where a
+point's `run_by_bearing` is measured through usable water. A missing `kind` means lake (older packs).
 
 **Forecast points are snapped to a 0.1 deg grid.** A 40 nm radius around Pontiac leaves ~310
 candidates, which would be seven Open-Meteo calls of 50 points; on a 0.1 deg grid (about 6 nm north-
@@ -99,6 +104,8 @@ def select_candidates(
     out: list[Candidate] = []
     for lake in index:
         if lake.get("verdict") not in ("clear", "conditional"):
+            continue
+        if lake.get("kind", "lake") == "river":
             continue
         chord = lake.get("chord_ft") or 0.0
         if chord < min_run_ft:

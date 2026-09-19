@@ -5,11 +5,23 @@ Output: `data/work/lakes.parquet` and `data/work/usable_water.parquet` (GeoParqu
 
 What it keeps
 -------------
-`TYPE == 'lake'` only (the layer's other values are `river` and `swamp`). `NAME` is space-padded in
-the source, so it is stripped and turned into `None` when blank. Of the 57,780 lake polygons we keep
-**every named lake (10,284) plus unnamed lakes of at least 20 acres**; the rest are sub-20-acre
-unnamed ponds that would bloat `index.json` past its 5 MB target without ever being landable or
-searchable. The threshold is `--min-unnamed-acres`.
+`TYPE in ('lake', 'river')` (the layer's remaining value is `swamp`), recorded as the contract's
+`kind` column. `NAME` is space-padded in the source, so it is stripped and turned into `None` when
+blank. Of the 57,780 lake polygons and 2,043 river polygons we keep **every named one plus unnamed
+ones of at least 20 acres**; the rest are sub-20-acre unnamed ponds and river slivers that would
+bloat `index.json` past its 5 MB target without ever being landable or searchable. The threshold is
+`--min-unnamed-acres`. Rivers keep the same filter on purpose even though their median named polygon
+is only 4.8 acres: a small polygon is still the thing a DNR river rule has to attach to, and dropping
+it would silently drop the rule (`kind: "river"` polygons are 1,780 of the ~12,560 kept rows).
+
+Everything the layer types `lake` stays `kind: "lake"`, including the ~513 impoundments it names
+after a river ("Au Sable River", "Cornwall Creek Flooding"); `match` treats those as river-named lake
+polygons rather than reclassifying them.
+
+`counties` / `townships` list every county and minor civil division the polygon *intersects*, not the
+one holding its centroid: a river polygon runs through several of both, and the matcher narrows a
+river rule to a reach with them. `county` / `township` stay centroid-based (they are what the client
+shows, and changing them would move lake ids, which hash `name_norm|lat|lon`).
 
 Measurement CRS is EPSG:3078 (NAD83 / Michigan Oblique Mercator, metres) -- the layer's own native
 projection. Centroids, bboxes and stored geometry are WGS84.
@@ -23,6 +35,17 @@ wins. Work is capped per lake (`--max-candidates`, and 300 for lakes over 5,000 
 answer is almost always the first candidate). If no candidate is fully inside (rare, heavily
 concave lakes), the top candidates are intersected with the polygon and the longest interior piece
 is used, which is still a true interior chord.
+
+That vertex-pair search is exact enough for a lake, where the answer is a near-diameter, but it
+collapses on a **river**: 200 vertices out of the Muskegon River's 13,774 leave no pair lying along
+any one straight reach, so every long candidate crosses a bend, fails `covers`, and the fallback
+returns a short interior piece (measured: 1,871 ft against a real 4,643 ft reach; the big rivers came
+in 2-4x short). River polygons therefore also get `sweep_longest_reach`, a rotating scan-line sweep
+that finds the longest straight *reach* directly, and `chord_ft` is the longer of the two -- the
+vertex-pair answer still wins on the wide, lake-like river polygons where a corner-to-corner chord
+beats any axis-aligned run. Both are true interior segments either way: the scan line is clipped to
+the polygon's own interior, and `reduce_ring` only ever drops boundary vertices, never invents ones
+that could put a chord over land.
 """
 from __future__ import annotations
 
@@ -53,6 +76,21 @@ BIG_LAKE_CANDIDATES = 300
 EXTENT_BEARING_BINS = 16
 EXTENT_MIN_CHORD_FT = 1000.0
 EXTENT_SAMPLES = 40
+
+KINDS = ("lake", "river")
+
+#: Scan-line sweep (rivers only). Orientation is searched at `SWEEP_STEP_DEG`, then the best few
+#: orientations are refined, because a 20,000 ft reach in a 200 ft channel is missed by 1.5 deg.
+SWEEP_STEP_DEG = 3.0
+SWEEP_REFINE_TOP = 3
+SWEEP_REFINE_DEG = 1.5
+SWEEP_REFINE_STEP_DEG = 0.25
+#: Scan lines are spaced at half the polygon's mean width (2 * area / perimeter) so at least one
+#: line runs near the centre of any reach, with a floor and a cap to bound the work.
+SCAN_SPACING_FRACTION = 0.5
+SCAN_MIN_SPACING_M = 8.0
+SCAN_MIN_LINES = 40
+SCAN_MAX_LINES = 3000
 
 _GEOD = Geod(ellps="WGS84")
 _MEASURE_PROJ = Proj(MEASURE_CRS)
@@ -149,6 +187,140 @@ def longest_chord(poly, max_vertices: int = 200, max_candidates: int = 1000) -> 
     return best
 
 
+# --- scan-line runs ------------------------------------------------------------
+
+
+def part_edges(part) -> np.ndarray:
+    """`(N, 2, 2)`: every boundary segment of `part` (exterior ring and holes) as (start, end)."""
+    rings = [part.exterior, *part.interiors]
+    segs = []
+    for ring in rings:
+        coords = np.asarray(ring.coords, dtype=float)
+        if len(coords) < 2:
+            continue
+        segs.append(np.stack([coords[:-1], coords[1:]], axis=1))
+    if not segs:
+        return np.empty((0, 2, 2), dtype=float)
+    return np.concatenate(segs, axis=0)
+
+
+def rotate_points(points: np.ndarray, deg: float, origin: np.ndarray) -> np.ndarray:
+    """Counter-clockwise rotation about `origin`, matching `shapely.affinity.rotate`'s convention."""
+    a = np.radians(deg)
+    ca, sa = np.cos(a), np.sin(a)
+    d = points - origin
+    return np.stack([d[..., 0] * ca - d[..., 1] * sa, d[..., 0] * sa + d[..., 1] * ca], axis=-1) + origin
+
+
+def scan_spacing(part) -> float:
+    """Scan-line spacing for `part`: half its mean width (`2 * area / perimeter`), floored."""
+    perimeter = float(part.length)
+    width = 2.0 * float(part.area) / perimeter if perimeter > 0 else 0.0
+    return max(width * SCAN_SPACING_FRACTION, SCAN_MIN_SPACING_M)
+
+
+def scan_longest_run(edges: np.ndarray, spacing: float, max_lines: int = SCAN_MAX_LINES):
+    """Longest horizontal interior segment over evenly spaced scan lines. `(length, x1, x2, y)`.
+
+    A classic even-odd scan conversion, vectorized: every boundary segment is assigned the scan
+    lines it spans (half-open in y, so a shared vertex is counted once), the crossing abscissae are
+    sorted per line, and consecutive pairs starting at an even position are interior. Cost is
+    O(crossings), not O(edges x lines), which is what makes a 14,000-vertex river polygon cheap.
+    """
+    if len(edges) == 0:
+        return 0.0, 0.0, 0.0, 0.0
+    y1, y2 = edges[:, 0, 1], edges[:, 1, 1]
+    ylo, yhi = np.minimum(y1, y2), np.maximum(y1, y2)
+    lo, hi = float(ylo.min()), float(yhi.max())
+    if not np.isfinite(lo) or not np.isfinite(hi) or hi <= lo:
+        return 0.0, 0.0, 0.0, 0.0
+    n = int(np.clip(np.ceil((hi - lo) / max(spacing, 1e-9)), SCAN_MIN_LINES, max_lines))
+    ys = lo + (np.arange(n) + 0.5) * (hi - lo) / n
+
+    first = np.searchsorted(ys, ylo, side="left")
+    last = np.searchsorted(ys, yhi, side="left")
+    counts = np.maximum(last - first, 0)
+    total = int(counts.sum())
+    if total == 0:
+        return 0.0, 0.0, 0.0, 0.0
+    edge_idx = np.repeat(np.arange(len(edges)), counts)
+    base = np.repeat(np.cumsum(counts) - counts, counts)
+    line_idx = np.repeat(first, counts) + (np.arange(total) - base)
+
+    e = edges[edge_idx]
+    yv = ys[line_idx]
+    x = e[:, 0, 0] + (yv - e[:, 0, 1]) * (e[:, 1, 0] - e[:, 0, 0]) / (e[:, 1, 1] - e[:, 0, 1])
+
+    order = np.lexsort((x, line_idx))
+    li, xs = line_idx[order], x[order]
+    pos = np.arange(total) - np.searchsorted(li, li, side="left")
+    interior = (pos[:-1] % 2 == 0) & (li[:-1] == li[1:])
+    if not interior.any():
+        return 0.0, 0.0, 0.0, 0.0
+    lengths = np.where(interior, xs[1:] - xs[:-1], -1.0)
+    k = int(np.argmax(lengths))
+    if lengths[k] <= 0:
+        return 0.0, 0.0, 0.0, 0.0
+    return float(lengths[k]), float(xs[k]), float(xs[k + 1]), float(ys[li[k]])
+
+
+def sweep_longest_reach(poly, spacing: float | None = None) -> tuple[float, tuple, tuple]:
+    """Longest straight interior segment of a sinuous polygon: `(length_m, (x1,y1), (x2,y2))`.
+
+    Rotates the polygon through `SWEEP_STEP_DEG` steps, scan-converts each orientation, then
+    refines the best `SWEEP_REFINE_TOP` orientations at `SWEEP_REFINE_STEP_DEG`. Unlike
+    `longest_chord` this does not need the endpoints to be boundary vertices, which is the whole
+    point on a river: the ends of a reach are wherever the bends cut it off.
+    """
+    part = largest_part(poly)
+    if part.is_empty:
+        return 0.0, (0.0, 0.0), (0.0, 0.0)
+    edges = part_edges(part)
+    if len(edges) == 0:
+        return 0.0, (0.0, 0.0), (0.0, 0.0)
+    origin = np.asarray(part.centroid.coords[0], dtype=float)
+    step = spacing if spacing is not None else scan_spacing(part)
+
+    def measure(angle: float):
+        length, x1, x2, y = scan_longest_run(rotate_points(edges, angle, origin), step)
+        return length, angle, x1, x2, y
+
+    coarse = [measure(a) for a in np.arange(0.0, 180.0, SWEEP_STEP_DEG)]
+    best = max(coarse, key=lambda r: r[0])
+    for _, angle, *_ in sorted(coarse, key=lambda r: -r[0])[:SWEEP_REFINE_TOP]:
+        for a in np.arange(angle - SWEEP_REFINE_DEG, angle + SWEEP_REFINE_DEG + 1e-9, SWEEP_REFINE_STEP_DEG):
+            cand = measure(float(a))
+            if cand[0] > best[0]:
+                best = cand
+    length, angle, x1, x2, y = best
+    if length <= 0:
+        return 0.0, (0.0, 0.0), (0.0, 0.0)
+    ends = rotate_points(np.array([[x1, y], [x2, y]]), -angle, origin)
+    if not _covers_segment(part, ends[0], ends[1]):
+        # Even-odd scan conversion assumes a valid ring; 11 of the state's river polygons are not.
+        # Rather than publish a reach that might cross land, drop back to the vertex-pair chord,
+        # which is checked against the polygon itself.
+        return 0.0, (0.0, 0.0), (0.0, 0.0)
+    return float(length), tuple(ends[0]), tuple(ends[1])
+
+
+def _covers_segment(part, a: np.ndarray, b: np.ndarray, inset_m: float = 0.01) -> bool:
+    """Is the segment inside `part`? Pulled `inset_m` off both ends, which sit on the boundary."""
+    d = b - a
+    n = float(np.hypot(d[0], d[1]))
+    if n <= 2 * inset_m:
+        return True
+    u = d / n
+    return bool(part.covers(LineString([a + u * inset_m, b - u * inset_m])))
+
+
+def longest_reach(poly, max_vertices: int = 200, max_candidates: int = 1000) -> tuple[float, tuple, tuple]:
+    """`longest_chord` for a river: the better of the vertex-pair chord and the scan-line sweep."""
+    chord = longest_chord(poly, max_vertices, max_candidates)
+    sweep = sweep_longest_reach(poly)
+    return sweep if sweep[0] > chord[0] else chord
+
+
 # --- extent by bearing ---------------------------------------------------------
 
 
@@ -184,7 +356,9 @@ def _longest_segment(inter) -> float:
     return best
 
 
-def extent_by_bearing(poly, convergence_deg: float, n_samples: int = EXTENT_SAMPLES) -> list[int]:
+def extent_by_bearing(
+    poly, convergence_deg: float, n_samples: int = EXTENT_SAMPLES, spacing_m: float | None = None
+) -> list[int]:
     """16 ints (ft): longest straight segment inside `poly` (`MEASURE_CRS`) along each bearing bin.
 
     Bin `i` is centered on true bearing `i * 22.5` deg (0 = north). A segment has two ends, so only
@@ -192,10 +366,25 @@ def extent_by_bearing(poly, convergence_deg: float, n_samples: int = EXTENT_SAMP
     polygon (on the largest part, same as `longest_chord`) so the bearing becomes the x axis, sample
     `n_samples` evenly spaced horizontal lines across its height, and take the longest single inside
     segment per line -- not the sum of pieces (see `_longest_segment`).
+
+    `spacing_m` switches to the scan-line implementation with lines spaced that far apart instead of
+    `n_samples` across the whole height. Rivers need it: 40 lines across the Muskegon's 40 km bounding
+    box is one line every kilometre, and a 60 m wide channel falls between them, so the fixed-count
+    sampler reads a long river as nearly dry. It is the same measurement either way -- longest single
+    interior run per line -- so lakes keep the cheaper shapely path and their published values.
     """
     part = largest_part(poly)
     if part.is_empty:
         return [0] * EXTENT_BEARING_BINS
+    if spacing_m is not None:
+        edges = part_edges(part)
+        origin = np.asarray(part.centroid.coords[0], dtype=float)
+        scan = [
+            scan_longest_run(rotate_points(edges, k * 22.5 - convergence_deg - 90.0, origin), spacing_m)[0]
+            for k in range(8)
+        ]
+        ft = [round(v * FT_PER_M) for v in scan]
+        return ft + ft
     values = [0.0] * 8
     for k in range(8):
         rotated = _rotate_for_bearing(part, k * 22.5, convergence_deg)
@@ -223,9 +412,11 @@ def extent_by_bearing(poly, convergence_deg: float, n_samples: int = EXTENT_SAMP
 
 
 def load_lakes(path, min_unnamed_acres: float) -> gpd.GeoDataFrame:
-    """Read the hydrography layer, keep lakes, clean names, compute area, apply the size filter."""
+    """Read the hydrography layer, keep lakes and rivers, clean names, area, size filter, `kind`."""
     gdf = gpd.read_file(path, columns=["NAME", "NAME2", "TYPE", "ACRES"])
-    gdf = gdf[gdf["TYPE"].astype(str).str.strip() == "lake"].copy()
+    kind = gdf["TYPE"].astype(str).str.strip().str.lower()
+    gdf = gdf[kind.isin(KINDS)].copy()
+    gdf["kind"] = kind[kind.isin(KINDS)].to_numpy()
     name = gdf["NAME"].astype("string").str.strip()
     gdf["name"] = name.where(name.str.len() > 0, other=pd.NA)
     if gdf.crs is None:
@@ -234,49 +425,79 @@ def load_lakes(path, min_unnamed_acres: float) -> gpd.GeoDataFrame:
     proj = gdf.geometry.to_crs(MEASURE_CRS)
     gdf["area_acres"] = (proj.area / M2_PER_ACRE).round(2)
     keep = gdf["name"].notna() | (gdf["area_acres"] >= min_unnamed_acres)
-    dropped = int((~keep).sum())
+    kept = gdf[keep]
     log.info(
-        "hydrography: %d lake polygons -> keeping %d (%d named, %d unnamed >= %.0f acres); dropped %d small unnamed",
+        "hydrography: %d polygons -> keeping %d (%d named, %d unnamed >= %.0f acres); dropped %d small unnamed",
         len(gdf),
-        int(keep.sum()),
+        len(kept),
         int(gdf["name"].notna().sum()),
         int((keep & gdf["name"].isna()).sum()),
         min_unnamed_acres,
-        dropped,
+        int((~keep).sum()),
     )
-    return gdf[keep].reset_index(drop=True)
+    log.info(
+        "  by kind: %s",
+        ", ".join(f"{k}={v}" for k, v in sorted(kept["kind"].value_counts().items())),
+    )
+    return kept.reset_index(drop=True)
 
 
-def _join_boundaries(cfg: Config, centroids: gpd.GeoSeries) -> tuple[pd.Series, pd.Series]:
-    """Spatial-join lake centroids to county and civil-township names."""
+def _mcd_labels(mcd: gpd.GeoDataFrame) -> np.ndarray:
+    """"Rose Township" for a township row, "City of Wakefield" for a city row."""
+    return np.where(
+        mcd["TYPE"].astype(str).str.strip().str.lower() == "township",
+        mcd["NAME"].astype(str).str.strip() + " Township",
+        mcd["LABEL"].astype(str).str.strip(),
+    )
+
+
+def _intersecting(polys: gpd.GeoSeries, areas: gpd.GeoDataFrame, column: str) -> pd.Series:
+    """For each polygon, the sorted distinct `column` values of the areas it intersects."""
+    left = gpd.GeoDataFrame(geometry=polys.reset_index(drop=True), crs=MEASURE_CRS)
+    joined = gpd.sjoin(left, areas[[column, "geometry"]], how="left", predicate="intersects")
+    grouped = joined.groupby(level=0)[column].apply(
+        lambda s: sorted({str(v).strip() for v in s.dropna() if str(v).strip()})
+    )
+    return grouped.reindex(range(len(left))).apply(lambda v: v if isinstance(v, list) else [])
+
+
+def _join_boundaries(
+    cfg: Config, centroids: gpd.GeoSeries, polys: gpd.GeoSeries
+) -> tuple[pd.Series, pd.Series, pd.Series, pd.Series]:
+    """Centroid county/township (what the client shows) plus every county/MCD the polygon touches.
+
+    A river polygon runs through several counties and townships, and its centroid may sit in a
+    county the DNR rule never mentions, so `match` narrows river rules with the intersection lists.
+    """
     pts = gpd.GeoDataFrame(geometry=centroids, crs=MEASURE_CRS)
-    county = pd.Series([None] * len(pts), index=pts.index, dtype=object)
-    township = pd.Series([None] * len(pts), index=pts.index, dtype=object)
+    n = len(pts)
+    county = pd.Series([None] * n, index=pts.index, dtype=object)
+    township = pd.Series([None] * n, index=pts.index, dtype=object)
+    counties = pd.Series([[] for _ in range(n)], index=range(n), dtype=object)
+    townships = pd.Series([[] for _ in range(n)], index=range(n), dtype=object)
 
     cpath = gis.find_dataset(cfg, "counties")
     if cpath is None:
         log.warning("counties.geojson missing; county will be null (run `seaplane fetch`)")
     else:
-        counties = gpd.read_file(cpath).to_crs(MEASURE_CRS)
-        joined = gpd.sjoin(pts, counties[["NAME", "geometry"]], how="left", predicate="within")
+        src = gpd.read_file(cpath).to_crs(MEASURE_CRS)
+        src = src.assign(county_name=src["NAME"].astype(str).str.strip().str.title())
+        joined = gpd.sjoin(pts, src[["county_name", "geometry"]], how="left", predicate="within")
         joined = joined[~joined.index.duplicated(keep="first")]
-        county = joined["NAME"].astype(object).str.title().where(joined["NAME"].notna(), None)
+        county = joined["county_name"].where(joined["county_name"].notna(), None)
+        counties = _intersecting(polys, src, "county_name")
 
     tpath = gis.find_dataset(cfg, "civil_townships")
     if tpath is None:
         log.info("minor_civil_divisions.geojson missing; township stays null (it is optional)")
     else:
         mcd = gpd.read_file(tpath).to_crs(MEASURE_CRS)
-        label = np.where(
-            mcd["TYPE"].astype(str).str.strip().str.lower() == "township",
-            mcd["NAME"].astype(str).str.strip() + " Township",
-            mcd["LABEL"].astype(str).str.strip(),
-        )
-        mcd = mcd.assign(township=label)
+        mcd = mcd.assign(township=_mcd_labels(mcd))
         joined = gpd.sjoin(pts, mcd[["township", "geometry"]], how="left", predicate="within")
         joined = joined[~joined.index.duplicated(keep="first")]
         township = joined["township"].where(joined["township"].notna(), None)
-    return county, township
+        townships = _intersecting(polys, mcd, "township")
+    return county, township, counties, townships
 
 
 def run(cfg: Config, args) -> int:
@@ -296,9 +517,11 @@ def run(cfg: Config, args) -> int:
     gdf["lat"] = np.round(lat, 6)
     gdf["lon"] = np.round(lon, 6)
 
-    county, township = _join_boundaries(cfg, centroids)
+    county, township, counties, townships = _join_boundaries(cfg, centroids, proj)
     gdf["county"] = county.to_numpy()
     gdf["township"] = township.to_numpy()
+    gdf["counties"] = counties.to_numpy()
+    gdf["townships"] = townships.to_numpy()
 
     if cfg.counties:
         wanted = {c.lower() for c in cfg.counties}
@@ -312,8 +535,13 @@ def run(cfg: Config, args) -> int:
 
     gdf["name_norm"] = [ids.normalize_name(n) if isinstance(n, str) else "" for n in gdf["name"]]
 
-    # Stable order -> stable collision bumps across runs.
-    order = np.lexsort((gdf["lon"].to_numpy(), gdf["lat"].to_numpy(), gdf["name_norm"].to_numpy()))
+    # Stable order -> stable collision bumps across runs. `kind` is the primary key so every lake is
+    # numbered before any river: the lake subsequence, and therefore every existing lake id, is
+    # exactly what it was before rivers joined the table.
+    kind_rank = np.array([KINDS.index(k) for k in gdf["kind"]])
+    order = np.lexsort(
+        (gdf["lon"].to_numpy(), gdf["lat"].to_numpy(), gdf["name_norm"].to_numpy(), kind_rank)
+    )
     gdf = gdf.iloc[order].reset_index(drop=True)
     proj = gdf.geometry.to_crs(MEASURE_CRS)
     used: set[int] = set()
@@ -323,14 +551,19 @@ def run(cfg: Config, args) -> int:
     ]
 
     t0 = time.monotonic()
+    is_river = (gdf["kind"] == "river").to_numpy()
     lengths, p1, p2 = [], [], []
-    for geom, acres in zip(proj.to_numpy(), gdf["area_acres"].to_numpy(), strict=True):
+    for geom, acres, river in zip(proj.to_numpy(), gdf["area_acres"].to_numpy(), is_river, strict=True):
         cap = BIG_LAKE_CANDIDATES if acres > BIG_LAKE_ACRES else max_candidates
-        length, a, b = longest_chord(geom, max_vertices, cap)
+        measure = longest_reach if river else longest_chord
+        length, a, b = measure(geom, max_vertices, cap)
         lengths.append(length)
         p1.append(a)
         p2.append(b)
-    log.info("longest chord for %d lakes in %.1fs", len(gdf), time.monotonic() - t0)
+    log.info(
+        "longest chord for %d waterbodies (%d by river reach sweep) in %.1fs",
+        len(gdf), int(is_river.sum()), time.monotonic() - t0,
+    )
 
     p1 = np.array(p1, dtype=float).reshape(-1, 2)
     p2 = np.array(p2, dtype=float).reshape(-1, 2)
@@ -348,10 +581,13 @@ def run(cfg: Config, args) -> int:
     extents: list = [None] * len(gdf)
     proj_geoms = proj.to_numpy()
     for i in np.flatnonzero(qualifies):
-        extents[i] = extent_by_bearing(proj_geoms[i], float(convergence[i]))
+        # Rivers are scan-converted at their own width instead of 40 lines across the bbox; see
+        # `extent_by_bearing`. Lakes keep the fixed-count sampler, so their published values do not move.
+        spacing = scan_spacing(largest_part(proj_geoms[i])) if is_river[i] else None
+        extents[i] = extent_by_bearing(proj_geoms[i], float(convergence[i]), spacing_m=spacing)
     gdf["extent_by_bearing"] = extents
     log.info(
-        "extent_by_bearing for %d of %d lakes (chord >= %.0f ft) in %.1fs",
+        "extent_by_bearing for %d of %d waterbodies (chord >= %.0f ft) in %.1fs",
         int(qualifies.sum()), len(gdf), EXTENT_MIN_CHORD_FT, time.monotonic() - t1,
     )
 
@@ -363,7 +599,7 @@ def run(cfg: Config, args) -> int:
 
     cfg.work_dir.mkdir(parents=True, exist_ok=True)
     cols = [
-        "id", "name", "name_norm", "county", "township", "lat", "lon",
+        "id", "name", "name_norm", "kind", "county", "township", "counties", "townships", "lat", "lon",
         "minx", "miny", "maxx", "maxy", "area_acres", "chord_ft", "chord_bearing_deg",
         "extent_by_bearing", "geometry",
     ]
@@ -372,6 +608,9 @@ def run(cfg: Config, args) -> int:
     lakes_path = cfg.work_dir / "lakes.parquet"
     out.to_parquet(lakes_path, index=False)
 
+    # A reach narrower than 200 ft erodes to nothing under the 100 ft shore buffer, so most river
+    # polygons drop out here. That is the right answer, not a bug: there is no water on such a reach
+    # that is 100 ft off both banks. `_present` filters the empties.
     eroded = proj.buffer(-SHORE_BUFFER_M)
     usable = gpd.GeoDataFrame({"id": gdf["id"]}, geometry=eroded, crs=MEASURE_CRS).to_crs(WGS84)
     usable = usable[_present(usable.geometry)].reset_index(drop=True)
@@ -379,7 +618,7 @@ def run(cfg: Config, args) -> int:
     usable.to_parquet(usable_path, index=False)
 
     log.info(
-        "wrote %s (%d lakes) and %s (%d with a usable-water core) in %.1fs total",
+        "wrote %s (%d waterbodies) and %s (%d with a usable-water core) in %.1fs total",
         lakes_path, len(out), usable_path, len(usable), time.monotonic() - started,
     )
     return 0

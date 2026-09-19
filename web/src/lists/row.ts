@@ -1,3 +1,4 @@
+import { KIND_LABEL } from "../config";
 import type { Lake, Verdict } from "../types";
 import { el } from "../ui/format";
 
@@ -28,7 +29,10 @@ export function lakeRow(lake: Lake, opts: LakeRowOptions): HTMLElement {
 
   const text = el("span", "row-text");
   text.append(el("span", "row-name", lake.name ?? "Unnamed waterbody"));
-  const place = [lake.county, lake.township].filter(Boolean).join(" · ");
+  // "River · Ionia · Lyons Township": a river is digitized as several same-name polygons, so the
+  // place line is what tells two search hits apart (the reach length is added by the caller when
+  // even that is not enough).
+  const place = [KIND_LABEL[lake.kind], lake.county, lake.township].filter(Boolean).join(" · ");
   text.append(el("span", "row-place", place));
   if (opts.note != null) text.append(slot("row-note", opts.note));
 

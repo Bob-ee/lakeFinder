@@ -24,15 +24,15 @@ pytestmark = pytest.mark.skipif(
 
 LAT0, LON0 = 42.70, -83.60
 INDEX_FIELDS = {
-    "id", "name", "name_norm", "county", "township", "lat", "lon", "bbox",
+    "id", "name", "name_norm", "kind", "county", "township", "lat", "lon", "bbox",
     "area_acres", "chord_ft", "chord_bearing_deg", "verdict", "flags", "restriction_ids", "access",
 }
 
 
-def _lake(i, name, name_norm, chord_ft=None, extent_by_bearing=None):
+def _lake(i, name, name_norm, chord_ft=None, extent_by_bearing=None, kind="lake"):
     geom = box(LON0 + i * 0.05, LAT0, LON0 + i * 0.05 + 0.01, LAT0 + 0.01)
     return {
-        "id": 1000 + i, "name": name, "name_norm": name_norm, "county": "Oakland",
+        "id": 1000 + i, "name": name, "name_norm": name_norm, "kind": kind, "county": "Oakland",
         "township": "Rose Township", "lat": LAT0 + 0.005, "lon": LON0 + i * 0.05 + 0.005,
         "minx": LON0 + i * 0.05, "miny": LAT0, "maxx": LON0 + i * 0.05 + 0.01, "maxy": LAT0 + 0.01,
         "area_acres": 120.0 + i, "chord_ft": chord_ft if chord_ft is not None else 2500.0 + i,
@@ -204,7 +204,7 @@ def test_pmtiles_layers_and_properties(work_dir):
     lakes_layers = layers(cfg.out_dir / "lakes.pmtiles")
     assert [layer["id"] for layer in lakes_layers] == ["lakes"]
     fields = lakes_layers[0]["fields"]
-    assert set(fields) == {"id", "name", "verdict", "flags", "county"}
+    assert set(fields) == {"id", "name", "kind", "verdict", "flags", "county"}
     assert fields["id"] == "Number"
     assert lakes_layers[0]["minzoom"] == 6 and lakes_layers[0]["maxzoom"] == 14
 

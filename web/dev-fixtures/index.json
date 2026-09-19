@@ -3,6 +3,7 @@
     "id": 461406506,
     "name": "Lake Angelus",
     "name_norm": "angelus",
+    "kind": "lake",
     "county": "Oakland",
     "township": "City of Lake Angelus",
     "lat": 42.7095,
@@ -29,6 +30,7 @@
     "id": 1191379730,
     "name": "Big School Lot Lake",
     "name_norm": "big school lot",
+    "kind": "lake",
     "county": "Oakland",
     "township": "Rose Township",
     "lat": 42.7712,
@@ -55,6 +57,7 @@
     "id": 460478574,
     "name": "Cass Lake",
     "name_norm": "cass",
+    "kind": "lake",
     "county": "Oakland",
     "township": "West Bloomfield Township",
     "lat": 42.6091,
@@ -74,9 +77,66 @@
     "access": "Dodge Brothers #4 BAS"
   },
   {
+    "id": 442037361,
+    "name": "Huron River",
+    "name_norm": "huron river",
+    "kind": "river",
+    "county": "Oakland",
+    "township": "Milford Township",
+    "lat": 42.5772,
+    "lon": -83.6008,
+    "bbox": [
+      -83.6046,
+      42.5723,
+      -83.5976,
+      42.5827
+    ],
+    "area_acres": 30.5,
+    "chord_ft": 4214,
+    "chord_bearing_deg": 154,
+    "verdict": "restricted",
+    "flags": [
+      "reach_unresolved",
+      "no_public_access"
+    ],
+    "restriction_ids": [
+      "5df35ea27c29"
+    ],
+    "access": null
+  },
+  {
+    "id": 756544397,
+    "name": "Huron River",
+    "name_norm": "huron river",
+    "kind": "river",
+    "county": "Oakland",
+    "township": "Commerce Township",
+    "lat": 42.5622,
+    "lon": -83.512,
+    "bbox": [
+      -83.5133,
+      42.5585,
+      -83.5107,
+      42.567
+    ],
+    "area_acres": 16,
+    "chord_ft": 3171,
+    "chord_bearing_deg": 10,
+    "verdict": "restricted",
+    "flags": [
+      "reach_unresolved",
+      "no_public_access"
+    ],
+    "restriction_ids": [
+      "5df35ea27c29"
+    ],
+    "access": null
+  },
+  {
     "id": 22736109,
     "name": "Little School Lot Lake",
     "name_norm": "little school lot",
+    "kind": "lake",
     "county": "Oakland",
     "township": "Rose Township",
     "lat": 42.7791,
@@ -104,6 +164,7 @@
     "id": 223057208,
     "name": "Loon Lake",
     "name_norm": "loon",
+    "kind": "lake",
     "county": "Oakland",
     "township": "Wixom",
     "lat": 42.5451,
@@ -126,6 +187,7 @@
     "id": 1663026972,
     "name": "Mud Lake",
     "name_norm": "mud",
+    "kind": "lake",
     "county": "Oakland",
     "township": "Rose Township",
     "lat": 42.7398,
@@ -153,6 +215,7 @@
     "id": 368858589,
     "name": "Pontiac Lake",
     "name_norm": "pontiac",
+    "kind": "lake",
     "county": "Oakland",
     "township": "Waterford Township",
     "lat": 42.684,
@@ -177,6 +240,7 @@
     "id": 260200585,
     "name": "Round Lake",
     "name_norm": "round",
+    "kind": "lake",
     "county": "Oakland",
     "township": "Springfield Township",
     "lat": 42.7541,
@@ -199,6 +263,7 @@
     "id": 314179109,
     "name": "Union Lake",
     "name_norm": "union",
+    "kind": "lake",
     "county": "Oakland",
     "township": "Commerce Township",
     "lat": 42.6123,
@@ -223,6 +288,7 @@
     "id": 1487578877,
     "name": null,
     "name_norm": "",
+    "kind": "lake",
     "county": "Oakland",
     "township": "Highland Township",
     "lat": 42.6512,

@@ -197,6 +197,7 @@ def build_index(lakes: gpd.GeoDataFrame, verdicts: dict, overlays: dict, by_lake
                 "id": lake_id,
                 "name": str(name) if name else None,
                 "name_norm": _clean(row.name_norm) or "",
+                "kind": _clean(getattr(row, "kind", None)) or "lake",
                 "county": _clean(row.county),
                 "township": _clean(row.township),
                 "lat": _clean(row.lat),
@@ -245,9 +246,12 @@ def build_restrictions(records: list[dict], matches: list[dict], synthetic: list
     """
     lake_ids: dict[str, list[int]] = {}
     confidence: dict[str, float] = {}
+    unresolved: set[str] = set()
     for m in matches:
         lake_ids.setdefault(m["restriction_id"], []).append(int(m["lake_id"]))
         confidence[m["restriction_id"]] = min(confidence.get(m["restriction_id"], 1.0), float(m["score"]))
+        if m.get("reach_unresolved"):
+            unresolved.add(m["restriction_id"])
     out: dict[str, dict] = {}
     for rec in records:
         if rec.get("status", "active") != "active":
@@ -259,6 +263,8 @@ def build_restrictions(records: list[dict], matches: list[dict], synthetic: list
             published["match_confidence"] = round(confidence[rid], 3)
             if confidence[rid] < match_mod.ACCEPT:
                 published["needs_review"] = True
+        if rid in unresolved:
+            published["reach_unresolved"] = True
         out[rid] = published
     for rec in synthetic:
         published = dict(rec)
@@ -405,6 +411,7 @@ def run(cfg: Config, args) -> int:
                         "id": int(row.id),
                         "lake_id": int(row.id),
                         "name": by_id[int(row.id)]["name"],
+                        "kind": by_id[int(row.id)]["kind"],
                         "verdict": by_id[int(row.id)]["verdict"],
                         "flags": ",".join(by_id[int(row.id)]["flags"]),
                         "county": by_id[int(row.id)]["county"],

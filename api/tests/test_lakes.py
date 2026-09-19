@@ -30,6 +30,20 @@ def test_candidate_filter_drops_restricted_lakes():
     assert {"Cass Lake", "Orchard Lake", "Pontiac Lake", "Union Lake", "Big Lake"} == names
 
 
+def test_candidate_filter_skips_rivers_until_the_wave_field_lands():
+    index = load("index_sample.json")
+    cass = next(lake for lake in index if lake["name"] == "Cass Lake")
+    river = {**cass, "id": 999, "name": "Otter Creek", "kind": "river"}
+    lake = {**cass, "id": 998, "name": "Tagged Lake", "kind": "lake"}
+    got = lakes_mod.select_candidates(
+        [*index, river, lake], home_lat=KPTK[0], home_lon=KPTK[1], radius_nm=40, min_run_ft=2000,
+        public_access_only=False, extents=None,
+    )
+    names = {c.name for c in got}
+    assert "Otter Creek" not in names
+    assert {"Tagged Lake", "Cass Lake"} <= names  # a missing kind means lake
+
+
 def test_candidate_filter_honours_min_run_and_radius_and_access():
     assert {c.name for c in _candidates(min_run_ft=9000)} == {"Cass Lake", "Pontiac Lake"}
     assert _candidates(radius_nm=2) == [c for c in _candidates() if c.distance_nm <= 2]

@@ -28,9 +28,17 @@ export type Flag =
   | "federal_overlay"
   | "needs_review"
   | "mac_pending"
+  /** A river rule the pipeline could not narrow to a reach; display only, never a verdict. */
+  | "reach_unresolved"
   | "user_verified"
   | "user_note"
   | "saved";
+
+/**
+ * Hydrography `TYPE`. Open on purpose: the Great Lakes and Lake St. Clair come from a different
+ * source and will add values, so the client must never assume this is exhaustive.
+ */
+export type WaterbodyKind = "lake" | "river" | (string & {});
 
 export interface TimeWindow {
   text: string;
@@ -74,6 +82,11 @@ export interface Restriction {
   parser: "regex" | "llm" | "manual";
   needs_review: boolean;
   lake_ids: number[];
+  /**
+   * Only present, and only true, when the rule names a river the pipeline could not narrow below
+   * the county: it covers some reach of each matched polygon, not all of it.
+   */
+  reach_unresolved?: boolean;
 }
 
 export type RestrictionIndex = Record<string, Restriction>;
@@ -83,6 +96,7 @@ export interface Lake {
   id: number;
   name: string | null;
   name_norm: string;
+  kind: WaterbodyKind;
   county: string;
   township: string | null;
   lat: number;

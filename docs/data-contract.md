@@ -70,7 +70,8 @@ One record per (lake mention, rule). `restrictions.json` is `{ "<restriction_id>
   "parser": "regex",                     // "regex" | "llm" | "manual"
   "needs_review": false,
   "lake_ids": [1234567],                 // build stage only; [] when unmatched
-  "match_confidence": 0.9                // build stage only; matcher score (< 0.8 also sets needs_review)
+  "match_confidence": 0.9,               // build stage only; matcher score (< 0.8 also sets needs_review)
+  "reach_unresolved": true               // build stage only, and only when true; see "Waterway matching"
 }
 ```
 
@@ -119,9 +120,31 @@ the federal overlay, with `parser: "manual"` and `source_url` pointing at the re
 
 ### Match stage outputs (`data/work/`)
 
-`matches.json`: `[{restriction_id, lake_id, score, method, needs_review}]`. `unmatched.json`: one row per active
-restriction with no acceptable lake, with `kind: "lake" | "waterway"` (rivers, creeks, channels, harbors, and bays have
-no lake polygon and are expected to stay unmatched) and a `reason`. `seaplane review` prints the lake-kind rows first.
+`matches.json`: `[{restriction_id, lake_id, score, method, needs_review, reach_unresolved?}]`. `unmatched.json`: one row
+per active restriction with no acceptable waterbody, with `kind: "lake" | "waterway"` and a `reason`. `seaplane review`
+prints the lake-kind rows first.
+
+### Waterway matching
+
+A restriction header names a **waterway** when it carries a river/creek/channel/canal/drain/bayou/harbor/bay word and
+does *not* end in a lake generic (`Lake`, `Pond`, `Reservoir`, `Flowage`, `Impoundment`, `Basin`), so
+`"Stoney Creek Lake"` stays a lake and `"Pine River"` is a waterway. The two sides never cross:
+
+- a **lake** header only ever scores against `kind: "lake"` polygons;
+- a **waterway** header only ever scores against `kind: "river"` polygons and the river-named `kind: "lake"`
+  polygons (impoundments the hydrography layer types as lakes but names `"Au Sable River"`, `"Cornwall Creek
+  Flooding"`).
+
+A waterway header may attach to **several** polygons, because one river is digitized as several polygons sharing one
+name (Grand River: 19, Sturgeon River: 29). Candidates are the same-name polygons that intersect the restriction's
+county (geometric, not centroid — a river polygon crosses county lines), all polygons tied at the best score are kept,
+and that set is then narrowed by, in order, the buffered PLSS section union and the restriction's township/city labels.
+When neither narrows it, every same-name polygon in the county is matched and the match carries
+`reach_unresolved: true`, which `build` copies onto the published restriction record and `classify` surfaces as the
+lake flag `reach_unresolved`. It means "the rule covers part of this river; read the rule text", not "unverified".
+
+Creeks, channels, canals, and bays with no polygon in the hydrography layer stay unmatched waterways, as do the Great
+Lakes and their connecting waters, which the layer does not contain at all.
 
 ## `rules/rules.json`
 
@@ -168,18 +191,19 @@ import { evaluateLake, evaluateAll, loadRules } from "./index.js";
 Verdict order: `restricted > conditional > unknown > clear`. A lake with no restrictions and a name is `clear`;
 a lake with no name is `unknown` (the pipeline sets `name: null` for unnamed polygons).
 
-Flags: `no_public_access`, `chord_below_minimum`, `federal_overlay`, `needs_review`, `mac_pending`, plus client-only
-`user_verified`, `user_note`, `saved`.
+Flags: `no_public_access`, `chord_below_minimum`, `federal_overlay`, `needs_review`, `mac_pending`,
+`reach_unresolved` (added by the pipeline's `classify` stage, not by the engine; see "Waterway matching"), plus
+client-only `user_verified`, `user_note`, `saved`.
 
 CLI for the pipeline: `node rules/engine/cli.js --rules rules/rules.json < input.json > output.json` where input is
 `{"lakes": [...], "restrictions": {"<lake_id>": [records]}}` and output is an array of the result objects above.
 
 ## `index.json` (stage `build`)
 
-A JSON array, target under 5 MB. One entry per named lake polygon (plus unnamed ones over 20 acres).
+A JSON array, target under 5 MB. One entry per named hydrography polygon (plus unnamed ones over 20 acres).
 
 ```jsonc
-{"id": 1234567, "name": "Big School Lot Lake", "name_norm": "big school lot",
+{"id": 1234567, "name": "Big School Lot Lake", "name_norm": "big school lot", "kind": "lake",
  "county": "Oakland", "township": "Rose Township",
  "lat": 42.7712, "lon": -83.5901, "bbox": [-83.60, 42.76, -83.58, 42.78],
  "area_acres": 41.2, "chord_ft": 2350, "chord_bearing_deg": 47,
@@ -189,11 +213,20 @@ A JSON array, target under 5 MB. One entry per named lake polygon (plus unnamed 
 
 `chord_bearing_deg` is 0–179 (a chord has two directions; the client shows both).
 
+`kind` is `"lake"` or `"river"`, straight from the hydrography layer's `TYPE`. Everything the layer types `lake`
+stays `"lake"`, including the ~500 impoundments it names after a river (`"Au Sable River"`). The value is open: a
+later source adds `"great_lake"` and `"connecting_water"` for the Great Lakes and Lake St. Clair, which this layer
+does not contain. `kind` does not change verdict logic — the same DNR local watercraft controls apply — it only
+labels the waterbody in the client and gates which restrictions may match it (see "Waterway matching").
+
+For a `"river"` polygon, `chord_ft` / `chord_bearing_deg` are the longest straight *reach* of open water inside the
+polygon, which is the number a pilot needs on a sinuous river.
+
 ## Tiles (stage `build`)
 
 | file | layer | zooms | properties |
 |---|---|---|---|
-| `lakes.pmtiles` | `lakes` | 6–14 | `id` (int, also feature id), `name`, `verdict`, `flags` (comma-joined), `county` |
+| `lakes.pmtiles` | `lakes` | 6–14 | `id` (int, also feature id), `name`, `kind`, `verdict`, `flags` (comma-joined), `county` |
 | `usable_water.pmtiles` | `usable_water` | 12–14 | `id` |
 | `overlays.pmtiles` | `federal`, `airspace`, `bas`, `airports` | 6–14 | `name`, `kind`, plus source-specific |
 | `basemap.pmtiles` | Protomaps schema | 0–14 | Protomaps basemap layers |
@@ -329,6 +362,9 @@ Unknown keys are rejected; missing keys are filled from the defaults, so an olde
  "links": {"metar": "https://…", "taf": "https://…", "forecast": "https://…"},
  "errors": ["nws: timeout"]}
 ```
+
+Briefing candidates are `kind: "lake"` only for now: a river's `chord_ft` is its longest straight reach and says
+nothing about width, so rivers return with the per-point wave field (`docs/big-water-design.md`).
 
 Lake rows are **water-only**: `score` and `limiting` come from waves, run, water crosswind, and ice at that lake, not
 from the airport weather, which lives in the header, blocks, and hours. Rows are ranked by score, then distance, then

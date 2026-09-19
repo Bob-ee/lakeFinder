@@ -108,6 +108,22 @@ def run_engine(
     return json.loads(proc.stdout)
 
 
+def apply_reach_flags(results: list[dict], matches: list[dict]) -> int:
+    """Add the `reach_unresolved` flag to lakes carrying an unnarrowed river rule.
+
+    Display only, which is why it is bolted on here instead of taught to the rules engine: the
+    verdict for a river reach is whatever the DNR rule says, exactly as for a lake. The flag tells
+    the client to say "this rule covers part of this river" next to the restriction list.
+    """
+    flagged = {int(m["lake_id"]) for m in matches if m.get("reach_unresolved")}
+    applied = 0
+    for result in results:
+        if int(result["id"]) in flagged and "reach_unresolved" not in result.get("flags", []):
+            result.setdefault("flags", []).append("reach_unresolved")
+            applied += 1
+    return applied
+
+
 def apply_verdict_overrides(results: list[dict], overrides: dict[int, dict]) -> int:
     applied = 0
     for result in results:
@@ -166,6 +182,7 @@ def run(cfg: Config, args) -> int:
         node=getattr(args, "node", "node"),
     )
 
+    reaches = apply_reach_flags(results, matches)
     overrides = manual.verdict_overrides(manual.load_overrides(cfg))
     applied = apply_verdict_overrides(results, overrides)
 
@@ -176,12 +193,14 @@ def run(cfg: Config, args) -> int:
     for r in results:
         hist[r["verdict"]] = hist.get(r["verdict"], 0) + 1
     log.info(
-        "classified %d lakes in %.1fs: %s (%d MAC + %d federal synthetic records, %d verdict overrides)",
+        "classified %d waterbodies in %.1fs: %s (%d MAC + %d federal synthetic records, "
+        "%d verdict overrides, %d reach_unresolved)",
         len(results),
         time.monotonic() - started,
         ", ".join(f"{k}={v}" for k, v in sorted(hist.items())),
         len(mac_records),
         len(federal_records),
         applied,
+        reaches,
     )
     return 0

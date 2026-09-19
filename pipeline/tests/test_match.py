@@ -323,3 +323,146 @@ def test_conflicting_qualifiers_do_not_match():
     assert score + 0.2 + 0.1 < 0.5, "section and county bonuses must not lift a sibling lake into the review band"
     assert score_name("school lot", "big school lot") == (0.6, "qualifier")
     assert score_name("big school lot", "big school lot") == (1.0, "exact")
+
+
+# --- waterway track ---------------------------------------------------------
+
+
+def make_waterbodies(rows: list[dict]) -> gpd.GeoDataFrame:
+    """`make_lakes` plus the columns `geometry` now writes: kind, counties, townships."""
+    frame = make_lakes(rows)
+    frame["kind"] = [r.get("kind", "lake") for r in rows]
+    frame["counties"] = [r.get("counties", [r.get("county", "Oakland")]) for r in rows]
+    frame["townships"] = [r.get("townships", [r["township"]] if r.get("township") else []) for r in rows]
+    return frame
+
+
+def test_restriction_kind_splits_lakes_from_waterways():
+    for name in ("Pine River", "Nottawa Creek", "Kawkawlin River and Saginaw Bay Adjacent to Mouth",
+                 "Lake Margrethe Channel in Harbor Beach Subdivision", "Fox River, East Branch"):
+        assert match.restriction_kind(name) == "waterway", name
+    # A waterway word is not enough: what decides it is the generic the head ends in.
+    for name in ("Stoney Creek Lake", "Middle Straits Lake", "Outlet Lake", "Tubbs Lake (canals)",
+                 "Cass Lake", "Spring Lake - Spring Lake Township", "Pere Marquette Lake"):
+        assert match.restriction_kind(name) == "lake", name
+
+
+def test_lake_headers_never_see_river_polygons():
+    """"Torch Lake" must not land on the Torch River polygon, and it is the only thing in the county."""
+    lakes = make_waterbodies([
+        {"id": 1, "name": "Torch River", "kind": "river", "geometry": lake_box(0, 0)},
+    ])
+    matcher = match.Matcher(lakes)
+    found, miss = matcher.match_record(restriction("r1", "Torch Lake"))
+    assert found == []
+    assert miss["kind"] == "lake"
+
+
+def test_river_headers_never_see_plain_lake_polygons():
+    """"Torch River" must not fall back onto Torch Lake the way the lake-only matcher used to."""
+    lakes = make_waterbodies([
+        {"id": 1, "name": "Torch Lake", "kind": "lake", "geometry": lake_box(0, 0)},
+    ])
+    matcher = match.Matcher(lakes)
+    found, miss = matcher.match_record(restriction("r1", "Torch River"))
+    assert found == []
+    assert miss["kind"] == "waterway"
+    assert "river polygon" in miss["reason"]
+
+
+def test_river_header_matches_a_river_named_lake_polygon():
+    """The hydrography layer types impoundments as lakes but names them after the river."""
+    lakes = make_waterbodies([
+        {"id": 1, "name": "Cornwall Creek Flooding", "kind": "lake", "county": "Cheboygan",
+         "geometry": lake_box(0, 0)},
+        {"id": 2, "name": "Douglas Lake", "kind": "lake", "county": "Cheboygan", "geometry": lake_box(1, 0)},
+    ])
+    found, miss = match.Matcher(lakes).match_record(
+        restriction("r1", "Cornwall Creek Flooding", county="Cheboygan")
+    )
+    assert miss is None
+    assert [m.lake_id for m in found] == [1]
+    assert found[0].score == 1.0
+
+
+def test_one_river_rule_attaches_to_every_same_name_polygon_in_the_county():
+    lakes = make_waterbodies([
+        {"id": 1, "name": "Grand River", "kind": "river", "geometry": lake_box(0, 0)},
+        {"id": 2, "name": "Grand River", "kind": "river", "geometry": lake_box(1, 0)},
+        {"id": 3, "name": "Grand River", "kind": "river", "county": "Kent", "counties": ["Kent"],
+         "geometry": lake_box(2, 0)},
+        {"id": 4, "name": "Little Grand River", "kind": "river", "geometry": lake_box(3, 0)},
+    ])
+    found, miss = match.Matcher(lakes).match_record(restriction("r1", "Grand River"))
+    assert miss is None
+    assert sorted(m.lake_id for m in found) == [1, 2]   # not Kent, not the qualifier-different one
+    assert all(m.reach_unresolved for m in found)
+    assert all(m.method.endswith("+river-county") for m in found)
+
+
+def test_a_river_polygon_is_a_candidate_in_every_county_it_crosses():
+    """Its centroid county is Kent; the Ionia rule must still find it."""
+    lakes = make_waterbodies([
+        {"id": 1, "name": "Grand River", "kind": "river", "county": "Kent",
+         "counties": ["Kent", "Ionia"], "geometry": lake_box(0, 0)},
+    ])
+    found, _ = match.Matcher(lakes).match_record(restriction("r1", "Grand River", county="Ionia"))
+    assert [m.lake_id for m in found] == [1]
+
+
+def test_township_narrows_a_river_rule_to_one_reach():
+    lakes = make_waterbodies([
+        {"id": 1, "name": "Huron River", "kind": "river", "townships": ["Milford Township"],
+         "geometry": lake_box(0, 0)},
+        {"id": 2, "name": "Huron River", "kind": "river", "townships": ["Commerce Township"],
+         "geometry": lake_box(1, 0)},
+    ])
+    matcher = match.Matcher(lakes)
+    found, _ = matcher.match_record(restriction("r1", "Huron River", township="Milford Township"))
+    assert [m.lake_id for m in found] == [1]
+    assert not found[0].reach_unresolved
+    assert found[0].method.endswith("+river-township")
+
+    # A township the layer does not carry narrows nothing, so the rule covers both, flagged.
+    found, _ = matcher.match_record(restriction("r2", "Huron River", township="Village of Milford"))
+    assert sorted(m.lake_id for m in found) == [1, 2]
+    assert all(m.reach_unresolved for m in found)
+
+
+def test_plss_sections_narrow_a_river_rule_before_township():
+    lakes = make_waterbodies([
+        {"id": 1, "name": "Huron River", "kind": "river", "geometry": lake_box(0, 0)},
+        {"id": 2, "name": "Huron River", "kind": "river", "geometry": lake_box(2, 0)},
+    ])
+    plss = make_plss([("04N", "07E", "16", 0, 0)])
+    matcher = match.Matcher(lakes, plss)
+    rec = restriction("r1", "Huron River", plss=[{"township": "4N", "range": "7E", "sections": [16]}])
+    found, _ = matcher.match_record(rec)
+    assert [m.lake_id for m in found] == [1]
+    assert not found[0].reach_unresolved
+    assert found[0].method.endswith("+river-plss")
+
+
+def test_narrowing_that_would_drop_the_rule_is_skipped():
+    """A section list that misses the digitized channel must not delete the rule."""
+    lakes = make_waterbodies([
+        {"id": 1, "name": "Huron River", "kind": "river", "geometry": lake_box(5, 5)},
+    ])
+    plss = make_plss([("04N", "07E", "16", 0, 0)])
+    rec = restriction("r1", "Huron River", plss=[{"township": "4N", "range": "7E", "sections": [16]}])
+    found, _ = match.Matcher(lakes, plss).match_record(rec)
+    assert [m.lake_id for m in found] == [1]
+    assert found[0].reach_unresolved
+
+
+def test_match_rows_carry_reach_unresolved_only_when_set():
+    m = match.Match("r1", 1, 1.0, "exact+river-county", False, reach_unresolved=True)
+    assert m.as_dict()["reach_unresolved"] is True
+    assert "reach_unresolved" not in match.Match("r1", 1, 1.0, "exact+plss", False).as_dict()
+
+
+def test_matcher_reads_a_lakes_frame_without_the_river_columns():
+    """An older lakes.parquet (no kind/counties/townships) still matches as an all-lake table."""
+    lakes = make_lakes([{"id": 1, "name": "Cass Lake", "geometry": lake_box(0, 0)}])
+    found, _ = match.Matcher(lakes).match_record(restriction("r1", "Cass Lake"))
+    assert [m.lake_id for m in found] == [1]
