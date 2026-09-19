@@ -36,6 +36,31 @@ answer is almost always the first candidate). If no candidate is fully inside (r
 concave lakes), the top candidates are intersected with the polygon and the longest interior piece
 is used, which is still a true interior chord.
 
+Big water
+---------
+The hydrography layer is inland only, so the Great Lakes, Lake St. Clair and the Detroit / St. Clair
+/ St. Marys Rivers come from four separate sources (recipes on the `big_water_*` entries in
+`gis.py`) and are folded into the same table by `load_big_water` with `kind: "great_lake"` or
+`"connecting_water"`. They then flow through every measurement below unchanged, except that a
+connecting water is measured like a river (reach sweep, scan-line extents) and a Great Lake like a
+lake.
+
+Two subtractions keep the published water bodies from overlapping each other, because the source
+layers do overlap badly: Michigan's "Lake Michigan Shoreline" swallows 302 km2 of connected inland
+water (Torch Lake, Lake Charlevoix, Muskegon Lake, Lake Macatawa, Lake Skegemog...) and "Lake Erie
+Shoreline" runs 33 km2 up the Detroit River past Grosse Ile.
+
+1. **inland wins over big water.** Every kept inland polygon is subtracted from every big-water
+   polygon, so no inland lake is published twice.
+2. **connecting water wins over the Great Lake it joins.** The river mouths and the St. Clair Flats
+   delta channels are river, the rules that name them are river rules, and the piece is a large
+   share of the river (43% of the Detroit River, 31% of the St. Clair River) against ~1% of the
+   lake. Anchor Bay and both Muscamoot bays are outside the St. Clair River polygon, so the lake's
+   sheltered water is untouched.
+
+Both subtractions are local to the overlap; the wave field's fetch mask is the union of every water
+polygon, so a ray still runs from the Detroit River into Lake Erie without stopping.
+
 That vertex-pair search is exact enough for a lake, where the answer is a near-diameter, but it
 collapses on a **river**: 200 vertices out of the Muskegon River's 13,774 leave no pair lying along
 any one straight reach, so every long candidate crosses a bend, fails `covers`, and the fallback
@@ -51,6 +76,7 @@ from __future__ import annotations
 
 import logging
 import time
+from dataclasses import dataclass
 
 import geopandas as gpd
 import numpy as np
@@ -77,7 +103,23 @@ EXTENT_BEARING_BINS = 16
 EXTENT_MIN_CHORD_FT = 1000.0
 EXTENT_SAMPLES = 40
 
+#: Kinds the hydrography layer supplies, in the order they are numbered. Every later kind sorts
+#: after them, which is what keeps existing lake and river ids byte-identical (see `run`).
 KINDS = ("lake", "river")
+BIG_WATER_KINDS = ("great_lake", "connecting_water")
+KIND_ORDER = (*KINDS, *BIG_WATER_KINDS)
+#: Kinds whose `extent_by_bearing` is scan-converted at the polygon's own width rather than with a
+#: fixed 40 sample lines: narrow water that a fixed count reads as nearly dry.
+REACH_KINDS = ("river", "connecting_water")
+#: Kinds whose chord is the better of the vertex-pair chord and the scan-line sweep. Great Lakes are
+#: here because 200 simplified vertices of a clipped, convoluted shoreline leave no vertex pair along
+#: the long axis: Lake Superior measured 34 miles by vertex pair against 237 by sweep, Lake Huron 37
+#: against 197. Erie, Michigan and St. Clair agree either way. The sweep costs ~0.1 s per lake.
+CHORD_SWEEP_KINDS = (*REACH_KINDS, "great_lake")
+#: Parts of a big-water polygon smaller than this are subtraction noise along an inland lake's
+#: shoreline, not water anyone lands on (the 100 ft shore buffer leaves nothing in 1 ha). Dropping
+#: them takes Lake Michigan from 1,015 parts to ~350 and costs 0.003% of its area.
+MIN_BIG_WATER_PART_M2 = 10_000.0
 
 #: Scan-line sweep (rivers only). Orientation is searched at `SWEEP_STEP_DEG`, then the best few
 #: orientations are refined, because a 20,000 ft reach in a 200 ft channel is missed by 1.5 deg.
@@ -442,6 +484,134 @@ def load_lakes(path, min_unnamed_acres: float) -> gpd.GeoDataFrame:
     return kept.reset_index(drop=True)
 
 
+# --- big water -----------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class BigWater:
+    """One published big-water body and the source features it is unioned from.
+
+    `column`/`value` pick the features out of a multi-feature layer; `None` takes the whole layer.
+    """
+
+    name: str
+    kind: str
+    dataset: str
+    column: str | None = None
+    value: str | None = None
+
+
+#: Source per water body, chosen in `docs/gis-sources.md`'s 2026-09-19 addendum and re-checked live.
+#: Whole-lake polygons are preferred over Michigan-jurisdiction ones: the wave field casts fetch rays
+#: across these polygons, and a polygon clipped at a state or international line makes every ray
+#: toward the clip read short. Erie, Michigan and St. Clair are whole; Huron and Superior have no
+#: whole-lake source here and are clipped at the international boundary.
+BIG_WATERS = (
+    BigWater("Lake Superior", "great_lake", "big_water_ifr", "WBID", "ls"),
+    BigWater("Lake Michigan", "great_lake", "big_water_michigan", "LAKE_NAME", "Lake Michigan"),
+    BigWater("Lake Huron", "great_lake", "big_water_ifr", "WBID", "lh"),
+    BigWater("Lake Erie", "great_lake", "big_water_erie"),
+    BigWater("Lake St. Clair", "great_lake", "big_water_st_clair"),
+    BigWater("St. Marys River", "connecting_water", "big_water_ifr", "WBID", "smr"),
+    BigWater("St. Clair River", "connecting_water", "big_water_ifr", "WBID", "scr"),
+    BigWater("Detroit River", "connecting_water", "big_water_ifr", "WBID", "dr"),
+)
+
+
+def polygons_only(geom, min_part_m2: float = 0.0):
+    """Drop the stray lines and points a `difference` leaves behind, and parts under `min_part_m2`."""
+    if geom is None or geom.is_empty:
+        return geom
+    parts = [g for g in shapely.get_parts(geom) if g.geom_type in ("Polygon", "MultiPolygon")]
+    if min_part_m2 > 0:
+        parts = [g for g in parts if g.area >= min_part_m2]
+    if not parts:
+        return shapely.Polygon()
+    return shapely.make_valid(shapely.union_all(parts)) if len(parts) > 1 else shapely.make_valid(parts[0])
+
+
+def _source_union(path, column: str | None, value: str | None):
+    """Read one source layer, keep the selected features, and union them in `MEASURE_CRS`."""
+    gdf = gpd.read_file(path)
+    if column is not None:
+        keep = gdf[column].astype(str).str.strip() == value
+        gdf = gdf[keep]
+    if not len(gdf):
+        return None
+    if gdf.crs is None:
+        gdf = gdf.set_crs(WGS84)
+    geoms = [shapely.make_valid(g) for g in gdf.to_crs(MEASURE_CRS).geometry.values if g is not None]
+    return polygons_only(shapely.union_all(geoms)) if geoms else None
+
+
+def load_big_water(cfg: Config, inland: gpd.GeoDataFrame | None = None) -> gpd.GeoDataFrame:
+    """The Great Lakes and their connecting waters as rows of the same table as the inland lakes.
+
+    `inland` is the kept hydrography frame (WGS84); every polygon of it that touches a big-water
+    body is subtracted from that body, so an inland lake the shoreline layers swallowed -- Torch
+    Lake, Lake Charlevoix, Muskegon Lake -- is not published twice. The connecting waters are then
+    subtracted from the Great Lakes for the same reason at the river mouths and the St. Clair Flats.
+    Returns an empty frame (not an error) when the sources have not been fetched.
+    """
+    empty = gpd.GeoDataFrame({"name": [], "kind": [], "area_acres": []}, geometry=[], crs=WGS84)
+    geoms: dict[str, object] = {}
+    for spec in BIG_WATERS:
+        path = gis.find_dataset(cfg, spec.dataset)
+        if path is None:
+            log.warning(
+                "%s (%s) not found; %s will be missing -- run `seaplane fetch --only %s`",
+                gis.DATASETS[spec.dataset].filename, spec.dataset, spec.name, spec.dataset,
+            )
+            continue
+        geom = _source_union(path, spec.column, spec.value)
+        if geom is None or geom.is_empty:
+            log.warning("%s: no features in %s", spec.name, path.name)
+            continue
+        geoms[spec.name] = geom
+    if not geoms:
+        log.info("no big-water sources present; the table stays inland-only")
+        return empty
+
+    connecting = [geoms[s.name] for s in BIG_WATERS if s.kind == "connecting_water" and s.name in geoms]
+    connecting_union = shapely.make_valid(shapely.union_all(connecting)) if connecting else None
+
+    inland_proj = None
+    if inland is not None and len(inland):
+        src = inland if inland.crs is not None else inland.set_crs(WGS84)
+        inland_proj = src.geometry.to_crs(MEASURE_CRS)
+        sindex = inland_proj.sindex
+
+    rows = []
+    for spec in BIG_WATERS:
+        geom = geoms.get(spec.name)
+        if geom is None:
+            continue
+        raw_area = geom.area
+        if spec.kind == "great_lake" and connecting_union is not None:
+            geom = polygons_only(geom.difference(connecting_union))
+        if inland_proj is not None:
+            hits = sindex.query(geom, predicate="intersects")
+            if len(hits):
+                cut = shapely.union_all([shapely.make_valid(g) for g in inland_proj.iloc[hits].to_numpy()])
+                geom = geom.difference(cut)
+        geom = polygons_only(geom, MIN_BIG_WATER_PART_M2)
+        if geom.is_empty:
+            log.warning("%s: nothing left after the overlap subtractions; dropped", spec.name)
+            continue
+        log.info(
+            "  %-16s %-16s %9.1f km2 (%.1f km2 trimmed as overlap), %d parts",
+            spec.name, spec.kind, geom.area / 1e6, (raw_area - geom.area) / 1e6,
+            len(shapely.get_parts(geom)),
+        )
+        rows.append({"name": spec.name, "kind": spec.kind, "area_acres": round(geom.area / M2_PER_ACRE, 2),
+                     "geometry": geom})
+    if not rows:
+        return empty
+    out = gpd.GeoDataFrame(rows, geometry="geometry", crs=MEASURE_CRS).to_crs(WGS84)
+    log.info("big water: %d water bodies (%s)", len(out), ", ".join(out["name"]))
+    return out
+
+
 def _mcd_labels(mcd: gpd.GeoDataFrame) -> np.ndarray:
     """"Rose Township" for a township row, "City of Wakefield" for a city row."""
     return np.where(
@@ -510,6 +680,12 @@ def run(cfg: Config, args) -> int:
     gdf = load_lakes(path, min_unnamed)
     log.info("read + filtered in %.1fs", time.monotonic() - started)
 
+    big = load_big_water(cfg, gdf)
+    if len(big):
+        gdf = gpd.GeoDataFrame(
+            pd.concat([gdf, big], ignore_index=True), geometry="geometry", crs=WGS84
+        )
+
     proj = gdf.geometry.to_crs(MEASURE_CRS)
     centroids = proj.centroid
     to_wgs = Transformer.from_crs(MEASURE_CRS, WGS84, always_xy=True)
@@ -536,9 +712,10 @@ def run(cfg: Config, args) -> int:
     gdf["name_norm"] = [ids.normalize_name(n) if isinstance(n, str) else "" for n in gdf["name"]]
 
     # Stable order -> stable collision bumps across runs. `kind` is the primary key so every lake is
-    # numbered before any river: the lake subsequence, and therefore every existing lake id, is
-    # exactly what it was before rivers joined the table.
-    kind_rank = np.array([KINDS.index(k) for k in gdf["kind"]])
+    # numbered before any river, and both before any big water: each earlier kind's subsequence, and
+    # therefore every id already published, is exactly what it was before the new kind joined the
+    # table. `KIND_ORDER` may only ever be appended to.
+    kind_rank = np.array([KIND_ORDER.index(k) for k in gdf["kind"]])
     order = np.lexsort(
         (gdf["lon"].to_numpy(), gdf["lat"].to_numpy(), gdf["name_norm"].to_numpy(), kind_rank)
     )
@@ -551,18 +728,22 @@ def run(cfg: Config, args) -> int:
     ]
 
     t0 = time.monotonic()
-    is_river = (gdf["kind"] == "river").to_numpy()
+    # A connecting water is a river: the vertex-pair chord collapses on a 20 mile sinuous channel,
+    # so it gets the reach sweep too. A Great Lake keeps the vertex-pair chord, where the answer is
+    # a near-diameter and the 300-candidate cap keeps a 40,000-vertex polygon cheap.
+    use_reach = np.isin(gdf["kind"].to_numpy(), REACH_KINDS)
+    use_sweep = np.isin(gdf["kind"].to_numpy(), CHORD_SWEEP_KINDS)
     lengths, p1, p2 = [], [], []
-    for geom, acres, river in zip(proj.to_numpy(), gdf["area_acres"].to_numpy(), is_river, strict=True):
+    for geom, acres, sweep in zip(proj.to_numpy(), gdf["area_acres"].to_numpy(), use_sweep, strict=True):
         cap = BIG_LAKE_CANDIDATES if acres > BIG_LAKE_ACRES else max_candidates
-        measure = longest_reach if river else longest_chord
+        measure = longest_reach if sweep else longest_chord
         length, a, b = measure(geom, max_vertices, cap)
         lengths.append(length)
         p1.append(a)
         p2.append(b)
     log.info(
-        "longest chord for %d waterbodies (%d by river reach sweep) in %.1fs",
-        len(gdf), int(is_river.sum()), time.monotonic() - t0,
+        "longest chord for %d waterbodies (%d also by reach sweep) in %.1fs",
+        len(gdf), int(use_sweep.sum()), time.monotonic() - t0,
     )
 
     p1 = np.array(p1, dtype=float).reshape(-1, 2)
@@ -583,7 +764,7 @@ def run(cfg: Config, args) -> int:
     for i in np.flatnonzero(qualifies):
         # Rivers are scan-converted at their own width instead of 40 lines across the bbox; see
         # `extent_by_bearing`. Lakes keep the fixed-count sampler, so their published values do not move.
-        spacing = scan_spacing(largest_part(proj_geoms[i])) if is_river[i] else None
+        spacing = scan_spacing(largest_part(proj_geoms[i])) if use_reach[i] else None
         extents[i] = extent_by_bearing(proj_geoms[i], float(convergence[i]), spacing_m=spacing)
     gdf["extent_by_bearing"] = extents
     log.info(

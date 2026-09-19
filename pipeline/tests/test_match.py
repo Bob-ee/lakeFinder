@@ -367,7 +367,7 @@ def test_river_headers_never_see_plain_lake_polygons():
     found, miss = matcher.match_record(restriction("r1", "Torch River"))
     assert found == []
     assert miss["kind"] == "waterway"
-    assert "river polygon" in miss["reason"]
+    assert "no waterbody of that name" in miss["reason"]
 
 
 def test_river_header_matches_a_river_named_lake_polygon():
@@ -466,3 +466,123 @@ def test_matcher_reads_a_lakes_frame_without_the_river_columns():
     lakes = make_lakes([{"id": 1, "name": "Cass Lake", "geometry": lake_box(0, 0)}])
     found, _ = match.Matcher(lakes).match_record(restriction("r1", "Cass Lake"))
     assert [m.lake_id for m in found] == [1]
+
+
+# --- big water -------------------------------------------------------------
+
+
+def great_lakes_world():
+    """A Great Lake and a connecting river next to an inland lake that shares the Great Lake's name.
+
+    Emmet touches only the Great Lake; Mackinac touches two, so it is ambiguous by construction.
+    """
+    return make_waterbodies([
+        {"id": 1, "name": "Lake Erie", "kind": "great_lake", "county": None,
+         "counties": ["Monroe", "Wayne", "Emmet", "Mackinac"],
+         "townships": ["Frenchtown Township", "City of Manistee"], "geometry": lake_box(0, 0, size=0.03)},
+        {"id": 2, "name": "Lake Huron", "kind": "great_lake", "county": None,
+         "counties": ["Mackinac"], "townships": ["Moran Township"], "geometry": lake_box(4, 0, size=0.03)},
+        {"id": 3, "name": "Detroit River", "kind": "connecting_water", "county": None,
+         "counties": ["Wayne"], "townships": ["City of Trenton", "City of Wyandotte"],
+         "geometry": lake_box(1, 0)},
+        # The 25-acre inland "Lake Erie" in Monroe, which must keep its own rules.
+        {"id": 4, "name": "Lake Erie", "kind": "lake", "county": "Monroe", "geometry": lake_box(2, 0)},
+    ])
+
+
+def test_a_lake_header_never_reaches_a_great_lake():
+    """The inland "Lake Erie" pond in Monroe wins; the Great Lake is not on the lake track at all."""
+    matcher = match.Matcher(great_lakes_world())
+    found, miss = matcher.match_record(restriction("r1", "Lake Erie", county="Monroe"))
+    assert miss is None
+    assert [m.lake_id for m in found] == [4]
+
+
+def test_a_connecting_water_matches_by_name_and_is_always_reach_unresolved():
+    matcher = match.Matcher(great_lakes_world())
+    found, miss = matcher.match_record(
+        restriction("r2", "Detroit River", county="Wayne", township="City of Wyandotte")
+    )
+    assert miss is None
+    assert [m.lake_id for m in found] == [3]
+    # The township narrowed the set, but a township never covers a 20 mile river.
+    assert found[0].method.endswith("river-township")
+    assert found[0].reach_unresolved is True
+
+
+def test_lake_st_clair_certain_creeks_reaches_the_great_lake_through_the_comma_variant():
+    lakes = make_waterbodies([
+        {"id": 7, "name": "Lake St. Clair", "kind": "great_lake", "county": None,
+         "counties": ["Macomb"], "townships": ["City of New Baltimore"], "geometry": lake_box(0, 0, size=0.03)},
+    ])
+    found, miss = match.Matcher(lakes).match_record(
+        restriction("r3", "Lake St. Clair, Certain Creeks", county="Macomb",
+                    township="City of New Baltimore")
+    )
+    assert miss is None
+    assert [m.lake_id for m in found] == [7]
+    assert found[0].reach_unresolved is True
+
+
+def test_is_bay_or_harbor_name():
+    for name in ("Little Traverse Bay", "East Bay", "Manistee Harbor", "Port Austin Harbor of Refuge",
+                 "Sandy Creek Bay and North", "Saugatuck Harbor"):
+        assert match.is_bay_or_harbor_name(name), name
+    # Not bay headers: the word is not what the head ends in, or it is a different word entirely.
+    for name in ("Bay of Lake Nettie", "Indian Pete's Bayou", "Black Creek", "Pine River"):
+        assert not match.is_bay_or_harbor_name(name), name
+
+
+def test_bay_fallback_attaches_to_the_only_great_lake_the_county_touches():
+    matcher = match.Matcher(great_lakes_world())
+    found, miss = matcher.match_record(
+        restriction("r4", "Manistee Harbor", county="Emmet", township="City of Manistee")
+    )
+    assert miss is None
+    assert [m.lake_id for m in found] == [1]
+    assert found[0].method == "bay+great-lake-township"
+    assert found[0].reach_unresolved is True and found[0].score == 1.0
+
+
+def test_bay_fallback_refuses_without_a_narrowing_geometry():
+    """"Saugatuck Harbor" carries no PLSS and no township, so the county alone would be a guess."""
+    matcher = match.Matcher(great_lakes_world())
+    found, miss = matcher.match_record(restriction("r5", "Saugatuck Harbor", county="Emmet"))
+    assert found == []
+    assert miss["kind"] == "waterway"
+
+
+def test_bay_fallback_refuses_a_township_that_does_not_touch_the_lake():
+    """"Pine Creek Bay" is on Lake Macatawa; its township is nowhere near the Great Lake."""
+    matcher = match.Matcher(great_lakes_world())
+    found, _ = matcher.match_record(
+        restriction("r6", "Pine Creek Bay", county="Emmet", township="Park Township")
+    )
+    assert found == []
+
+
+def test_bay_fallback_refuses_an_ambiguous_county():
+    """Mackinac touches Lake Michigan and Lake Huron; guessing between them is not allowed."""
+    matcher = match.Matcher(great_lakes_world())
+    found, _ = matcher.match_record(
+        restriction("r7", "Some Harbor", county="Mackinac", township="Moran Township")
+    )
+    assert found == []
+
+
+def test_big_water_partial_ids_needs_every_match_on_big_water():
+    kinds = {1: "great_lake", 3: "connecting_water", 4: "lake"}
+    matches = [
+        {"restriction_id": "big", "lake_id": 1},
+        {"restriction_id": "mixed", "lake_id": 3},
+        {"restriction_id": "mixed", "lake_id": 4},
+        {"restriction_id": "inland", "lake_id": 4},
+    ]
+    assert match.big_water_partial_ids(matches, kinds) == {"big"}
+    assert match.big_water_partial_ids(matches, {}) == set()
+
+
+def test_kinds_by_lake_defaults_to_lake_for_an_older_frame():
+    lakes = make_lakes([{"id": 1, "name": "Cass Lake", "geometry": lake_box(0, 0)}])
+    assert match.kinds_by_lake(lakes) == {1: "lake"}
+    assert match.kinds_by_lake(None) == {}

@@ -16,6 +16,8 @@ STAGES = [
     ("match", "Join restrictions to lake polygons"),
     ("overlay", "Public access, federal unit, airspace flags"),
     ("classify", "Run the shared rules engine"),
+    # wavefield needs geometry's parquet only, and build packs what it writes.
+    ("wavefield", "Sample points with per-bearing fetch, run, depth and a region label"),
     ("build", "Emit tiles, index.json, restrictions.json, pack.json"),
     ("review", "Print the review queue"),
     ("suggest", "Write data/manual/overrides.suggested.yaml from the review queue"),

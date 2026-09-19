@@ -55,7 +55,7 @@ def lakes_phrase(rows: list[dict], limit: int = 4) -> str:
 
     Without a wave field a row reads as it always has -- `Cass Lake 6 in chop with 4,100 ft run into
     the wind; Orchard Lake 5 in`. With one it names the place, because that is the whole point:
-    `Lake St. Clair, Big Muscamoot Bay 2 in (open lake 14 in); Cass Lake west end 3 in`.
+    `Lake St. Clair, Big Muscamoot Bay 2 in (open water 14 in); Cass Lake west end 3 in`.
     """
     if not rows:
         return "No candidate lakes."
@@ -76,7 +76,7 @@ def lakes_phrase(rows: list[dict], limit: int = 4) -> str:
 
 
 def home_water_phrase(home_water: dict | None, limit: int = 3) -> str | None:
-    """`Lake St. Clair: Big Muscamoot Bay 2 in, Anchor Bay 5 in, open lake 14 in.`
+    """`Lake St. Clair: Big Muscamoot Bay 2 in, Anchor Bay 5 in, open water 14 in.`
 
     The calmest few regions with a usable run, then the open-water figure so the contrast between
     "where I would go" and "what the lake is doing" is in one sentence. `None` when there is no home
@@ -88,18 +88,18 @@ def home_water_phrase(home_water: dict | None, limit: int = 3) -> str | None:
     bits = [f"{r['label']} {r['hs_in']} in" for r in usable[:limit]]
     open_in = home_water.get("hs_open_in")
     if open_in is not None and (not bits or open_in != usable[0].get("hs_in")):
-        bits.append(f"open lake {open_in} in")
+        bits.append(f"open water {open_in} in")
     if not bits:
         return None
     return f"{home_water['name']}: " + ", ".join(bits) + "."
 
 
 def _open_water_suffix(row: dict) -> str:
-    """` (open lake 14 in)` when the open water is rougher than the region being recommended."""
+    """` (open water 14 in)` when the open water is rougher than the region being recommended."""
     open_in = row.get("hs_open_in")
     if open_in is None or open_in == row.get("hs_in"):
         return ""
-    return f" (open lake {open_in} in)"
+    return f" (open water {open_in} in)"
 
 
 def summary(

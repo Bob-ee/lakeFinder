@@ -18,7 +18,7 @@ def test_a_row_with_regions_names_the_place_and_the_open_water():
         _row("Union Lake", 5, region="north end", hs_open_in=5),
     ]
     assert render.lakes_phrase(rows) == (
-        "Best water: Lake St. Clair, Big Muscamoot Bay 2 in (open lake 14 in); "
+        "Best water: Lake St. Clair, Big Muscamoot Bay 2 in (open water 14 in); "
         "Cass Lake west end 3 in; Union Lake north end 5 in."
     )
 
@@ -51,7 +51,7 @@ def test_the_home_water_sentence_lists_the_calm_ends_then_the_open_lake():
             {"label": "North Channel", "hs_in": None},
         ],
     }
-    assert render.home_water_phrase(home, limit=2) == "Lake St. Clair: Big Muscamoot Bay 2 in, Anchor Bay 5 in, open lake 14 in."
+    assert render.home_water_phrase(home, limit=2) == "Lake St. Clair: Big Muscamoot Bay 2 in, Anchor Bay 5 in, open water 14 in."
     assert render.home_water_phrase(home).startswith("Lake St. Clair: Big Muscamoot Bay 2 in, Anchor Bay 5 in, middle 11 in")
 
 
@@ -62,7 +62,7 @@ def test_no_home_water_and_no_regions_produce_no_sentence():
 
 def test_a_home_water_with_nothing_usable_still_reports_the_open_water():
     home = {"name": "Lake St. Clair", "hs_open_in": 20, "regions": [{"label": "Anchor Bay", "hs_in": None}]}
-    assert render.home_water_phrase(home) == "Lake St. Clair: open lake 20 in."
+    assert render.home_water_phrase(home) == "Lake St. Clair: open water 20 in."
 
 
 def test_the_summary_never_says_legal_safe_or_go():

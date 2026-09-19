@@ -9,6 +9,11 @@ Highlights that shaped this module:
   `OpenData/*` services and is used here.
 - `gis.fws.gov` 502s; the Esri Living Atlas mirror of the refuge boundaries is used instead.
 - Everything else is small enough for a paged `/query` (`resultOffset` + `exceededTransferLimit`).
+
+Big water (the `big_water_*` datasets) is a separate problem, because the hydrography layer is
+**inland only**: it has no Great Lake, no Lake St. Clair, and no Detroit / St. Clair / St. Marys
+River, so ~25 DNR rules that name that water attach to nothing. Recipes and why each was chosen are
+on the `Dataset` entries below; `geometry.load_big_water` assembles them.
 """
 from __future__ import annotations
 
@@ -20,7 +25,7 @@ from pathlib import Path
 
 import httpx
 
-from .config import MICHIGAN_BBOX, USER_AGENT, Config
+from .config import GNIS_STATES, MICHIGAN_BBOX, USER_AGENT, Config
 
 log = logging.getLogger(__name__)
 
@@ -56,6 +61,75 @@ DATASETS: dict[str, Dataset] = {
         url=OPENDATA_DOWNLOAD.format(item="e6f0b7dfb22d4ed49a05969970441f4f"),
         params={"layers": "17"},
         note="Michigan Hydrography Polygons, 59,922 features (~124 MB), WGS84.",
+    ),
+    # -- big water ----------------------------------------------------------------------------
+    # Four small `/query` pulls, cached like the hydrography. Each one is a *whole* feature class
+    # (10, 1, 2 and 8 features), so no bbox and no paging beyond the 1,000-record default.
+    # Checked live 2026-09-19; areas below are EPSG:3078 after `make_valid` + union.
+    "big_water_st_clair": Dataset(
+        key="big_water_st_clair",
+        filename="big_water_st_clair.geojson",
+        store="cache",
+        kind="query",
+        url=f"{GISAGO}/OpenData/hydro/MapServer/13/query",
+        params={"where": "1=1", "outFields": "*"},
+        note=(
+            "Lake St. Clair Shoreline, 10 features, 17,172 vertices, 449 holes, 1,150 km2. Verified "
+            "2026-09-19 (docs/gis-sources.md addendum): whole lake including the Ontario side, Harsens / "
+            "Dickinson / Walpole / Strawberry / Gull / McDonald are land, the Muscamoot marsh islands are "
+            "resolved. NHDWaterbody has no geometry at all for the eastern Flats, which is why this "
+            "Michigan-only layer wins until the national NHD switch. LAKE_NAME is truncated to "
+            "'Lake Saint Clai', so the published name is set in code, not read from the layer."
+        ),
+    ),
+    "big_water_erie": Dataset(
+        key="big_water_erie",
+        filename="big_water_erie.geojson",
+        store="cache",
+        kind="query",
+        url=f"{GISAGO}/OpenData/hydro/MapServer/11/query",
+        params={"where": "1=1", "outFields": "*"},
+        note=(
+            "Lake Erie Shoreline, 1 feature, 25,534 vertices, 163 island holes, 25,830 km2: the WHOLE lake "
+            "(Ontario, Ohio, Pennsylvania and New York shores included, east to Buffalo), which is what the "
+            "wave field needs so a fetch ray toward Canada does not read short. It does run up the Detroit "
+            "River past Grosse Ile (32.7 km2), trimmed in `geometry.load_big_water`."
+        ),
+    ),
+    "big_water_michigan": Dataset(
+        key="big_water_michigan",
+        filename="big_water_michigan.geojson",
+        store="cache",
+        kind="query",
+        url=f"{GISAGO}/OpenData/hydro/MapServer/12/query",
+        params={"where": "1=1", "outFields": "*"},
+        note=(
+            "Lake Michigan Shoreline, 2 features, 58,096 km2 for the WHOLE lake (40,235 vertices, 327 holes) "
+            "plus 'Lake Oskosh' (Winnebago, Wisconsin) which is dropped by name. It swallows 302 km2 of "
+            "connected inland water -- Torch Lake, Lake Charlevoix, Indian Lake, Muskegon Lake, Lake "
+            "Macatawa, Lake Skegemog -- all of which are their own water bodies already, so the inland "
+            "polygons are subtracted in `geometry.load_big_water`."
+        ),
+    ),
+    "big_water_ifr": Dataset(
+        key="big_water_ifr",
+        filename="big_water_ifr.geojson",
+        store="cache",
+        kind="query",
+        url=(
+            "https://services3.arcgis.com/Jdnp1TjADvSDxMAX/arcgis/rest/services/"
+            "DNRHydrologyOPENDATA/FeatureServer/4/query"
+        ),
+        params={"where": "1=1", "outFields": "*"},
+        note=(
+            "MichiganDNR inland-fisheries-region hydrology, 8 features keyed by WBID: dr (Detroit River, "
+            "76.5 km2), scr (St. Clair River, 43.2), smr (St. Marys River, 483), lh (Lake Huron, 23,076), "
+            "ls (Lake Superior, 40,980), lm, le, lsc. Only dr/scr/smr/lh/ls are used: it is the only source "
+            "here with the connecting rivers at all, and the only one with Huron and Superior (the hydro "
+            "MapServer has no layer for either). Both big lakes are clipped at the international boundary "
+            "-- 39% of Huron and 50% of Superior -- and le/lm/lsc are coarser or more clipped than the "
+            "MapServer layers, so those three are ignored."
+        ),
     ),
     "plss": Dataset(
         key="plss",
@@ -144,7 +218,43 @@ DATASETS: dict[str, Dataset] = {
         params={"where": "STATE='MI'", "outFields": "*", **_BBOX_PARAMS},
         note="490 Michigan airports/heliports/seaplane bases, context layer only.",
     ),
+    "bathymetry_erie": Dataset(
+        key="bathymetry_erie",
+        filename="erie_lld.flt.tar.gz",
+        store="cache",
+        kind="direct",
+        url="https://www.ngdc.noaa.gov/mgg/greatlakes/erie/data/binary_float/erie_lld.flt.tar.gz",
+        note=(
+            "NCEI 'Bathymetry of Lake Erie and Lake Saint Clair' (DOI 10.7289/V5KS6PHK), the lld grid: "
+            "7,201 x 2,401 cells of 3 arc-seconds over 84W-78W / 41N-43N, NAD83, metres relative to Low "
+            "Water Datum positive up, nodata -9999. 22.5 MB packed, 69 MB raw ESRI float + .hdr, so it "
+            "needs no raster library. Covers Lake St. Clair; every other water body stays depth-unknown."
+        ),
+    ),
 }
+
+# GNIS Domestic Names, one bulk file per state (docs/gis-sources.md addendum). The state list lives in
+# config, never here, because the wave field has to work outside Michigan (docs/nationwide.md).
+GNIS_DOMESTIC_NAMES = (
+    "https://prd-tnm.s3.amazonaws.com/StagedProducts/GeographicNames/DomesticNames/"
+    "DomesticNames_{state}_Text.zip"
+)
+
+
+def gnis_dataset(state: str) -> Dataset:
+    st = state.upper()
+    return Dataset(
+        key=f"gnis_{st.lower()}",
+        filename=f"DomesticNames_{st}_Text.zip",
+        store="cache",
+        kind="direct",
+        url=GNIS_DOMESTIC_NAMES.format(state=st),
+        note=f"GNIS Domestic Names for {st} (~1 MB, pipe-delimited): Bay/Channel names for wave regions.",
+    )
+
+
+for _state in GNIS_STATES:
+    DATASETS[f"gnis_{_state.lower()}"] = gnis_dataset(_state)
 
 
 def dest_path(cfg: Config, ds: Dataset) -> Path:

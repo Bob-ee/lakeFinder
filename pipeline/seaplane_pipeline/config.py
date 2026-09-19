@@ -12,6 +12,9 @@ USER_AGENT = (
     "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 )
 MICHIGAN_BBOX = (-90.5, 41.6, -82.3, 48.4)  # west, south, east, north (WGS84)
+#: States whose GNIS Domestic Names file is downloaded for wave-field region labels. Per-state bulk
+#: files, one dataset each; a second state is added here and nowhere else (docs/nationwide.md).
+GNIS_STATES: tuple[str, ...] = ("MI",)
 
 
 @dataclass
@@ -21,6 +24,7 @@ class Config:
     counties: list[str] | None = None  # None = all
     force: bool = False  # ignore caches
     verbose: bool = False
+    gnis_states: tuple[str, ...] = GNIS_STATES
 
     @property
     def data_dir(self) -> Path:

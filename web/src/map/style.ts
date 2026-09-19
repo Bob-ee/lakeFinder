@@ -159,7 +159,7 @@ function lakeLayers(theme: ResolvedTheme): LayerSpecification[] {
       layout: { "line-join": "round", "line-cap": "round" },
       paint: {
         "line-color": color,
-        "line-width": ["interpolate", ["linear"], ["zoom"], 6, 3.5, 10, 6, 14, 10],
+        "line-width": selectionWidth(3.5, 6, 10),
       },
     },
     {
@@ -173,12 +173,22 @@ function lakeLayers(theme: ResolvedTheme): LayerSpecification[] {
       layout: { "line-join": "round", "line-cap": "round" },
       paint: {
         "line-color": color,
-        "line-width": ["interpolate", ["linear"], ["zoom"], 6, 9, 10, 15, 14, 24],
+        "line-width": selectionWidth(9, 15, 24),
         "line-opacity": 0,
         "line-blur": 3,
       },
     },
   ];
+}
+
+/**
+ * Selection line widths are sized to make a 40-acre lake findable. Around a river or the St. Clair
+ * Flats the same width traces every island and channel and reads as an orange smear, so water that
+ * is not a plain lake gets 40% of it.
+ */
+function selectionWidth(z6: number, z10: number, z14: number): ExpressionSpecification {
+  const thin: ExpressionSpecification = ["match", ["get", "kind"], ["river", "great_lake", "connecting_water"], 0.4, 1];
+  return ["interpolate", ["linear"], ["zoom"], 6, ["*", z6, thin], 10, ["*", z10, thin], 14, ["*", z14, thin]];
 }
 
 function overlayLayers(theme: ResolvedTheme): LayerSpecification[] {

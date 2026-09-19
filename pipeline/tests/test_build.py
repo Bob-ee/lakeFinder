@@ -251,3 +251,28 @@ def test_build_without_geometry_fails_cleanly(tmp_path, monkeypatch):
     cfg = Config()
     cfg.ensure_dirs()
     assert build.run(cfg, argparse.Namespace(skip_basemap=True, skip_tiles=True)) == 2
+
+
+def test_build_restrictions_publishes_big_water_partial():
+    """The published field the rules engine reads to cap a big-water rule at conditional."""
+    records = [
+        {"restriction_id": "a", "status": "active", "restriction_type": "slow_no_wake"},
+        {"restriction_id": "b", "status": "active", "restriction_type": "slow_no_wake"},
+        {"restriction_id": "c", "status": "active", "restriction_type": "slow_no_wake"},
+    ]
+    matches = [
+        {"restriction_id": "a", "lake_id": 301, "score": 1.0, "reach_unresolved": True},
+        {"restriction_id": "b", "lake_id": 302, "score": 1.0},
+        # "c" lands on both a Great Lake and an inland river: not capped, because the inland
+        # polygon's verdict must stay whatever the rule says.
+        {"restriction_id": "c", "lake_id": 301, "score": 1.0, "reach_unresolved": True},
+        {"restriction_id": "c", "lake_id": 302, "score": 1.0},
+    ]
+    kinds = {301: "great_lake", 302: "river"}
+    out = build.build_restrictions(records, matches, [], kinds)
+    assert out["a"]["big_water_partial"] is True
+    assert out["a"]["reach_unresolved"] is True
+    assert "big_water_partial" not in out["b"]
+    assert "big_water_partial" not in out["c"]
+    # Without the kinds map (an older lakes.parquet) nothing is capped.
+    assert "big_water_partial" not in build.build_restrictions(records, matches, [])["a"]

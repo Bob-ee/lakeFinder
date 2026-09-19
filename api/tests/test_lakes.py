@@ -427,3 +427,29 @@ def _uniform_series(wind_kt: float, gust_kt: float, wind_dir: float) -> HourlySe
         },
     }
     return HourlySeries.from_open_meteo(payload, DETROIT)
+
+
+def _round_lake(**kw):
+    base = {
+        "id": 50, "name": "Round", "lat": 42.7, "lon": -83.4, "verdict": "clear", "chord_ft": 6000,
+        "chord_bearing_deg": 0, "distance_nm": 5, "bearing_deg": 90, "extents_ft": tuple([5000] * 16),
+    }
+    base.update(kw)
+    return lakes_mod.Candidate(**base)
+
+
+def test_crosswind_on_the_long_axis_is_not_scored_when_the_run_into_the_wind_is_long_enough():
+    # Wind straight across the longest chord, 14 kt: 14 kt of crosswind on the long axis, but there
+    # is 5,000 ft of water into the wind, so nobody lands on the long axis.
+    hour = lakes_mod.score_lake_hour(_round_lake(), wind_dir_deg=90, wind_kt=14, gust_kt=14, limits=LIMITS)
+    assert hour.limiting != "xwind_water"
+    assert hour.xwind_kt == pytest.approx(14, abs=0.5)  # still reported
+
+
+def test_short_run_into_the_wind_is_marginal_when_the_long_axis_is_within_the_crosswind_limit():
+    extents = [6000 if i in (0, 8) else 900 for i in range(16)]
+    narrow = _round_lake(extents_ft=tuple(extents))
+    ok = lakes_mod.score_lake_hour(narrow, wind_dir_deg=90, wind_kt=8, gust_kt=8, limits=LIMITS)
+    assert (ok.level, ok.limiting) == ("marginal", "xwind_water")
+    too_much = lakes_mod.score_lake_hour(narrow, wind_dir_deg=90, wind_kt=14, gust_kt=14, limits=LIMITS)
+    assert (too_much.level, too_much.limiting) == ("unfavorable", "run")

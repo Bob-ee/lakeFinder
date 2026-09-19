@@ -59,9 +59,29 @@ applies when it leaves at least one polygon; a DNR section list that misses the 
 falls through to the next test rather than dropping the rule.
 
 This is deliberately the one place the matcher emits several rows for one restriction. A creek,
-channel, canal or bay with no polygon in the layer still ends up in `unmatched.json` as
-`kind: "waterway"`, as do the Great Lakes and their connecting waters, which the layer omits
-entirely.
+channel or canal with no polygon in any water layer still ends up in `unmatched.json` as
+`kind: "waterway"`.
+
+Big water
+---------
+`geometry` also supplies `kind == "great_lake"` and `kind == "connecting_water"` polygons, and they
+join the **waterway track only**. That single gate is what keeps a lake-named inland rule off a
+Great Lake: the 25-acre "Lake Erie" in Monroe, "Saint Clair Lake" in Antrim, "Huron Lake" in
+Houghton and "Superior Lakes" in Marquette are all lake headers scoring against lake polygons, while
+"Detroit River", "St. Clair River" and "Lake St. Clair, Certain Creeks" are waterway headers that
+reach the big-water polygons by name (the last through the `head.split(",")[0]` variant).
+
+Two rules are specific to big water:
+
+- **Every big-water match is `reach_unresolved`.** A township or a section never covers a 430 sq mi
+  lake or a 20 mile river, so the rule is about a reach whatever the narrowing found.
+- **Bay and harbor fallback** (`match_great_lake_bay`): a header *ending* in Bay or Harbor that
+  matched no polygon by name attaches to the one Great Lake its county touches, but only when the
+  restriction's own PLSS sections or township/city labels touch that lake too. Both tests are
+  required and both reuse machinery the waterway track already has -- the polygon's `counties` and
+  `townships` intersection lists, and the buffered section union. The county test alone would be a
+  guess: "Pine Creek Bay" (Ottawa) is on Lake Macatawa, and a county on two Great Lakes (Chippewa,
+  Mackinac, St. Clair, Wayne) is ambiguous by construction.
 """
 from __future__ import annotations
 
@@ -138,6 +158,12 @@ LAKE_GENERIC_RE = re.compile(
 )
 _PAREN_RE = re.compile(r"\s*\([^)]*\)\s*")
 
+#: Contract "Waterway matching": kinds the inland hydrography layer does not contain.
+BIG_WATER_KINDS = ("great_lake", "connecting_water")
+#: A header that *ends* in a bay or harbor word. "Bay of Lake Nettie" and "Indian Pete's Bayou" are
+#: deliberately not bay headers; "Sandy Creek Bay and North" is, once its trailing clause is trimmed.
+BAY_HARBOR_RE = re.compile(r"\b(bays?|harbou?rs?)(\s+of\s+refuge)?\s*$", re.IGNORECASE)
+
 
 def is_waterway_name(raw_name: str) -> bool:
     """True for DNR entries that describe a river, creek, channel, harbor, or bay."""
@@ -196,6 +222,13 @@ def waterway_name_variants(raw_name: str) -> list[str]:
         if norm and norm not in out:
             out.append(norm)
     return out
+
+
+def is_bay_or_harbor_name(raw_name: str) -> bool:
+    """True when the header's head *ends* in a bay or harbor word (see `BAY_HARBOR_RE`)."""
+    head = NAME_SUFFIX_RE.sub("", raw_name or "").strip()
+    head = TRAILING_CLAUSE_RE.sub("", _PAREN_RE.sub(" ", head)).strip()
+    return bool(BAY_HARBOR_RE.search(head))
 
 
 _AREA_PUNCT_RE = re.compile(r"[^a-z0-9]+")
@@ -292,15 +325,20 @@ class Matcher:
         else:
             self._kind = np.array(["lake"] * len(self.lakes), dtype=object)
         self._is_river = self._kind == "river"
+        self._is_big_water = np.isin(self._kind, BIG_WATER_KINDS)
         self._river_named = np.array(
             [is_waterway_name(str(n)) if isinstance(n, str) else False for n in self.lakes["name"]]
         )
         self._counties = self._area_sets("counties", "county")
         self._townships = self._area_sets("townships", "township")
         self._waterway_rows = np.flatnonzero(
-            (self._is_river | self._river_named) & self.lakes["name_norm"].astype(bool).to_numpy()
+            (self._is_river | self._river_named | self._is_big_water)
+            & self.lakes["name_norm"].astype(bool).to_numpy()
         )
-        self._lake_rows_mask = ~self._is_river
+        self._great_lake_rows = np.flatnonzero(self._kind == "great_lake")
+        # The lake track is `kind == "lake"` exactly, never "not a river": a Great Lake must not be
+        # reachable from a lake-named header (contract, "Waterway matching").
+        self._lake_rows_mask = self._kind == "lake"
         if self.plss is not None and len(self.plss):
             if self.plss.crs is None:
                 self.plss = self.plss.set_crs(WGS84)
@@ -476,10 +514,14 @@ class Matcher:
                 scored, method_suffix = hits, ("-trimmed" if i else "")
                 break
         if not scored:
+            bay = self.match_great_lake_bay(rec)
+            if bay is not None:
+                return [bay], None
             reason = (
                 "no river polygon scored 0.5 or better"
                 if rows
-                else "no river polygon of that name in the county (creek/channel/bay/Great Lakes water)"
+                else "no waterbody of that name in the county (creek/channel/canal, or a bay the "
+                "Great Lake fallback could not place)"
             )
             best = max((s for s, _, _ in self._score_rows(name_norm, county, rows)), default=0.0)
             return [], self._miss(rec, name_norm, "waterway", len(rows), best, None, reason)
@@ -496,10 +538,44 @@ class Matcher:
                 score=score,
                 method=method,
                 needs_review=score < ACCEPT,
-                reach_unresolved=narrowed == "county",
+                # Big water is always a reach: no township or section covers a whole Great Lake.
+                reach_unresolved=narrowed == "county" or bool(self._is_big_water[row]),
             )
             for _, row, _ in keep
         ], None
+
+    def match_great_lake_bay(self, rec: dict) -> Match | None:
+        """A bay or harbor of a Great Lake -> that lake, `reach_unresolved`. `None` when unsure.
+
+        Requires (1) the restriction's county to touch exactly one `great_lake` polygon and (2) the
+        restriction's own PLSS sections (buffered) or township/city labels to touch that same lake.
+        Both, because either alone is a guess -- see the module docstring.
+        """
+        if not is_bay_or_harbor_name(rec.get("lake_name_raw") or ""):
+            return None
+        keys = area_keys(rec.get("county"))
+        if not keys:
+            return None
+        rows = [row for row in self._great_lake_rows if self._counties[row] & keys]
+        if len(rows) != 1:
+            return None
+        row = rows[0]
+
+        section_geom = self.section_geometry(plss_keys(rec.get("plss")))
+        if section_geom is not None and self._proj.iloc[row].intersects(section_geom.buffer(self.buffer_m)):
+            narrowed = "plss"
+        elif area_keys(rec.get("township")) & self._townships[row]:
+            narrowed = "township"
+        else:
+            return None
+        return Match(
+            restriction_id=rec["restriction_id"],
+            lake_id=int(self.lakes["id"].iat[row]),
+            score=1.0,
+            method=f"bay+great-lake-{narrowed}",
+            needs_review=False,
+            reach_unresolved=True,
+        )
 
     def _narrow_reach(self, rec: dict, keep: list) -> tuple[list, str]:
         """PLSS sections first, then township / city labels. Either is skipped when it empties the set."""
@@ -622,14 +698,55 @@ def run(cfg: Config, args) -> int:
         len({m.restriction_id for m in matches}), len(active), len(matches), low, len(unmatched),
         len({m.lake_id for m in matches}), time.monotonic() - started,
     )
+    big_ids = set(matcher.lakes["id"].to_numpy()[matcher._is_big_water])
+    big = [m for m in matches if m.lake_id in big_ids]
     log.info(
         "  waterway track: %d restrictions on %d polygons, %d with reach_unresolved; %d unmatched waterways",
-        len({m.restriction_id for m in matches if "+river-" in m.method}),
-        len({m.lake_id for m in matches if "+river-" in m.method}),
+        len({m.restriction_id for m in matches if "+river-" in m.method or m.method.startswith("bay+")}),
+        len({m.lake_id for m in matches if "+river-" in m.method or m.method.startswith("bay+")}),
         len(unresolved),
         sum(1 for u in unmatched if u["kind"] == "waterway"),
     )
+    if big:
+        by_name = {}
+        for m in big:
+            name = str(matcher.lakes.loc[matcher.lakes["id"] == m.lake_id, "name"].iat[0])
+            by_name[name] = by_name.get(name, 0) + 1
+        log.info(
+            "  big water: %d restrictions on %d water bodies (%s)",
+            len({m.restriction_id for m in big}), len(by_name),
+            ", ".join(f"{k} x{v}" for k, v in sorted(by_name.items())),
+        )
     return 0
+
+
+def kinds_by_lake(lakes) -> dict[int, str]:
+    """`{lake_id: kind}` from a `lakes.parquet` frame; `"lake"` for a frame written before `kind`."""
+    if lakes is None or not len(lakes):
+        return {}
+    if "kind" not in lakes:
+        return {int(i): "lake" for i in lakes["id"]}
+    kinds = lakes["kind"].astype("string").fillna("lake")
+    return {int(i): str(k) for i, k in zip(lakes["id"], kinds, strict=True)}
+
+
+def big_water_partial_ids(matches: list[dict], kinds: dict[int, str]) -> set[str]:
+    """Restriction ids to publish as `big_water_partial` (docs/data-contract.md).
+
+    A restriction qualifies when every water body it matched is a `great_lake` or
+    `connecting_water`, so a rule that also lands on an inland polygon is never capped. `classify`
+    and `build` both call this, which is what keeps the pipeline's prebaked verdict and the client's
+    re-run of the engine on the published record in agreement.
+    """
+    if not kinds:
+        return set()
+    by_rid: dict[str, list[int]] = {}
+    for m in matches:
+        by_rid.setdefault(str(m["restriction_id"]), []).append(int(m["lake_id"]))
+    return {
+        rid for rid, ids in by_rid.items()
+        if ids and all(kinds.get(i) in BIG_WATER_KINDS for i in ids)
+    }
 
 
 def matches_by_lake(matches: list[dict]) -> dict[int, list[dict]]:

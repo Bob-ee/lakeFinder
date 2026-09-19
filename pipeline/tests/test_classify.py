@@ -14,7 +14,7 @@ import geopandas as gpd
 import pytest
 from shapely.geometry import box
 
-from seaplane_pipeline import classify
+from seaplane_pipeline import classify, match
 
 pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node not on PATH")
 
@@ -152,3 +152,60 @@ def test_run_end_to_end(tmp_path, monkeypatch, repo_root):
     assert all(s["parser"] == "manual" for s in synthetic)
     mac = next(s for s in synthetic if s["restriction_type"] == "mac_ordinance")
     assert mac["lake_ids"] == [2] and mac["source_url"] == "http://example.test"
+
+
+# --- big water -------------------------------------------------------------
+
+
+def big_water_frame():
+    return lakes_frame([
+        {"id": 301, "name": "Lake St. Clair"},
+        {"id": 302, "name": "Cass Lake"},
+    ]).assign(kind=["great_lake", "lake"])
+
+
+def test_drop_big_water_federal_withholds_only_the_big_water_records():
+    records = [
+        {"restriction_id": "f1", "restriction_type": "federal_no_landing", "lake_ids": [301]},
+        {"restriction_id": "f2", "restriction_type": "federal_no_landing", "lake_ids": [302]},
+    ]
+    kept = classify.drop_big_water_federal(records, big_water_frame())
+    assert [r["restriction_id"] for r in kept] == ["f2"]
+
+
+def test_restrictions_by_lake_stamps_big_water_partial():
+    records = [
+        {"restriction_id": "a", "restriction_type": "slow_no_wake", "scope": "lakewide", "status": "active"},
+        {"restriction_id": "b", "restriction_type": "slow_no_wake", "scope": "lakewide", "status": "active"},
+    ]
+    matches = [
+        {"restriction_id": "a", "lake_id": 301, "score": 1.0, "method": "exact+river-township"},
+        {"restriction_id": "b", "lake_id": 302, "score": 1.0, "method": "exact+plss"},
+    ]
+    partial = match.big_water_partial_ids(matches, match.kinds_by_lake(big_water_frame()))
+    grouped = classify.restrictions_by_lake(records, matches, [], partial)
+    assert grouped["301"][0]["big_water_partial"] is True
+    assert "big_water_partial" not in grouped["302"][0]
+
+
+def test_the_cap_is_what_the_engine_applies_to_the_pipeline_verdict(repo_root):
+    """End to end through the real rules engine: the same rule is conditional on big water only."""
+    records = [
+        {"restriction_id": "a", "restriction_type": "slow_no_wake", "scope": "lakewide", "status": "active",
+         "hours": None, "season": None},
+        {"restriction_id": "b", "restriction_type": "slow_no_wake", "scope": "lakewide", "status": "active",
+         "hours": None, "season": None},
+    ]
+    matches = [
+        {"restriction_id": "a", "lake_id": 301, "score": 1.0, "method": "exact+river-township"},
+        {"restriction_id": "b", "lake_id": 302, "score": 1.0, "method": "exact+plss"},
+    ]
+    lakes = big_water_frame()
+    partial = match.big_water_partial_ids(matches, match.kinds_by_lake(lakes))
+    grouped = classify.restrictions_by_lake(records, matches, [], partial)
+    results = {
+        r["id"]: r
+        for r in classify.run_engine(repo_root / "rules" / "rules.json", classify.lake_inputs(lakes, {}), grouped)
+    }
+    assert results[301]["verdict"] == "conditional"
+    assert results[302]["verdict"] == "restricted"

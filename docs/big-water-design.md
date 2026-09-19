@@ -2,7 +2,9 @@
 
 Added 2026-09-19 from Bobby's feedback on the first build, then generalized the same day at his direction: whatever
 is built for Lake St. Clair must apply to every lake, and the app is headed for a nationwide release to the seaplane
-community (`docs/nationwide.md`). Status: requirements captured, source recon running, nothing built.
+community (`docs/nationwide.md`). Status: **built 2026-09-19** for Michigan (sections 3-5, steps 1-4; step 5 partly: all five Great Lakes are in, Huron
+and Superior clipped at the border). The authoritative spec is `docs/data-contract.md` "Wave field"; this file is the
+reasoning. What changed while building is in section 7.
 
 ## 1. What Bobby asked for
 
@@ -99,3 +101,25 @@ them, since they exist only for the Great Lakes and coasts.
   reproduce what Bobby described, so the mechanism is sound. Still open: the NCEI grid cell size for St. Clair.
 - Whether the Ontario half of St. Clair is scored or only drawn.
 - Sample-point density and the cap; decide from St. Clair and one mid-size inland lake.
+
+## 7. What changed while building (2026-09-19)
+
+- **Clip edges.** Rays leaving through an artificial polygon edge count as open water. The first test (a boundary
+  segment over 1,500 m) missed Lake Huron's densified 104 km border line; the second (vertices within 60 m of a 2 km
+  chord) caught it but also caught ordinary straight shore on Torch and Houghton lakes and painted 40 inch bands on
+  them. Drawn lines sit 0 m off their chord and natural shore 40 m or more, so the tolerance is 10 m.
+- **Density.** 400 points put 1.7 km between samples on Lake St. Clair and gave the small Flats bays nothing. Water
+  of 100,000 acres or more aims for 2,000 points (St. Clair: about 1,950 at 750 m).
+- **Names.** GNIS gives a point and no extent, so a name's reach is measured from the width of the water at the
+  name; a name needs at least 2 points and a compass sector at least 3. GNIS `Channel` names label only rivers and
+  connecting waters: on Lake St. Clair they are fifty marsh cuts that buried the bays.
+- **True bearings.** The trial table in `docs/gis-sources.md` was cast on grid north. Convergence at St. Clair is 2.3°,
+  and single rays are sensitive to it (Anchor Bay's south ray 39 km grid, 11 km true); the 5-ray arc mean smooths it.
+  The shipped field uses true bearings, as the wind does.
+- **Depth only on big water.** A DEM cell under an inland lake is the lake's surface elevation, not its depth.
+- **Overlaps.** The state's Great Lakes polygons swallow inland water (Torch Lake 97% inside "Lake Michigan") and run
+  up the Detroit River; inland water is subtracted from big water and connecting waters from the Great Lakes.
+- **Crosswind on water** is scored only when the run into the wind is too short and the long axis would have to be
+  used; scoring it always made Lake St. Clair "marginal, crosswind" against its 28 mile chord.
+- **First real output** (KONZ, wind 072/12 G14): Lake St. Clair regions from Campau / Fisher / Little Muscamoot Bay
+  5 in, Big Muscamoot 8, Anchor Bay 11, L'anse Creuse 13, to the open middle 18 and the downwind west end 19.

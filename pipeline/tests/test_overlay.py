@@ -139,3 +139,85 @@ def test_run_without_geometry_fails_cleanly(tmp_path, monkeypatch):
     cfg = Config()
     cfg.ensure_dirs()
     assert overlay.run(cfg, argparse.Namespace()) == 2
+
+
+# --- big water -------------------------------------------------------------
+
+
+def big_water_frame():
+    """One Great Lake, one connecting water, one ordinary inland lake, all 1 km-ish boxes."""
+    return gpd.GeoDataFrame(
+        {
+            "id": [201, 202, 203],
+            "name": ["Lake St. Clair", "Detroit River", "Cass Lake"],
+            "kind": ["great_lake", "connecting_water", "lake"],
+        },
+        geometry=[
+            box(LON0, LAT0, LON0 + 0.12, LAT0 + 0.09),
+            box(LON0 + 0.20, LAT0, LON0 + 0.32, LAT0 + 0.09),
+            box(LON0 + 0.50, LAT0, LON0 + 0.512, LAT0 + 0.009),
+        ],
+        crs="EPSG:4326",
+    )
+
+
+def test_big_water_takes_access_from_its_own_site_type():
+    bas = gpd.GeoDataFrame(
+        {
+            "name": ["Great Lake Launch", "River Launch", "Inland Launch"],
+            "waterbodytype": ["Great Lake", "River/Stream", "Inland Lake"],
+        },
+        geometry=[
+            Point(LON0 + 0.06, LAT0 + 0.04),        # inside the Great Lake
+            Point(LON0 + 0.26, LAT0 + 0.04),        # inside the connecting water
+            Point(LON0 + 0.50, LAT0 + 0.004),       # inside the inland lake
+        ],
+        crs="EPSG:4326",
+    )
+    out = overlay.compute_overlays(big_water_frame(), bas=bas)
+    assert out["201"]["access"] == "Great Lake Launch"
+    assert out["202"]["access"] == "River Launch"
+    assert out["203"]["access"] == "Inland Launch"
+
+
+def test_a_great_lake_site_never_reaches_an_inland_lake():
+    """A "Great Lake" site at a river mouth must not flag the inland lake it sits on."""
+    bas = gpd.GeoDataFrame(
+        {"name": ["Great Lake Launch"], "waterbodytype": ["Great Lake"]},
+        geometry=[Point(LON0 + 0.50, LAT0 + 0.004)],
+        crs="EPSG:4326",
+    )
+    out = overlay.compute_overlays(big_water_frame(), bas=bas)
+    assert out["203"]["public_access"] is False
+
+
+def test_big_water_flags_are_computed_by_intersection_not_by_centroid():
+    """Selfridge's Class D covers a corner of Lake St. Clair; the centroid is open water."""
+    corner = box(LON0 - 0.01, LAT0 - 0.01, LON0 + 0.02, LAT0 + 0.02)
+    airspace = gpd.GeoDataFrame(
+        {"CLASS": ["D"], "LOWER_VAL": [0]}, geometry=[corner], crs="EPSG:4326"
+    )
+    federal = gpd.GeoDataFrame({"name": ["Some Refuge"], "kind": ["fws"]}, geometry=[corner], crs="EPSG:4326")
+    out = overlay.compute_overlays(big_water_frame(), federal=federal, airspace=airspace)
+    assert out["201"]["airspace_class"] == "D"
+    assert out["201"]["federal_unit"] == "Some Refuge"
+    # The inland lake keeps the centroid rule, so a corner touch does not flag it.
+    inland_corner = box(LON0 + 0.499, LAT0 - 0.001, LON0 + 0.5005, LAT0 + 0.001)
+    out2 = overlay.compute_overlays(
+        big_water_frame(),
+        airspace=gpd.GeoDataFrame({"CLASS": ["D"], "LOWER_VAL": [0]}, geometry=[inland_corner], crs="EPSG:4326"),
+    )
+    assert out2["203"]["airspace_class"] is None
+
+
+def test_big_water_federal_unit_is_the_largest_overlap():
+    """"Part of Lake Superior is Isle Royale", not the refuge that clips 0.16 km2 of it."""
+    big = box(LON0 - 0.01, LAT0 - 0.01, LON0 + 0.10, LAT0 + 0.08)
+    tiny = box(LON0 - 0.001, LAT0 - 0.001, LON0 + 0.001, LAT0 + 0.001)
+    federal = gpd.GeoDataFrame(
+        {"name": ["Tiny Sliver Refuge", "Big National Park"], "kind": ["fws", "nps"]},
+        geometry=[tiny, big],
+        crs="EPSG:4326",
+    )
+    out = overlay.compute_overlays(big_water_frame(), federal=federal)
+    assert out["201"]["federal_unit"] == "Big National Park"

@@ -14,17 +14,19 @@ reads as a build order.
 
 | part | state | verify with |
 |---|---|---|
-| `pipeline/` (Python 3.12, uv) | all 8 design stages plus `suggest`; `geometry` also computes `extent_by_bearing`; statewide run takes ~6 min warm | `cd pipeline && uv run pytest -q` (275 pass) and `uv run ruff check seaplane_pipeline tests` |
-| `rules/` (JS, zero deps) | 24 rules, shared fixtures, CLI used by the pipeline, module imported by the client | `cd rules && npm test` (117 pass) |
+| `pipeline/` (Python 3.12, uv) | all 8 design stages plus `suggest`; `geometry` also computes `extent_by_bearing`; statewide run takes ~6 min warm | `cd pipeline && uv run pytest -q` (336 pass) and `uv run ruff check seaplane_pipeline tests` |
+| `rules/` (JS, zero deps) | 24 rules, shared fixtures, CLI used by the pipeline, module imported by the client | `cd rules && npm test` (144 pass: engine + `rules/waves/`) |
 | `web/` (Vite, TS, MapLibre) | map with verdict outlines, search, 3-snap sheet / iPad panel, `?lake=`, disclaimer, client-side rules engine | `cd web && npm run typecheck && npm run build` |
-| `api/` (FastAPI, Python 3.12, uv) | briefing generator with the evening outlook, in-process scheduler, settings, airport lookup; `/api/wind/*` is an empty slot | `cd api && uv run pytest -q` (219 pass) and `uv run ruff check .` |
+| `api/` (FastAPI, Python 3.12, uv) | briefing generator with the evening outlook, in-process scheduler, settings, airport lookup; `/api/wind/*` is an empty slot | `cd api && uv run pytest -q` (324 pass) and `uv run ruff check .` |
 | briefing client | Briefing tab + chip under the search bar, outlook hour strip and run-history chips, settings dialog, `?briefing=1` | same web commands; screenshots were checked at 390 px and 1180 px, light and dark |
 | hosting | `Caddyfile`, `docker-compose.yml` written (api has rw data + manual mounts, `API_UPSTREAM` for a non-Docker install), **not deployed anywhere yet** | |
 | data | `data/out/` holds a full statewide pack (158 MB) including `lake_extents.json` (6,054 lakes) and a live `briefing.json`; gitignored, rebuild with `uv run seaplane all` | `pmtiles show data/out/lakes.pmtiles` |
 
-Statewide numbers as of the last run (2026-09-19, rivers included): 83 county pages, 1,134 restriction records,
-12,563 water bodies (10,783 `kind: lake` + 1,780 `kind: river`), 910 of 1,119 active restrictions matched, verdicts
-restricted 548 / conditional 281 / clear 11,246 / unknown 488. 181 waterway rules attach to 157 river polygons; 24 of
+Statewide numbers as of the last run (2026-09-19, rivers and big water included): 83 county pages, 1,134 restriction
+records, 12,571 water bodies (10,783 `lake`, 1,780 `river`, 5 `great_lake` incl. Lake St. Clair, 3
+`connecting_water`), 935 of 1,119 active restrictions matched, verdicts restricted 548 / conditional 287 / clear
+11,248 / unknown 488. Wave field: 81,436 sample points over 1,286 water bodies (`wave_points.bin` 4.9 MB), 8,552
+with a depth (Lake Erie, Lake St. Clair, Detroit and St. Clair Rivers, from the NCEI grid). 181 waterway rules attach to 157 river polygons; 24 of
 them could not be narrowed below the county and carry `reach_unresolved` (the sheet says the rule covers part of the
 river). Lake ids did not change when rivers were added.
 
@@ -86,17 +88,32 @@ web dev server / Caddy serve data/out at /data/ ──▶ client loads index.jso
 
 - **Direction from Bobby (2026-09-19):** he flies mostly Lake St. Clair (his saved home airport is KONZ, Grosse Ile)
   and wants to know *where on the lake* to land; the mechanism must work on every lake; the app is headed for a
-  nationwide community release. Big water (St. Clair, Detroit River, the Great Lakes) is not on the map yet. Plan:
-  `docs/big-water-design.md`; constraints: `docs/nationwide.md`; sources, with a verified St. Clair polygon and
-  trial fetch rays: `docs/gis-sources.md` 2026-09-19 addendum.
-- **Rivers:** excluded from the briefing's ranked water until the per-point wave field exists (`chord_ft` on a river
-  says nothing about width). A county-level river rule marks every same-name polygon in the county restricted plus
-  `reach_unresolved`; conservative on purpose. 59 waterway rules remain unmatched: 25 name Great Lakes water
-  (Detroit River 11, St. Clair River 5, Little Traverse Bay 3, ...), 8 are an Antrim `parse-dnr` header bug
+  nationwide community release. **Built the same day:** big water on the map, the `wavefield` pipeline stage, region
+  scoring and `home_water` in the briefing, the Water section and wave overlay in the client. Design:
+  `docs/big-water-design.md`; constraints: `docs/nationwide.md`; contract: "Wave field"; sources:
+  `docs/gis-sources.md` 2026-09-19 addendum. Bobby has not yet set a home water in his real settings (the sheet has
+  a "Make this my home water" button) and has not reviewed the result.
+- **Wave field, known limits:** Lake Huron and Lake Superior polygons stop at the international line (rays through
+  that edge read as the 100 km cap; whole-lake polygons come with the NHD move). One wind forecast per water body
+  (its centroid), so a 25 mile lake gets one wind. Depth exists only where the NCEI Erie / St. Clair grid reaches;
+  everything else uses the deep-water form (overstates shallow water). About 40 St. Clair shoreline points read
+  depth-unknown (DEM shore ramp) and come out higher than their neighbors. First ground truth, 2026-09-19 15:00:
+  buoy 45147 1.3 ft (16 in) mid-lake against a computed 18 in at the gust and 14 in from the marine model.
+- **Big water, known limits:** every flag on `great_lake` / `connecting_water` means "part of this water"; airspace is
+  fetched for Michigan only, so Lake Erie shows nothing for Ohio, Pennsylvania, New York, or Ontario; Lake Michigan's
+  `counties` wrongly includes Kent and Kalkaska (the state shoreline layer runs up the Grand and Elk rivers);
+  "Saugatuck Harbor" (Allegan) did not attach and may really be a Kalamazoo River rule: left in the review queue.
+- **Bug to fix (pre-existing):** 30 unnamed lakes read `restricted` with empty `restriction_ids`: synthetic federal
+  restriction ids hash `county|lake_name_raw|township|raw_text`, which collides for unnamed lakes in one refuge, so
+  `build_restrictions` keeps only the last one's `lake_ids`. Put the lake id in the synthetic id. Also `parse-dnr`
+  takes the second half of "LAKE MACATAWA, PINE CREEK BAY" as the lake name.
+- **Rivers:** ranked in the briefing only when they have wave points and a region with enough run (171 rivers have
+  points; nearly all read "run too short"). A county-level river rule marks every same-name polygon in the county restricted plus
+  `reach_unresolved`; conservative on purpose. 34 waterway rules remain unmatched: 8 are an Antrim `parse-dnr` header bug
   (waterbody parsed as "Rivers"). `NAME_SUFFIX_RE` in `match.py` never trims a suffix that ends the string (worked
   around on the waterway track only). One match was lost to the lake/river gate and wants an override: Crawford
   "Lake Margrethe Channel in Harbor Beach Subdivision".
-- **`index.json` is 4.84 MB of the 5 MB budget** after rivers, and `lakes.pmtiles` grew to 23 MB. Cheapest lever:
+- **`index.json` is 4.85 MB of the 5 MB budget**, and `lakes.pmtiles` is 27 MB. Cheapest lever:
   drop `name_norm` from the payload (~330 KB; the client already imports `normalizeName`).
 
 - **Briefing limits are placeholders.** `docs/briefing-design.md` section 8 lists what only Bobby can supply (SeaRey
@@ -135,7 +152,7 @@ copy or rsync `data/out` (or run the pipeline there), Caddy on :8080 behind `tai
 tailnet, open it on the phone and iPad, add to home screen. Then a `launchd` (or cron container) job for the weekly
 pipeline with a diff notification (design phase 4 mentions this; the diff file already exists).
 
-**B. Daily briefing: BUILT 2026-09-19** (`docs/briefing-design.md`, schemas in the contract's "Briefing" section).
+**B. Daily briefing, big water, and the wave field: BUILT 2026-09-19** (`docs/briefing-design.md`, schemas in the contract's "Briefing" section).
 Deterministic, no LLM. Runs at 06, 09, 12, 15, 18, 20, 22 local; the 18:00, 20:00, and 22:00 runs are Bobby's
 "plan tomorrow morning" outlook (hourly sunrise-to-noon scoring, best window, fog factor, run history with trend,
 confidence, optional ntfy push). What is left: deploy it with step A (the api needs a `launchd` job, see

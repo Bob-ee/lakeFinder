@@ -12,6 +12,14 @@ overrides from `overrides.yaml` are applied afterwards, on top of the engine's a
 A low-confidence match (0.5-0.8, see `match.py`) is applied but carries `match_confidence` and sets
 `needs_review` on the restriction copy handed to the engine, so the lake surfaces in `review` and
 gets the `needs_review` flag in the index.
+
+The one synthetic record this stage withholds is `federal_no_landing` on a `great_lake` or
+`connecting_water`. `overlay` sets `federal_unit` on those kinds by intersection, so it means "part
+of this water is in the unit" -- the Michigan Islands refuge over a handful of islands in Lake
+Michigan, the Detroit River International Wildlife Refuge over shoals in the Detroit River. Turning
+that into a lakewide 36 CFR 2.17 record would mark a Great Lake restricted on a technicality. The
+`federal_overlay` flag still shows, and the client words it "part of this water" off `kind`
+(docs/data-contract.md, `index.json`).
 """
 from __future__ import annotations
 
@@ -67,9 +75,19 @@ def lake_inputs(lakes: gpd.GeoDataFrame, overlays: dict) -> list[dict]:
 
 
 def restrictions_by_lake(
-    records: list[dict], matches: list[dict], synthetic: list[dict] | None = None
+    records: list[dict],
+    matches: list[dict],
+    synthetic: list[dict] | None = None,
+    big_water_partial: set[str] | None = None,
 ) -> dict[str, list[dict]]:
-    """Group active restriction records under the lake ids the matcher assigned."""
+    """Group active restriction records under the lake ids the matcher assigned.
+
+    `big_water_partial` is the id set from `match.big_water_partial_ids`. It has to be stamped on
+    the copies handed to the engine here as well as on the published records in `build`, or the
+    prebaked verdict in `index.json` and the client's re-run of the engine would disagree on exactly
+    the water bodies the cap exists for.
+    """
+    partial = big_water_partial or set()
     by_id = {r["restriction_id"]: r for r in records}
     grouped: dict[str, list[dict]] = {}
     for m in matches:
@@ -81,6 +99,8 @@ def restrictions_by_lake(
         copy["match_method"] = m.get("method")
         if m.get("needs_review"):
             copy["needs_review"] = True
+        if str(m["restriction_id"]) in partial:
+            copy["big_water_partial"] = True
         grouped.setdefault(str(int(m["lake_id"])), []).append(copy)
     for rec in synthetic or []:
         for lake_id in rec.get("lake_ids") or []:
@@ -122,6 +142,21 @@ def apply_reach_flags(results: list[dict], matches: list[dict]) -> int:
             result.setdefault("flags", []).append("reach_unresolved")
             applied += 1
     return applied
+
+
+def drop_big_water_federal(records: list[dict], lakes) -> list[dict]:
+    """Withhold `federal_no_landing` on `great_lake` / `connecting_water`; see the module docstring."""
+    kinds = match.kinds_by_lake(lakes)
+    kept, dropped = [], 0
+    for rec in records:
+        ids = [int(i) for i in rec.get("lake_ids") or []]
+        if ids and all(kinds.get(i) in match.BIG_WATER_KINDS for i in ids):
+            dropped += 1
+            continue
+        kept.append(rec)
+    if dropped:
+        log.info("withheld %d federal_no_landing records on big water (flag only, no verdict)", dropped)
+    return kept
 
 
 def apply_verdict_overrides(results: list[dict], overrides: dict[int, dict]) -> int:
@@ -166,13 +201,17 @@ def run(cfg: Config, args) -> int:
 
     matcher = match.Matcher(lakes) if len(lakes) else None
     mac_records, mac_loaded = manual.mac_restrictions(cfg, matcher)
-    federal_records = manual.federal_restrictions(lakes, overlays)
+    federal_records = drop_big_water_federal(manual.federal_restrictions(lakes, overlays), lakes)
+
     synthetic = mac_records + federal_records
     (cfg.work_dir / "synthetic_restrictions.json").write_text(
         json.dumps(synthetic, indent=1), encoding="utf-8"
     )
 
-    grouped = restrictions_by_lake(records, matches, synthetic)
+    kinds = match.kinds_by_lake(lakes)
+    grouped = restrictions_by_lake(
+        records, matches, synthetic, match.big_water_partial_ids(matches, kinds)
+    )
     rules_path = Path(getattr(args, "rules", None) or (cfg.rules_dir / "rules.json"))
     results = run_engine(
         rules_path,

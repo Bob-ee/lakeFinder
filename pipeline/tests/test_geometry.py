@@ -311,3 +311,124 @@ def test_extent_by_bearing_needs_river_spacing_on_a_river(meander_river):
     assert max(adaptive) > 3 * max(default[0], default[4])
     # It is the same measurement, so a denser grid can only find longer runs, never shorter ones.
     assert all(a >= d - 1 for a, d in zip(adaptive, default, strict=True))
+
+
+# --- big water -------------------------------------------------------------
+
+
+def _write_fc(path, features):
+    """A tiny GeoJSON FeatureCollection, WGS84, the shape the `big_water_*` datasets arrive in."""
+    path.write_text(json.dumps({
+        "type": "FeatureCollection",
+        "features": [
+            {"type": "Feature", "properties": props, "geometry": shapely.geometry.mapping(geom)}
+            for geom, props in features
+        ],
+    }), encoding="utf-8")
+    return path
+
+
+@pytest.fixture
+def big_water_cfg(tmp_path, monkeypatch):
+    """A `Config` whose cache holds stand-ins for the four big-water sources.
+
+    Geometry (degrees, near Lake St. Clair so EPSG:3078 is sane): the "Great Lake" is a 0.2 deg
+    square; the "connecting water" is a strip overlapping its east edge; one inland lake sits inside
+    the Great Lake and one 200 m sliver is left over to be dropped.
+    """
+    from shapely.geometry import box
+
+    from seaplane_pipeline import config as config_mod
+
+    monkeypatch.setenv("SEAPLANE_DATA_DIR", str(tmp_path))
+    cfg = config_mod.Config()
+    cfg.cache_dir.mkdir(parents=True, exist_ok=True)
+    _write_fc(cfg.cache_dir / "big_water_erie.geojson", [(box(-82.9, 42.3, -82.7, 42.5), {})])
+    _write_fc(cfg.cache_dir / "big_water_michigan.geojson", [
+        (box(-86.5, 43.0, -86.3, 43.2), {"LAKE_NAME": "Lake Michigan"}),
+        (box(-88.6, 43.8, -88.5, 43.9), {"LAKE_NAME": "Lake Oskosh"}),
+    ])
+    _write_fc(cfg.cache_dir / "big_water_st_clair.geojson", [(box(-82.6, 42.3, -82.5, 42.4), {})])
+    _write_fc(cfg.cache_dir / "big_water_ifr.geojson", [
+        (box(-82.75, 42.3, -82.65, 42.5), {"WBID": "dr"}),
+        (box(-84.2, 46.4, -84.1, 46.5), {"WBID": "scr"}),
+        (box(-84.4, 46.4, -84.3, 46.5), {"WBID": "smr"}),
+        (box(-87.0, 45.0, -86.9, 45.1), {"WBID": "lh"}),
+        (box(-89.0, 47.0, -88.9, 47.1), {"WBID": "ls"}),
+        (box(-83.4, 41.8, -83.3, 41.9), {"WBID": "le"}),     # ignored: the MapServer layer wins
+    ])
+    return cfg
+
+
+def _by_name(gdf):
+    return {row["name"]: row for _, row in gdf.iterrows()}
+
+
+def test_load_big_water_reads_every_source_with_its_published_name(big_water_cfg):
+    out = geometry.load_big_water(big_water_cfg)
+    got = _by_name(out)
+    assert set(got) == {
+        "Lake Superior", "Lake Michigan", "Lake Huron", "Lake Erie", "Lake St. Clair",
+        "St. Marys River", "St. Clair River", "Detroit River",
+    }
+    assert got["Lake Erie"]["kind"] == "great_lake"
+    assert got["Detroit River"]["kind"] == "connecting_water"
+    # "Lake Oskosh" shares the Lake Michigan layer and is filtered out by LAKE_NAME.
+    assert got["Lake Michigan"]["geometry"].bounds[0] > -87.0
+
+
+def test_load_big_water_subtracts_the_connecting_water_from_the_great_lake(big_water_cfg):
+    got = _by_name(geometry.load_big_water(big_water_cfg))
+    erie, dr = got["Lake Erie"]["geometry"], got["Detroit River"]["geometry"]
+    assert erie.intersection(dr).area == pytest.approx(0.0, abs=1e-12)
+    assert dr.bounds == pytest.approx((-82.75, 42.3, -82.65, 42.5))   # the river keeps its mouth
+
+
+def test_load_big_water_subtracts_the_inland_polygons(big_water_cfg):
+    from shapely.geometry import box
+
+    inland = gpd.GeoDataFrame(
+        {"name": ["Torch Lake", "A Sliver"], "kind": ["lake", "lake"]},
+        geometry=[box(-82.85, 42.35, -82.80, 42.40), box(-82.88, 42.32, -82.8799, 42.3201)],
+        crs=geometry.WGS84,
+    )
+    got = _by_name(geometry.load_big_water(big_water_cfg, inland))
+    erie = got["Lake Erie"]["geometry"]
+    assert erie.intersection(inland.geometry.iloc[0]).area == pytest.approx(0.0, abs=1e-12)
+    # The hole punched by the 10 m sliver is under MIN_BIG_WATER_PART_M2, but it is a hole, not a
+    # part, so what the threshold must not do is drop the lake itself.
+    assert erie.area > 0
+
+
+def test_load_big_water_drops_parts_under_the_minimum(big_water_cfg):
+    from shapely.geometry import box
+
+    # A cut clean across the lake leaves a 0.005 deg strip: ~0.4 km2, kept; and a 2 m strip: dropped.
+    inland = gpd.GeoDataFrame(
+        {"name": ["Cut", "Thin Cut"], "kind": ["river", "river"]},
+        geometry=[box(-82.9, 42.395, -82.7, 42.4), box(-82.9, 42.49998, -82.7, 42.4999999)],
+        crs=geometry.WGS84,
+    )
+    erie = _by_name(geometry.load_big_water(big_water_cfg, inland))["Lake Erie"]["geometry"]
+    parts = shapely.get_parts(shapely.geometry.shape(erie))
+    areas = sorted(
+        gpd.GeoSeries(list(parts), crs=geometry.WGS84).to_crs(geometry.MEASURE_CRS).area, reverse=True
+    )
+    assert all(a >= geometry.MIN_BIG_WATER_PART_M2 for a in areas), areas
+
+
+def test_load_big_water_is_empty_without_the_sources(tmp_path, monkeypatch):
+    from seaplane_pipeline import config as config_mod
+
+    monkeypatch.setenv("SEAPLANE_DATA_DIR", str(tmp_path))
+    out = geometry.load_big_water(config_mod.Config())
+    assert len(out) == 0
+    assert list(out.columns) == ["name", "kind", "area_acres", "geometry"]
+
+
+def test_kind_order_is_append_only():
+    """Ids hash in `KIND_ORDER` order; reordering it would renumber every published water body."""
+    assert geometry.KIND_ORDER[:2] == geometry.KINDS == ("lake", "river")
+    assert geometry.KIND_ORDER == ("lake", "river", "great_lake", "connecting_water")
+    assert set(geometry.BIG_WATER_KINDS) == {"great_lake", "connecting_water"}
+    assert "great_lake" in geometry.CHORD_SWEEP_KINDS and "great_lake" not in geometry.REACH_KINDS

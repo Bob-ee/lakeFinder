@@ -20,6 +20,22 @@ Rules (docs/design.md section 5, docs/gis-sources.md sections 3-5):
   548 lakes "Class B". (`LOWER_CODE` is "SFC" even for a 700 ft Class E floor -- it means "measured
   from the surface" -- so the test is `LOWER_VAL == 0`.) Pass `--airspace-any-floor` for the literal containing-polygon behaviour.
   All airspace polygons are still drawn as a context layer in `overlays.pmtiles`.
+
+Big water (`kind` in `great_lake` / `connecting_water`) is the same three flags with two changes,
+because a centroid test is meaningless on a 430 sq mi lake -- it returns null for all five Great
+Lakes and all three connecting rivers, which tells a pilot nothing:
+
+- `federal_unit` and `airspace_class` are computed by **intersection** instead. They then mean
+  "part of this water is ...", which is how the contract says the client words every flag on these
+  kinds: Lake St. Clair is Class D because Selfridge covers Anchor Bay, and the Detroit River is in
+  the Detroit River International Wildlife Refuge because the refuge holds islands and shoals in it.
+  `classify` deliberately does **not** turn that `federal_unit` into a `federal_no_landing`
+  restriction on these kinds -- a refuge over a few islands does not close a Great Lake.
+- `public_access` reads the boating-access sites the inland rule filters out: `"Great Lake"` sites
+  for a `great_lake`, `"River/Stream"` sites for a `connecting_water`. Each site type only ever
+  reaches the kinds it belongs to, so no inland lake gains access from a Great Lake site.
+  (`"River/Stream"` sites still do not reach `kind == "river"`; that is the pre-existing behaviour
+  and changing it would move 1,780 inland river polygons.)
 """
 from __future__ import annotations
 
@@ -28,7 +44,9 @@ import logging
 import time
 
 import geopandas as gpd
+import numpy as np
 import pandas as pd
+import shapely
 
 from . import gis
 from .config import Config
@@ -41,6 +59,14 @@ ACCESS_DISTANCE_M = 50.0
 # docs/gis-sources.md section 4: the refuge layer has no STATE field; these are the Michigan units.
 MI_FWS_LIT = {"DTR", "MCH", "SNY", "SHW", "HRN", "HBR", "KIW"}
 AIRSPACE_ORDER = ["B", "C", "D", "E", "G"]
+#: Boating-access `waterbodytype` values a water body of each kind may draw public access from.
+ACCESS_SITE_TYPES = {
+    "lake": ("Inland Lake",),
+    "river": ("Inland Lake",),
+    "great_lake": ("Great Lake",),
+    "connecting_water": ("River/Stream",),
+}
+BIG_WATER_KINDS = ("great_lake", "connecting_water")
 
 
 def add_args(sp) -> None:
@@ -114,19 +140,28 @@ def compute_overlays(
     if lakes.crs is None:
         lakes = lakes.set_crs(WGS84)
     proj = _to_proj(lakes)
+    kinds = (
+        lakes["kind"].astype("string").fillna("lake").to_numpy()
+        if "kind" in lakes
+        else np.array(["lake"] * len(lakes), dtype=object)
+    )
+    is_big = np.isin(kinds, BIG_WATER_KINDS)
     out: dict[str, dict] = {
         str(int(i)): {"public_access": False, "access": None, "federal_unit": None, "airspace_class": None}
         for i in lakes["id"]
     }
 
     if bas is not None and len(bas):
-        sites = bas
-        if "waterbodytype" in sites:
-            sites = sites[sites["waterbodytype"].astype(str).str.strip() == "Inland Lake"]
-        sites = sites[~sites.geometry.isna()]
-        if len(sites):
+        # No `waterbodytype` column (hand-built test frames): every site is eligible, as before.
+        wbt = bas["waterbodytype"].astype(str).str.strip() if "waterbodytype" in bas else None
+        for kind, wanted in ACCESS_SITE_TYPES.items():
+            targets = proj[kinds == kind]
+            sites = bas if wbt is None else bas[wbt.isin(wanted)]
+            sites = sites[~sites.geometry.isna()]
+            if not len(targets) or not len(sites):
+                continue
             joined = gpd.sjoin_nearest(
-                proj[["id", "geometry"]],
+                targets[["id", "geometry"]],
                 _to_proj(sites.reset_index(drop=True))[["name", "geometry"]],
                 how="inner",
                 max_distance=access_distance_m,
@@ -138,13 +173,34 @@ def compute_overlays(
                     entry["public_access"] = True
                     entry["access"] = None if pd.isna(name) else str(name).strip() or None
 
+    # Centroid for inland water (what the client shows today), whole polygon for big water, where a
+    # centroid test answers "no" for every Great Lake and every connecting river. See the docstring.
     centroids = gpd.GeoDataFrame({"id": lakes["id"]}, geometry=proj.geometry.centroid, crs=MEASURE_CRS)
+    probes = [(centroids[~is_big], "within"), (gpd.GeoDataFrame(
+        {"id": lakes["id"]}, geometry=proj.geometry, crs=MEASURE_CRS
+    )[is_big], "intersects")]
 
     if federal is not None and len(federal):
-        joined = gpd.sjoin(centroids, _to_proj(federal)[["name", "geometry"]], how="inner", predicate="within")
+        fed = _to_proj(federal)[["name", "geometry"]]
+        centroid_probe, big_probe = probes[0][0], probes[1][0]
+        joined = gpd.sjoin(centroid_probe, fed, how="inner", predicate="within")
         for lake_id, name in zip(joined["id"], joined["name"], strict=True):
             if out[str(int(lake_id))]["federal_unit"] is None and not pd.isna(name):
                 out[str(int(lake_id))]["federal_unit"] = str(name)
+        # Big water usually touches several units; the largest overlap is the one worth naming.
+        # "Part of Lake Superior is Isle Royale National Park" (1,656 km2), not "... is Seney
+        # National Wildlife Refuge", which clips it by 0.16 km2 and happened to be found first.
+        for lake_id, geom in zip(big_probe["id"], big_probe.geometry, strict=True):
+            best_name, best_area = None, 0.0
+            for name, unit in zip(fed["name"], fed.geometry, strict=True):
+                unit = shapely.make_valid(unit)
+                if pd.isna(name) or not unit.intersects(geom):
+                    continue
+                area = geom.intersection(unit).area
+                if area > best_area:
+                    best_name, best_area = str(name), area
+            if best_name is not None:
+                out[str(int(lake_id))]["federal_unit"] = best_name
 
     if airspace is not None and len(airspace):
         air = airspace.copy()
@@ -154,17 +210,20 @@ def compute_overlays(
         if not airspace_any_floor:
             air = air[_reaches_surface(air)]
         if len(air):
-            joined = gpd.sjoin(
-                centroids, _to_proj(air.reset_index(drop=True))[[col, "geometry"]],
-                how="inner", predicate="within",
-            )
-            for lake_id, klass in zip(joined["id"], joined[col], strict=True):
-                entry = out[str(int(lake_id))]
-                current = entry["airspace_class"]
-                rank = AIRSPACE_ORDER.index(klass) if klass in AIRSPACE_ORDER else len(AIRSPACE_ORDER)
-                crank = AIRSPACE_ORDER.index(current) if current in AIRSPACE_ORDER else len(AIRSPACE_ORDER) + 1
-                if current is None or rank < crank:
-                    entry["airspace_class"] = str(klass)
+            right = _to_proj(air.reset_index(drop=True))[[col, "geometry"]]
+            for left, predicate in probes:
+                if not len(left):
+                    continue
+                joined = gpd.sjoin(left, right, how="inner", predicate=predicate)
+                for lake_id, klass in zip(joined["id"], joined[col], strict=True):
+                    entry = out[str(int(lake_id))]
+                    current = entry["airspace_class"]
+                    rank = AIRSPACE_ORDER.index(klass) if klass in AIRSPACE_ORDER else len(AIRSPACE_ORDER)
+                    crank = (
+                        AIRSPACE_ORDER.index(current) if current in AIRSPACE_ORDER else len(AIRSPACE_ORDER) + 1
+                    )
+                    if current is None or rank < crank:
+                        entry["airspace_class"] = str(klass)
     return out
 
 

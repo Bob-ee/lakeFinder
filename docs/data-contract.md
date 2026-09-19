@@ -352,7 +352,10 @@ enough to have an answer, with nothing hand-drawn. Three consumers read it: the 
 
 Water bodies of 100 acres or more with non-empty usable water. Points lie on a regular grid (projected CRS, anchored
 deterministically) inside the usable water; spacing `clamp(sqrt(area_m2 / target), 150 m, 2000 m)` with `target` 60,
-or 400 for water of 10,000 acres or more. A water body with no entry has no wave field and consumers fall back to
+400 for water of 10,000 acres or more, and 2,000 for 100,000 acres or more (so Lake St. Clair's 1-2 km bays get
+points; the Great Lakes proper sit on the 2,000 m clamp). Nodes sit at `(k + 0.5) × spacing` from the projected CRS
+origin, so a water body keeps its points when its neighbors change. A qualifying water body whose usable core holds
+no node gets one representative point. A water body with no entry has no wave field and consumers fall back to
 the lake-level numbers (`lake_extents.json`, fetch = three-bin arc), exactly as before.
 
 ### Per point, computed by the pipeline
@@ -361,8 +364,8 @@ the lake-level numbers (`lake_extents.json`, fetch = three-bin arc), exactly as 
   to the first land, mean of 5 rays at −12°, −6°, 0°, +6°, +12°. Rays run across the **fetch mask**, the union of all
   water polygons of every kind, so a ray crosses from the Detroit River into Lake Erie or between connected lakes
   without stopping. Capped at 100 km. A ray that leaves the mask through an **artificial edge** counts as the cap:
-  a run of consecutive mask-boundary vertices that all lie within 60 m of the chord joining the run's ends, more
-  than 2,000 m long in total. That is how a clip line looks (Lake Huron and Lake Superior stop at the international
+  a run of consecutive mask-boundary vertices that all lie within 10 m of the chord joining the run's ends, more
+  than 2,000 m long in total (drawn clip lines sit 0 m off their chord; natural shore wanders 40 m or more). That is how a clip line looks (Lake Huron and Lake Superior stop at the international
   boundary, densified, so a single-segment length test misses them). A long straight breakwater also qualifies,
   which errs toward more waves. Wind **from** direction `d` uses
   `bin = floor(d / 22.5 + 0.5) % 16` and reads `fetch[bin]`.
@@ -372,7 +375,11 @@ the lake-level numbers (`lake_extents.json`, fetch = three-bin arc), exactly as 
 - `label`: index into `labels`. A GNIS name (feature classes Bay, Channel, Harbor; point inside or within 200 m of
   the water body) when one is near enough, otherwise a position descriptor: `middle`, or `north end`, `northeast
   side`, `east end`, `southeast side`, `south end`, `southwest side`, `west end`, `northwest side`. Every point has
-  a label. **Points sharing a label within a water body are one region.**
+  a label. **Points sharing a label within a water body are one region.** GNIS gives a point and no extent, so a
+  name's reach is measured from the water's width at the name; a name left with fewer than 2 points gives them back,
+  and a descriptor sector with fewer than 3 merges into its fullest neighbor (rule and constants documented in
+  `pipeline/seaplane_pipeline/wavefield.py`). Depth is sampled only on `great_lake` and `connecting_water`: a DEM
+  cell under an inland lake is that lake's surface elevation, not its depth.
 
 ### Files
 

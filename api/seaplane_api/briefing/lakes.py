@@ -325,13 +325,25 @@ def score_lake_hour(
 
     factors: list[tuple[str, str]] = []
     factors.append(("waves", band(hs_in, limits.wave_ok_in, limits.wave_max_in)))
-    factors.append(("run", FAVORABLE if run >= limits.min_run_ft else UNFAVORABLE))
-
+    # Landing is into the wind, so the crosswind on the longest chord is only the "I would rather use
+    # the long axis" number: reported always, scored only when the run into the wind is too short.
+    # Then a lake-level water body whose long axis is long enough and within the crosswind limit is
+    # marginal on `xwind_water` rather than unfavorable on `run`. (Scoring it unconditionally made
+    # Lake St. Clair and the Detroit River "marginal, crosswind" against a 28 mile chord.) With a wave
+    # field the whole-lake chord says nothing about a region, so only `run` applies.
     xw = None
     if wind_kt >= LIGHT_WIND_KT:
-        # Landing is into the wind, so this is only the "I would rather use the long axis" number.
         xw = aero.crosswind_kt(wind_dir_deg, wind_kt, cand.chord_bearing_deg)
-        factors.append(("xwind_water", FAVORABLE if xw <= limits.xwind_water_max else MARGINAL))
+    if run >= limits.min_run_ft:
+        factors.append(("run", FAVORABLE))
+    elif (
+        not cand.has_wave_field
+        and cand.chord_ft >= limits.min_run_ft
+        and (xw is None or xw <= limits.xwind_water_max)
+    ):
+        factors.append(("xwind_water", MARGINAL))
+    else:
+        factors.append(("run", UNFAVORABLE))
 
     level = FAVORABLE
     for _, lv in factors:

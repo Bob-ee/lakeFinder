@@ -2,7 +2,8 @@
 
 Files (schemas in docs/data-contract.md): `lakes.pmtiles`, `usable_water.pmtiles`,
 `overlays.pmtiles`, `basemap.pmtiles`, `index.json`, `restrictions.json`, `rules.json`,
-`lake_extents.json`, `pack.json`.
+`lake_extents.json`, `wave_points.bin` + `wave_points.json` (copied from `work/`, written by the
+`wavefield` stage), `pack.json`.
 
 Tiles are cut with tippecanoe using the flags the contract pins for the `lakes` layer. Tippecanoe
 2.17+ writes `.pmtiles` directly; older builds fall back to `.mbtiles` + `pmtiles convert`, which is
@@ -192,8 +193,7 @@ def build_index(lakes: gpd.GeoDataFrame, verdicts: dict, overlays: dict, by_lake
         verdict = verdicts.get(key) or {}
         ov = overlays.get(key) or {}
         name = _clean(getattr(row, "name", None))
-        entries.append(
-            {
+        entry = {
                 "id": lake_id,
                 "name": str(name) if name else None,
                 "name_norm": _clean(row.name_norm) or "",
@@ -210,10 +210,17 @@ def build_index(lakes: gpd.GeoDataFrame, verdicts: dict, overlays: dict, by_lake
                 ),
                 "verdict": verdict.get("verdict", "unknown"),
                 "flags": verdict.get("flags", []),
-                "restriction_ids": [r["restriction_id"] for r in by_lake.get(key, [])],
-                "access": ov.get("access"),
-            }
-        )
+            "restriction_ids": [r["restriction_id"] for r in by_lake.get(key, [])],
+            "access": ov.get("access"),
+        }
+        # Only when set. On an inland lake the unit's name also reaches the client through the
+        # synthetic `federal_no_landing` record, but big water does not get one (see `classify`), so
+        # without this the `federal_overlay` flag there could not be worded. 172 of 12,571 entries
+        # carry it, which is 9 KB -- a fixed `"federal_unit":null` on every row would be 260 KB and
+        # would push index.json past its 5 MB budget.
+        if ov.get("federal_unit"):
+            entry["federal_unit"] = str(ov["federal_unit"])
+        entries.append(entry)
     return entries
 
 
@@ -237,13 +244,22 @@ def build_lake_extents(lakes: gpd.GeoDataFrame, min_chord_ft: float = geometry_m
     return out
 
 
-def build_restrictions(records: list[dict], matches: list[dict], synthetic: list[dict]) -> dict[str, dict]:
+def build_restrictions(
+    records: list[dict], matches: list[dict], synthetic: list[dict], kinds: dict[int, str] | None = None
+) -> dict[str, dict]:
     """Active records only, keyed by restriction_id, with `lake_ids` filled in.
 
     A match below `match.ACCEPT` also sets `needs_review` on the published record, so the client,
     the engine's `needs_review` flag and `pack.json`'s `counts.needs_review` all agree about what a
     human still has to confirm.
+
+    `kinds` is `{lake_id: kind}`. A restriction whose every matched water body is a `great_lake` or
+    `connecting_water` is published with `big_water_partial: true`, which is the single field the
+    shared rules engine reads to cap it at `conditional` (docs/data-contract.md, "Waterway
+    matching"). It sits on the restriction rather than the water body because the client re-runs the
+    engine from `restrictions.json` and must reach the same verdict the pipeline did.
     """
+    partial = match_mod.big_water_partial_ids(matches, kinds or {})
     lake_ids: dict[str, list[int]] = {}
     confidence: dict[str, float] = {}
     unresolved: set[str] = set()
@@ -265,6 +281,8 @@ def build_restrictions(records: list[dict], matches: list[dict], synthetic: list
                 published["needs_review"] = True
         if rid in unresolved:
             published["reach_unresolved"] = True
+        if rid in partial:
+            published["big_water_partial"] = True
         out[rid] = published
     for rec in synthetic:
         published = dict(rec)
@@ -380,7 +398,7 @@ def run(cfg: Config, args) -> int:
     rpath = work / "restrictions.jsonl"
     records = match_mod.read_restrictions(rpath) if rpath.exists() else []
 
-    restrictions = build_restrictions(records, matches, synthetic)
+    restrictions = build_restrictions(records, matches, synthetic, match_mod.kinds_by_lake(lakes))
     by_lake: dict[str, list[dict]] = {}
     for rec in restrictions.values():
         for lake_id in rec.get("lake_ids") or []:
@@ -396,6 +414,17 @@ def run(cfg: Config, args) -> int:
     (out / "lake_extents.json").write_text(json.dumps(lake_extents, separators=(",", ":")), encoding="utf-8")
 
     emitted = ["index.json", "restrictions.json", "rules.json", "lake_extents.json"]
+
+    # The wave field is written by the `wavefield` stage into work/; build only packs it, so a pack
+    # built before that stage has run simply has no wave field and consumers fall back to lake level.
+    wave_files = [name for name in ("wave_points.bin", "wave_points.json") if (work / name).exists()]
+    if len(wave_files) == 2:
+        for name in wave_files:
+            shutil.copyfile(work / name, out / name)
+        emitted.extend(wave_files)
+    elif wave_files:
+        log.warning("only %s exists in %s; skipping the wave field (run `seaplane wavefield`)",
+                    ", ".join(wave_files), work)
 
     if not getattr(args, "skip_tiles", False):
         by_id = {e["id"]: e for e in index}
