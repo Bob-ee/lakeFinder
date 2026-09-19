@@ -253,6 +253,13 @@ seaplane-map/
 3. **v3 Offline.** Service worker, data pack download to OPFS, pmtiles OPFS source, install prompts, pack versioning.
 4. **v4 Personal layer and MAC.** Saved lakes with tags/notes/verified, export/import, sync endpoint, MAC record ingestion, review tooling polish, weekly cron with diff notifications.
 
+## 10a. Daily briefing (added 2026-09-19)
+
+A deterministic, no-LLM "is it a SeaRey day?" briefing anchored on an adjustable home airport, refreshed every few
+hours by the `api` service, with per-lake wave height from wind and fetch and a ranked list of nearby favorable
+lakes. Full design: `docs/briefing-design.md`. Sits between phase 1 deployment and the rest of phase 2 because it
+shares the `api` service with the wind layer.
+
 ## 11. Open items
 
 - Obtain the MAC seaplane record from MDOT Aeronautics (email/FOIA). Until then the app must state that MAC-approved ordinances are not yet loaded.

@@ -248,3 +248,8 @@ entries:
 - `?lake=<id>` opens that lake via the single `selectLake(id)` path.
 - IndexedDB db `seaplane`, stores `saved` (key `id`), `recent` (key `id`), `wind` (key bbox tile).
 - OPFS directory `pack/` holds the downloaded data pack files by name (phase 3).
+
+## Briefing files (designed, not built)
+
+`data/manual/settings.json`, `data/out/briefing.json`, and `data/out/lake_extents.json` are specified in
+`docs/briefing-design.md` section 6. Move their schemas into this file when the briefing is implemented.

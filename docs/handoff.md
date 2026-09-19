@@ -104,23 +104,30 @@ copy or rsync `data/out` (or run the pipeline there), Caddy on :8080 behind `tai
 tailnet, open it on the phone and iPad, add to home screen. Then a `launchd` (or cron container) job for the weekly
 pipeline with a diff notification (design phase 4 mentions this; the diff file already exists).
 
-**B. Phase 2, flight mode.** Design sections 7.5, 7.7, 7.9. Client slots already exist and are wired as no-ops:
+**B. Daily briefing (Bobby's newest ask, designed in `docs/briefing-design.md`).** Deterministic, no LLM: home
+airport adjustable in the app, wind/gust/crosswind/ceiling/visibility/convection/density altitude/ice scoring in
+3-hour blocks, per-lake wave height from wind and fetch (SPM 1984), ranked nearby lakes, refreshed every 3 hours by
+the new `api` service and written to `data/out/briefing.json`. Needs a pipeline addition (`extent_by_bearing`,
+`lake_extents.json`) and the `api` service the wind layer also needs, so build the service once for both. Section 8
+of that doc lists the numbers only Bobby can supply; use the placeholders until he does.
+
+**C. Phase 2, flight mode.** Design sections 7.5, 7.7, 7.9. Client slots already exist and are wired as no-ops:
 `web/src/location/` (geolocation, follow-me, heading-up, wake lock), `web/src/lists/` (Nearest tab with forward
 cone; the row component has a `trailing` slot for distance/bearing), the recenter control (currently home view).
 Wind needs the `api` service (FastAPI, `/api/wind/*`) that the Compose file references but that does not exist yet;
 the Synoptic token is server-side. `chord_bearing_deg` is already in `index.json` for the crosswind component. The
 usable-water layer already renders at z12+.
 
-**C. Phase 3, offline.** Plan is written in `web/src/sw/README.md` (cache-first shell, OPFS pack with sha256, pmtiles
+**D. Phase 3, offline.** Plan is written in `web/src/sw/README.md` (cache-first shell, OPFS pack with sha256, pmtiles
 OPFS `Source`, install prompt, pack versioning). `pack.json` already has sizes and sha256s. Test on the real iPad
 early; iOS storage behavior is the risk. Self-host basemap glyphs and sprites here.
 
-**D. Phase 4, personal layer and MAC.** `web/src/saved/` slot, IndexedDB store `saved` already created (db
+**E. Phase 4, personal layer and MAC.** `web/src/saved/` slot, IndexedDB store `saved` already created (db
 `seaplane`), star button currently toasts. Sync endpoint on the `api` service. MAC ingestion once the record arrives.
 
-**E. Bobby's new ideas.** He has more he wants in the program. Capture them in `docs/design.md` as a new numbered
-section (or `docs/ideas.md` if they are not yet decided), decide which phase each belongs to, and update the contract
-first for anything that changes a schema. Ask him which of them should jump ahead of B, C, D.
+**F. More of Bobby's ideas.** The briefing was the first; he may have more. Capture each in `docs/design.md` as a
+new numbered section (or `docs/ideas.md` if not yet decided), decide which step it belongs to, and update the
+contract first for anything that changes a schema. Ask him which should jump the queue.
 
 ## 6. Environment and working conventions
 
