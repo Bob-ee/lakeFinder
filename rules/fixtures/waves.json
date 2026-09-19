@@ -1,0 +1,309 @@
+{
+ "note": "Shared by api (Python) and rules/waves (JS). Formula and aggregation: docs/data-contract.md, Wave field.",
+ "wave": [
+  {
+   "wind_kt": 20,
+   "fetch_m": 5000,
+   "depth_m": null,
+   "hs_m": 0.4511,
+   "tp_s": 2.474
+  },
+  {
+   "wind_kt": 20,
+   "fetch_m": 40000,
+   "depth_m": null,
+   "hs_m": 1.276,
+   "tp_s": 4.948
+  },
+  {
+   "wind_kt": 10,
+   "fetch_m": 1000,
+   "depth_m": null,
+   "hs_m": 0.086,
+   "tp_s": 1.089
+  },
+  {
+   "wind_kt": 15,
+   "fetch_m": 25000,
+   "depth_m": 3.4,
+   "hs_m": 0.5018,
+   "tp_s": 2.83
+  },
+  {
+   "wind_kt": 15,
+   "fetch_m": 25000,
+   "depth_m": 1.0,
+   "hs_m": 0.2482,
+   "tp_s": 2.248
+  },
+  {
+   "wind_kt": 25,
+   "fetch_m": 39000,
+   "depth_m": 3.4,
+   "hs_m": 0.8217,
+   "tp_s": 3.783
+  },
+  {
+   "wind_kt": 12,
+   "fetch_m": 1200,
+   "depth_m": 1.0,
+   "hs_m": 0.1074,
+   "tp_s": 1.134
+  },
+  {
+   "wind_kt": 30,
+   "fetch_m": 500000,
+   "depth_m": null,
+   "hs_m": 7.4286,
+   "tp_s": 13.559
+  },
+  {
+   "wind_kt": 8,
+   "fetch_m": 300,
+   "depth_m": null,
+   "hs_m": 0.0358,
+   "tp_s": 0.665
+  },
+  {
+   "wind_kt": 0,
+   "fetch_m": 5000,
+   "depth_m": null,
+   "hs_m": 0.0,
+   "tp_s": 0.0
+  }
+ ],
+ "bins": [
+  {
+   "deg": 0,
+   "bin": 0
+  },
+  {
+   "deg": 11,
+   "bin": 0
+  },
+  {
+   "deg": 11.25,
+   "bin": 1
+  },
+  {
+   "deg": 12,
+   "bin": 1
+  },
+  {
+   "deg": 180,
+   "bin": 8
+  },
+  {
+   "deg": 348.74,
+   "bin": 15
+  },
+  {
+   "deg": 348.75,
+   "bin": 0
+  },
+  {
+   "deg": 359.9,
+   "bin": 0
+  }
+ ],
+ "regions": [
+  {
+   "lake": "111",
+   "wind_dir": 225,
+   "wind_kt": 12,
+   "min_run_ft": 2000,
+   "bin": 10,
+   "regions": [
+    {
+     "label": "Big Muscamoot Bay",
+     "n_points": 2,
+     "n_usable": 2,
+     "hs_all_in": 8,
+     "hs_in": 8,
+     "run_ft": 4000,
+     "point": 3
+    },
+    {
+     "label": "Anchor Bay",
+     "n_points": 2,
+     "n_usable": 2,
+     "hs_all_in": 11,
+     "hs_in": 11,
+     "run_ft": 7000,
+     "point": 0
+    },
+    {
+     "label": "middle",
+     "n_points": 2,
+     "n_usable": 2,
+     "hs_all_in": 16,
+     "hs_in": 16,
+     "run_ft": 40000,
+     "point": 5
+    }
+   ]
+  },
+  {
+   "lake": "111",
+   "wind_dir": 180,
+   "wind_kt": 15,
+   "min_run_ft": 2000,
+   "bin": 8,
+   "regions": [
+    {
+     "label": "Big Muscamoot Bay",
+     "n_points": 2,
+     "n_usable": 2,
+     "hs_all_in": 5,
+     "hs_in": 5,
+     "run_ft": 3000,
+     "point": 3
+    },
+    {
+     "label": "middle",
+     "n_points": 2,
+     "n_usable": 2,
+     "hs_all_in": 19,
+     "hs_in": 19,
+     "run_ft": 40000,
+     "point": 5
+    },
+    {
+     "label": "Anchor Bay",
+     "n_points": 2,
+     "n_usable": 2,
+     "hs_all_in": 22,
+     "hs_in": 22,
+     "run_ft": 9000,
+     "point": 0
+    }
+   ]
+  },
+  {
+   "lake": "111",
+   "wind_dir": 340,
+   "wind_kt": 18,
+   "min_run_ft": 2000,
+   "bin": 15,
+   "regions": [
+    {
+     "label": "Big Muscamoot Bay",
+     "n_points": 2,
+     "n_usable": 2,
+     "hs_all_in": 7,
+     "hs_in": 7,
+     "run_ft": 2400,
+     "point": 3
+    },
+    {
+     "label": "Anchor Bay",
+     "n_points": 2,
+     "n_usable": 2,
+     "hs_all_in": 13,
+     "hs_in": 13,
+     "run_ft": 9000,
+     "point": 0
+    },
+    {
+     "label": "middle",
+     "n_points": 2,
+     "n_usable": 2,
+     "hs_all_in": 29,
+     "hs_in": 29,
+     "run_ft": 50000,
+     "point": 5
+    }
+   ]
+  },
+  {
+   "lake": "111",
+   "wind_dir": 100,
+   "wind_kt": 10,
+   "min_run_ft": 2600,
+   "bin": 4,
+   "regions": [
+    {
+     "label": "Big Muscamoot Bay",
+     "n_points": 2,
+     "n_usable": 2,
+     "hs_all_in": 3,
+     "hs_in": 3,
+     "run_ft": 3000,
+     "point": 3
+    },
+    {
+     "label": "Anchor Bay",
+     "n_points": 2,
+     "n_usable": 2,
+     "hs_all_in": 9,
+     "hs_in": 9,
+     "run_ft": 12000,
+     "point": 0
+    },
+    {
+     "label": "middle",
+     "n_points": 2,
+     "n_usable": 2,
+     "hs_all_in": 14,
+     "hs_in": 14,
+     "run_ft": 60000,
+     "point": 5
+    }
+   ]
+  },
+  {
+   "lake": "222",
+   "wind_dir": 270,
+   "wind_kt": 14,
+   "min_run_ft": 2000,
+   "bin": 12,
+   "regions": [
+    {
+     "label": "north end",
+     "n_points": 1,
+     "n_usable": 1,
+     "hs_all_in": 3,
+     "hs_in": 3,
+     "run_ft": 2200,
+     "point": 0
+    },
+    {
+     "label": "middle",
+     "n_points": 1,
+     "n_usable": 1,
+     "hs_all_in": 5,
+     "hs_in": 5,
+     "run_ft": 4100,
+     "point": 1
+    }
+   ]
+  },
+  {
+   "lake": "222",
+   "wind_dir": 270,
+   "wind_kt": 14,
+   "min_run_ft": 5000,
+   "bin": 12,
+   "regions": [
+    {
+     "label": "middle",
+     "n_points": 1,
+     "n_usable": 0,
+     "hs_all_in": 5,
+     "hs_in": null,
+     "run_ft": null,
+     "point": null
+    },
+    {
+     "label": "north end",
+     "n_points": 1,
+     "n_usable": 0,
+     "hs_all_in": 3,
+     "hs_in": null,
+     "run_ft": null,
+     "point": null
+    }
+   ]
+  }
+ ]
+}

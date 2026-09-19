@@ -1,0 +1,22 @@
+{
+ "version": 1,
+ "record_bytes": 60,
+ "fetch_unit_m": 10,
+ "run_unit_ft": 10,
+ "labels": [
+  "Anchor Bay",
+  "Big Muscamoot Bay",
+  "middle",
+  "north end"
+ ],
+ "lakes": {
+  "111": [
+   0,
+   6
+  ],
+  "222": [
+   6,
+   2
+  ]
+ }
+}

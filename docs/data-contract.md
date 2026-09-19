@@ -282,6 +282,82 @@ entries:
 - IndexedDB db `seaplane`, stores `saved` (key `id`), `recent` (key `id`), `wind` (key bbox tile), `briefing` (key `"latest"`).
 - OPFS directory `pack/` holds the downloaded data pack files by name (phase 3).
 
+## Wave field (`wave_points.bin` + `wave_points.json`, stage `wavefield`, listed in `pack.json`)
+
+Design: `docs/big-water-design.md`. Answers "where on this water is it calm in this wind" for every water body big
+enough to have an answer, with nothing hand-drawn. Three consumers read it: the api briefing (Python), the client
+(`rules/waves/`, JS, zero deps, imported by `web/`), and tests. Shared fixtures: `rules/fixtures/waves.json`,
+`rules/fixtures/wave_points.sample.bin|json`. **Python and JS must both pass those fixtures.**
+
+### Which water bodies get points
+
+Water bodies of 100 acres or more with non-empty usable water. Points lie on a regular grid (projected CRS, anchored
+deterministically) inside the usable water; spacing `clamp(sqrt(area_m2 / target), 150 m, 2000 m)` with `target` 60,
+or 400 for water of 10,000 acres or more. A water body with no entry has no wave field and consumers fall back to
+the lake-level numbers (`lake_extents.json`, fetch = three-bin arc), exactly as before.
+
+### Per point, computed by the pipeline
+
+- `fetch[16]`: distance in the direction of bearing bin `i` (`i × 22.5°` true, convergence corrected) from the point
+  to the first land, mean of 5 rays at −12°, −6°, 0°, +6°, +12°. Rays run across the **fetch mask**, the union of all
+  water polygons of every kind, so a ray crosses from the Detroit River into Lake Erie or between connected lakes
+  without stopping. Capped at 100 km. A ray that leaves the mask through an artificial edge (a boundary segment
+  longer than 1,500 m: a clip line, not a shore) counts as the cap. Wind **from** direction `d` uses
+  `bin = floor(d / 22.5 + 0.5) % 16` and reads `fetch[bin]`.
+- `run[8]`: length of the straight line through the point along bearing bin `i` (and `i + 8`) inside the water
+  body's own usable water, both directions summed. Wind bin `b` reads `run[b % 8]`.
+- `depth_dm`: depth at the point in decimeters, `65535` when unknown.
+- `label`: index into `labels`. A GNIS name (feature classes Bay, Channel, Harbor; point inside or within 200 m of
+  the water body) when one is near enough, otherwise a position descriptor: `middle`, or `north end`, `northeast
+  side`, `east end`, `southeast side`, `south end`, `southwest side`, `west end`, `northwest side`. Every point has
+  a label. **Points sharing a label within a water body are one region.**
+
+### Files
+
+`wave_points.bin`: little-endian fixed records, 60 bytes, `struct "<ffHH16H8H"`: `lon` f32, `lat` f32, `depth_dm` u16,
+`label` u16, `fetch[16]` u16 in units of 10 m, `run[8]` u16 in units of 10 ft (clamped to 65535). Records of one
+water body are contiguous. `wave_points.json`:
+
+```jsonc
+{"version": 1, "record_bytes": 60, "fetch_unit_m": 10, "run_unit_ft": 10,
+ "labels": ["Anchor Bay", "Big Muscamoot Bay", "middle", "north end"],
+ "lakes": {"<lake_id>": [first_record, count]}}
+```
+
+The client reads one water body with an HTTP Range request (`first_record × 60`, `count × 60` bytes); the api reads
+the whole file.
+
+### Wave height at a point (SPM 1984, fetch limited; identical in Python and JS)
+
+```
+U  = wind_kt × 0.514444          UA = 0.71 × U^1.23          g = 9.80665
+f  = g × fetch_m / UA²           d  = g × max(depth_m, 0.1) / UA²
+depth unknown:  h = 1.6e-3 × sqrt(f)                          t = 0.2857 × f^(1/3)
+depth known:    a = tanh(0.530 × d^0.75)   h = 0.283 × a × tanh(0.00565 × sqrt(f) / a)
+                b = tanh(0.833 × d^0.375)  t = 7.54  × b × tanh(0.0379 × f^(1/3) / b)
+h = min(h, 0.2433)   t = min(t, 8.134)     Hs_m = h × UA² / g      Tp_s = t × UA / g
+wind_kt ≤ 0 or fetch ≤ 0  →  0, 0
+```
+
+Unknown depth is the deep-water form, which overstates shallow water: the conservative direction.
+
+### Regions for one wind (`wind_dir` from, `wind_kt`, `min_run_ft`)
+
+For each label in the water body: `usable` = its points with `run[b % 8] × 10 ≥ min_run_ft`. `hs_in` = 75th percentile
+(nearest rank: sorted ascending, index `ceil(0.75 n) − 1`) of `Hs` over the usable points, in whole inches
+(`floor(x / 0.0254 + 0.5)`); `run_ft` = lower median of the usable runs; `point` = the usable point with the lowest
+`Hs` (ties: lowest record index), whose lon/lat stands for the region. `hs_all_in` = the same percentile over all the
+label's points. A label with no usable point has `hs_in: null`. Regions sort by `hs_in` ascending with nulls last,
+ties by label. The **best region** is the first with a non-null `hs_in`; the water body's open-water figure is the
+largest `hs_all_in`.
+
+### Water body kinds
+
+`kind` is `lake | river | great_lake | connecting_water`. `great_lake` covers the Great Lakes and Lake St. Clair;
+`connecting_water` the Detroit, St. Clair, and St. Marys Rivers. On those two kinds a restriction that is
+`reach_unresolved` can raise the verdict no higher than `conditional` (a slow-no-wake zone at a creek mouth must not
+turn Lake St. Clair red); on `river` it still can. Their `county` may be null; `counties` lists every county touched.
+
 ## Briefing
 
 Algorithm and reasoning: `docs/briefing-design.md`. Three parts build against this section: the pipeline
@@ -308,6 +384,7 @@ bin `(i + 8) % 16`. Computed in `geometry` as the lake column `extent_by_bearing
                               {"id": "18/36", "heading": 172}]},   // heading: degrees TRUE of the first-named end
  "timezone": "America/Detroit",
  "radius_nm": 40, "n_lakes": 8, "public_access_only": false,
+ "home_water": null,                                          // or {"id": 7654321, "name": "Lake St. Clair"}: always briefed, ignores radius_nm
  "schedule": {"run_times_local": ["06:00", "09:00", "12:00", "15:00", "18:00", "20:00", "22:00"]},
  "outlook": {"times_local": ["18:00", "20:00", "22:00"],     // evening runs recorded in outlook.runs; always also run times
              "morning_start": "sunrise",                      // "sunrise" | "civil_twilight" | "HH:MM"
@@ -349,22 +426,36 @@ Unknown keys are rejected; missing keys are filled from the defaults, so an olde
               "ceiling_ft": null, "ceiling_known": true, "vis_sm": 10, "temp_f": 52, "dewpoint_f": 47, "fog_risk": false,
               "precip_prob": 5, "da_ft": 1200}],
    "lakes": [ /* same row shape as top-level "lakes", worst hour inside best_window */ ],
+   "home_water": null,                        // same shape as top-level home_water (no "observed"), worst hour inside best_window
    "confidence": "medium", "confidence_reasons": ["NWS and model wind differ by 6 kt"],
    "trend": "steady",                         // vs previous entry in runs: "improving" | "steady" | "worsening" | null
    "runs": [{"at": "18:00", "generated_at": "2026-09-19T22:00:03Z", "score": "favorable",
              "best_window": ["08:00", "12:00"], "limiting": null, "max_gust_kt": 12}],
    "summary": "Tomorrow morning (Sun): favorable 08:00–12:00. Wind 240/6 G9, no ceiling, vis 10. …"},
  "alerts": [{"event": "Lake Wind Advisory", "area": "Lake St. Clair", "ends": "2026-09-20T02:00:00Z"}],
- "lakes": [{"id": 1234567, "name": "Cass Lake", "score": "favorable", "limiting": null, "hs_in": 6, "run_ft": 4100,
+ "lakes": [{"id": 1234567, "name": "Cass Lake", "kind": "lake", "score": "favorable", "limiting": null,
+            "hs_in": 3, "run_ft": 4100,          // the best region's numbers when regions is non-empty
+            "region": "west end",                // best region label, null without a wave field
+            "hs_open_in": 7,                     // roughest region (hs_all_in); null without a wave field
+            "regions": [{"label": "west end", "hs_in": 3, "run_ft": 4100, "lat": 42.61, "lon": -83.37}],  // calm to rough, max 4
             "wind": {"dir": 250, "kt": 10, "gust": 15}, "distance_nm": 6.1, "bearing_deg": 118,
             "verdict": "conditional", "frozen": false}],
+ "home_water": {"id": 7654321, "name": "Lake St. Clair", "kind": "great_lake", "score": "favorable", "limiting": null,
+                "wind": {"dir": 250, "kt": 10, "gust": 15},
+                "regions": [ /* every region, same shape, plus "score" per region; hs_in null = no usable run */ ],
+                "hs_open_in": 14,
+                "observed": [{"station": "45147", "name": "Lake St Clair buoy", "kind": "buoy", "at": "2026-09-19T13:00:00Z",
+                              "wind": {"dir": 90, "kt": 12, "gust": 15}, "wave_ft": 1.0, "distance_nm": 9.4}],
+                "marine_hs_in": 12},             // Open-Meteo marine at the centroid, null when it has none
+                                                 // home_water is null when settings.home_water is null
  "sources": {"metar": "2026-09-19T21:53:00Z", "taf": "2026-09-19T17:20:00Z", "open_meteo": "…", "nws": "…"},  // null when that input failed
  "links": {"metar": "https://…", "taf": "https://…", "forecast": "https://…"},
  "errors": ["nws: timeout"]}
 ```
 
-Briefing candidates are `kind: "lake"` only for now: a river's `chord_ft` is its longest straight reach and says
-nothing about width, so rivers return with the per-point wave field (`docs/big-water-design.md`).
+Briefing candidates: every kind. A water body with wave points is scored by its **best region** for the wind
+("Wave field" above); one without is scored at lake level as before, and `river` / `connecting_water` without wave
+points are not candidates (a reach length says nothing about width).
 
 Lake rows are **water-only**: `score` and `limiting` come from waves, run, water crosswind, and ice at that lake, not
 from the airport weather, which lives in the header, blocks, and hours. Rows are ranked by score, then distance, then
@@ -402,3 +493,8 @@ The client reads the briefing as the static file `/data/briefing.json`, never th
   later, or when it is today and the window has not ended.
 - IndexedDB store `briefing` (key `"latest"`) keeps the last briefing for offline.
 - Settings screen edits `settings.json` through `/api/settings`; hidden with a notice when `/api/health` fails.
+  Home water is set from a water body's sheet ("Make this my home water") as well as cleared in settings.
+- Selected water body with a wave field: a "Water" section in the sheet with a wind control (direction and speed,
+  defaulting to that water body's wind in the briefing, else the briefing's current airport wind, else 270/10), the
+  region list for that wind, and the points drawn on the map colored by wave height. All computed in the browser by
+  `rules/waves/` from one Range request.
