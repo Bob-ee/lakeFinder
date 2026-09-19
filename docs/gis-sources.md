@@ -430,3 +430,102 @@ All under `pipeline/tests/fixtures/gis/` (repo-relative from `/Users/bobbywhitel
 - **Basemap zoom:** the z14 Michigan extract is ~550 MB; the z12 extract is 125 MB and is what `build` produces by
   default (`--basemap-maxzoom` overrides). Lakes carry their own z14 detail in `lakes.pmtiles`.
 - `gisago.mcgi.state.mi.us` also reset connections from this MacBook; `gisagocss.state.mi.us` is used throughout.
+
+
+## Addendum: big water and national sources (recon 2026-09-19)
+
+Recon for `docs/big-water-design.md` and `docs/nationwide.md`. All endpoints were hit live from this Mac. Nothing
+here is wired into the pipeline yet.
+
+### National water polygons: USGS NHD
+
+- REST: `https://hydro.nationalmap.gov/arcgis/rest/services/nhd/MapServer` (NHDWaterbody, NHDArea). Bulk: per-state
+  and per-HU4 GDBs under `https://prd-tnm.s3.amazonaws.com/StagedProducts/Hydrography/NHD/` (Michigan state GDB
+  389 MB; an HU4 GDB is ~110 MB). Public domain.
+- Fields that matter: `PERMANENT_IDENTIFIER` (stable id, which the Michigan layer lacks), `GNIS_ID`, `GNIS_NAME`,
+  `AREASQKM`, `REACHCODE`, `FTYPE`/`FCODE`.
+- Great Lakes and the connecting waters are present, split into parts that need a dissolve on `GNIS_NAME`:
+  Michigan 1, Erie 10, Huron 11, Superior 9, **"Lake Saint Clair" 4** (spelled out; "St." returns nothing).
+- Detail test, Cass Lake (Oakland): Michigan layer 531 vertices / 1,118 acres, NHD 6,695 vertices / ~1,311 acres.
+  NHD is ~12x more detailed; the 17% area gap needs a second test lake before switching.
+- NHDArea features on Lake St. Clair carry no names, so NHD does not provide bay polygons.
+
+### Names for regions of a lake: GNIS Domestic Names
+
+- Bulk per state: `https://prd-tnm.s3.amazonaws.com/StagedProducts/GeographicNames/DomesticNames/DomesticNames_MI_Text.zip`
+  (0.86 MB, pipe-delimited, public domain). Same pattern for every state.
+- Points only, never polygons. Michigan has 392 `Bay` features. Around Lake St. Clair: 14 bays (Anchor Bay
+  42.6500,-82.7166; Big Muscamoot Bay 42.5578,-82.6607; Little Muscamoot Bay 42.5781,-82.6260; Bouvier, Fisher,
+  Goose, L'anse Creuse, Long Point, Pollet, Scotten, Belvidere, Campau, Drouard; Fords Cove), 15 islands (Harsens,
+  Dickinson, Muscamoot Ridge, Strawberry, ...), 50 channels (North / Middle / South Channel, Chenal A Bout Rond, ...).
+  13 of the 14 bay points fall inside the lake polygon. Ontario names (Mitchell's Bay) need Canada's CGNDB.
+- Conclusion: names label computed regions; no source hands over a Muscamoot polygon.
+
+### Lake St. Clair polygons available today (Michigan-only products)
+
+| source | features | detail | note |
+|---|---|---|---|
+| `https://gisagocss.state.mi.us/arcgis/rest/services/OpenData/hydro/MapServer/13` "Lake St. Clair Shoreline" | 10 | main body 16,840 vertices | whole lake including Ontario waters; 9 small polygons at the Flats. **Not yet confirmed that Harsens / Dickinson are excluded as land: render it before trusting fetch rays near Muscamoot.** Layers 11, 12, 14 are Erie, Michigan, Saginaw Bay. |
+| `https://services3.arcgis.com/Jdnp1TjADvSDxMAX/arcgis/rest/services/DNRHydrologyOPENDATA/FeatureServer/4` | 8 (one per Great Lake / connecting river, `WBID` lsc, scr, dr, smr, lh, lm, ls, le) | `lsc` 2,392 vertices | closed against the St. Clair River and Detroit River polygons; coarser |
+
+**Verified 2026-09-19 by rendering both and point-testing:** use layer 13. Unioned it is 1,150 sq km, 17,172
+vertices, 449 holes; Harsens, Dickinson, Walpole, Strawberry, Gull, and McDonald islands are land, the Muscamoot
+marsh islands are resolved, Anchor / Big and Little Muscamoot / Goose / Fisher Bay points are water, the Ontario
+side is covered, and it closes at both river mouths. It omits a ~16 sq km strip of the North Channel by Walpole
+Island. NHDWaterbody agrees west of -82.60 but has **no geometry at all** for the eastern Flats (Harsens, the North /
+Middle / South Channels); that water is only in NHDArea (layer 9, StreamRiver), and even the union is neither a
+superset nor a subset of the Michigan layer. A `GNIS_NAME = 'Lake Saint Clair'` query also returns three other
+lakes of that name in WA, PA, and AZ, so NHD name queries must be bounded by bbox or id. Lesson for the national
+path: water = NHDWaterbody ∪ NHDArea, dissolved, and rendered once per big water body before it is trusted.
+
+Trial fetch rays on layer 13 (km, 16 true bearings from N clockwise):
+
+| from | N | NNE | NE | ENE | E | ESE | SE | SSE | S | SSW | SW | WSW | W | WNW | NW | NNW |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Big Muscamoot Bay | 1.2 | 1.1 | 1.4 | 3.8 | 1.1 | 1.0 | 0.9 | 0.9 | 1.2 | 2.4 | 24.8 | 19.5 | 1.6 | 1.3 | 1.3 | 1.4 |
+| Anchor Bay | 3.8 | 4.9 | 5.5 | 7.5 | 7.4 | 4.8 | 3.5 | 5.6 | 39.2 | 38.3 | 7.5 | 9.0 | 6.9 | 3.8 | 3.5 | 3.5 |
+| mid-lake buoy 45147 | 10.4 | 12.1 | 10.7 | 15.0 | 21.9 | 22.8 | 17.9 | 15.1 | 14.7 | 15.9 | 18.1 | 21.5 | 16.0 | 18.4 | 19.8 | 26.7 |
+
+This is what Bobby described: Muscamoot is about a kilometer of water in every direction but south-west, and
+Anchor Bay is sheltered from everything except a south wind.
+
+The national route is NHD dissolved by name and clipped at the boundary. Natural Earth 10 m lakes are too coarse
+(St. Clair is 83 vertices). OSM water polygons work as a static 905 MB download but are ODbL; Overpass is blocked
+from this Mac (406 on the main host and the kumi mirror).
+
+### Bathymetry
+
+- Great Lakes and St. Clair: NOAA NCEI "Bathymetry of Lake Erie and Lake Saint Clair" (DOI 10.7289/V5KS6PHK), grid
+  extract at `https://www.ncei.noaa.gov/maps/grid-extract/`, GeoTIFF / NetCDF / XYZ, meters below Low Water Datum.
+  Cell size for St. Clair not confirmed (other NCEI lake grids are 3 arc-seconds).
+- Everywhere else: GLOBathy (modeled depth for 1.4 M lakes, CC0) as an optional mean / max depth attribute. State
+  lake maps and LAGOS-US cover only well-studied lakes.
+
+### Subdivision and forecasts for big water
+
+- NWS marine zones (`https://api.weather.gov/zones?type=marine`, geometry from `/zones/forecast/{id}` with no `f=`
+  parameter): 699 nationwide, 64 touching Michigan; nearshore and open-lake zones are separate. `LCZ460` Lake
+  St. Clair open lake (U.S. portion, 2,618 vertices, stops at the border), `LCZ422` St. Clair River, `LCZ423` Detroit
+  River. The zone JSON carries no wave numbers; the DTX nearshore text product came back empty when checked.
+- Open-Meteo marine (`https://marine-api.open-meteo.com/v1/marine`) returns wave height for Lake St. Clair, Saginaw
+  Bay, and open Lake Michigan, and **all nulls for Grand Traverse Bay**: it does not resolve narrow bays, so it can
+  only be a second opinion.
+
+### Observations on and beside Lake St. Clair
+
+| station | where | reports |
+|---|---|---|
+| NDBC 45147 "Lake St Clair" | 42.43,-82.68, mid-lake | wind, **wave height and period**, water temp; seasonal |
+| KMTC Selfridge ANGB (METAR) | 42.6045,-82.8353, west shore of Anchor Bay | wind, gust, ceiling, visibility |
+| CLSM4 St. Clair Shores | 42.471,-82.877 | wind, gust, pressure, temp; no waves |
+| AGCM4 Algonac | 42.621,-82.527, at the Flats | pressure, water temp |
+| FTGM4 Fort Gratiot | 43.007,-82.422 | wind, gust; river end only |
+
+### What has to become matchable
+
+About 38 active DNR restrictions name Great Lakes water and attach to nothing today: Wayne 11 (all Detroit River),
+St. Clair 7, Berrien 4, Emmet 3, Macomb 3, Alpena 2, Grand Traverse 2, five counties with 1. Types: slow_no_wake 28,
+other 6, not_applicable 2, no_high_speed 1. Two reference Anchor Bay (`65e154a77bc5`, `6a327c4bd833`). Boating access
+sites with `waterbodytype == "Great Lake"`: 90. The federal units and the Selfridge Class D ("MOUNT CLEMENS CLASS D")
+are already in the overlays. The international boundary is not; Natural Earth
+`ne_10m_admin_0_boundary_lines_land` (1 MB) is the simplest line source.

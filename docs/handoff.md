@@ -1,6 +1,7 @@
 # Handoff: Michigan seaplane lake map
 
-Written 2026-09-19 for the next agent picking this up; updated the same day after the briefing (step B) was built. Read this first, then `docs/design.md` (the spec) and
+Written 2026-09-19 for the next agent picking this up; updated the same day after the briefing (step B) and rivers
+were built and Bobby set the direction in `docs/big-water-design.md` and `docs/nationwide.md`. **Read those two next.** Read this first, then `docs/design.md` (the spec) and
 `docs/data-contract.md` (the schemas every part is built against). `README.md` has the status table; `CLAUDE.md`
 has the one-screen orientation.
 
@@ -13,16 +14,19 @@ reads as a build order.
 
 | part | state | verify with |
 |---|---|---|
-| `pipeline/` (Python 3.12, uv) | all 8 design stages plus `suggest`; `geometry` also computes `extent_by_bearing`; statewide run takes ~6 min warm | `cd pipeline && uv run pytest -q` (259 pass) and `uv run ruff check seaplane_pipeline tests` |
+| `pipeline/` (Python 3.12, uv) | all 8 design stages plus `suggest`; `geometry` also computes `extent_by_bearing`; statewide run takes ~6 min warm | `cd pipeline && uv run pytest -q` (275 pass) and `uv run ruff check seaplane_pipeline tests` |
 | `rules/` (JS, zero deps) | 24 rules, shared fixtures, CLI used by the pipeline, module imported by the client | `cd rules && npm test` (117 pass) |
 | `web/` (Vite, TS, MapLibre) | map with verdict outlines, search, 3-snap sheet / iPad panel, `?lake=`, disclaimer, client-side rules engine | `cd web && npm run typecheck && npm run build` |
-| `api/` (FastAPI, Python 3.12, uv) | briefing generator with the evening outlook, in-process scheduler, settings, airport lookup; `/api/wind/*` is an empty slot | `cd api && uv run pytest -q` (218 pass) and `uv run ruff check .` |
+| `api/` (FastAPI, Python 3.12, uv) | briefing generator with the evening outlook, in-process scheduler, settings, airport lookup; `/api/wind/*` is an empty slot | `cd api && uv run pytest -q` (219 pass) and `uv run ruff check .` |
 | briefing client | Briefing tab + chip under the search bar, outlook hour strip and run-history chips, settings dialog, `?briefing=1` | same web commands; screenshots were checked at 390 px and 1180 px, light and dark |
 | hosting | `Caddyfile`, `docker-compose.yml` written (api has rw data + manual mounts, `API_UPSTREAM` for a non-Docker install), **not deployed anywhere yet** | |
 | data | `data/out/` holds a full statewide pack (158 MB) including `lake_extents.json` (6,054 lakes) and a live `briefing.json`; gitignored, rebuild with `uv run seaplane all` | `pmtiles show data/out/lakes.pmtiles` |
 
-Statewide numbers as of the last run: 83 county pages, 1,134 restriction records (34 flagged), 10,783 lakes,
-764 of 1,119 active restrictions matched, verdicts restricted 484 / conditional 207 / clear 9,612 / unknown 480.
+Statewide numbers as of the last run (2026-09-19, rivers included): 83 county pages, 1,134 restriction records,
+12,563 water bodies (10,783 `kind: lake` + 1,780 `kind: river`), 910 of 1,119 active restrictions matched, verdicts
+restricted 548 / conditional 281 / clear 11,246 / unknown 488. 181 waterway rules attach to 157 river polygons; 24 of
+them could not be narrowed below the county and carry `reach_unresolved` (the sheet says the rule covers part of the
+river). Lake ids did not change when rivers were added.
 
 The client was verified in headless Chrome against the real pack (see section 6 for the flags). Screenshots
 confirmed: disclaimer with build date, docked panel at 1180 px, verdict outlines, restriction list with rule text
@@ -80,6 +84,21 @@ web dev server / Caddy serve data/out at /data/ ──▶ client loads index.jso
 
 ## 4. Known issues and open items
 
+- **Direction from Bobby (2026-09-19):** he flies mostly Lake St. Clair (his saved home airport is KONZ, Grosse Ile)
+  and wants to know *where on the lake* to land; the mechanism must work on every lake; the app is headed for a
+  nationwide community release. Big water (St. Clair, Detroit River, the Great Lakes) is not on the map yet. Plan:
+  `docs/big-water-design.md`; constraints: `docs/nationwide.md`; sources, with a verified St. Clair polygon and
+  trial fetch rays: `docs/gis-sources.md` 2026-09-19 addendum.
+- **Rivers:** excluded from the briefing's ranked water until the per-point wave field exists (`chord_ft` on a river
+  says nothing about width). A county-level river rule marks every same-name polygon in the county restricted plus
+  `reach_unresolved`; conservative on purpose. 59 waterway rules remain unmatched: 25 name Great Lakes water
+  (Detroit River 11, St. Clair River 5, Little Traverse Bay 3, ...), 8 are an Antrim `parse-dnr` header bug
+  (waterbody parsed as "Rivers"). `NAME_SUFFIX_RE` in `match.py` never trims a suffix that ends the string (worked
+  around on the waterway track only). One match was lost to the lake/river gate and wants an override: Crawford
+  "Lake Margrethe Channel in Harbor Beach Subdivision".
+- **`index.json` is 4.84 MB of the 5 MB budget** after rivers, and `lakes.pmtiles` grew to 23 MB. Cheapest lever:
+  drop `name_norm` from the payload (~330 KB; the client already imports `normalizeName`).
+
 - **Briefing limits are placeholders.** `docs/briefing-design.md` section 8 lists what only Bobby can supply (SeaRey
   wave, crosswind, wind and gust numbers, VFR minimums, radius, morning window). He edits them in the app's briefing
   settings; nothing needs code. First real run note: Open-Meteo gusts read high (3 kt G12 scored "marginal, gusts"
@@ -97,8 +116,6 @@ web dev server / Caddy serve data/out at /data/ ──▶ client loads index.jso
   to `overrides.yaml`, rerun `match overlay classify build --skip-basemap`.
 - **MAC record.** Not obtained. Every lake carries `mac_pending`. Draft request: `docs/mdot-mac-record-request.md`.
   When it arrives: fill `mac_record.yaml`, set `loaded: true`, rerun from `match`.
-- **`index.json` is 3.98 MB** against a 5 MB target. Levers: raise `--min-unnamed-acres` in geometry, or drop
-  `name_norm` from the payload and compute it client-side (the client already imports `normalizeName`).
 - **480 unknown verdicts are the unnamed polygons over 20 acres.** By design; they still render gray so a pilot
   sees "no data" rather than "clear".
 - **Unmatched restrictions do not appear on any lake**, so those lakes show clear. This is the biggest data-quality
