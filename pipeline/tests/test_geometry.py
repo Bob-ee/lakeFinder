@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 
 import geopandas as gpd
 import pytest
@@ -66,6 +67,79 @@ def test_lshape_chord_is_not_the_convex_hull_diameter(lake_fixtures):
     length_ft = geometry.longest_chord(poly)[0] * FT_PER_M
     assert length_ft < exp["hull_diameter_ft"] * 0.9
     assert length_ft == pytest.approx(exp["chord_ft"], rel=TOL)
+
+
+# --- extent by bearing --------------------------------------------------------
+
+
+def test_extent_by_bearing_rect30_matches_analytic_rectangle_chord(lake_fixtures):
+    """22.5 deg bins mean the rectangle's true-030 long axis falls in bin 1 (centered 22.5 deg), 7.5
+    deg off axis, so the bin is NOT close to the full chord/long side -- verify against the
+    closed-form chord-in-a-rectangle formula instead of assuming near-full-length.
+    """
+    directory, _ = lake_fixtures
+    raw = gpd.read_file(directory / "rect30.geojson")
+    centroid = raw.geometry.iloc[0].centroid
+    convergence = geometry.meridian_convergence_deg(centroid.x, centroid.y)
+    poly = raw.to_crs(geometry.MEASURE_CRS).geometry.iloc[0]
+
+    bins = geometry.extent_by_bearing(poly, convergence)
+    assert len(bins) == 16
+
+    # 6000 x 40 m rectangle, long axis on a true 030 bearing (half-extents a=3000, b=20 m; see
+    # rect30.geojson's `_description` and expected.json). Longest chord inside a centered a x b
+    # rectangle along a direction `theta` off the long axis: 2a/cos(theta) while shallow, or
+    # 2b/sin(theta) once theta exceeds atan(b/a) (the rectangle's own diagonal half-angle).
+    def rect_chord_m(theta_deg: float, a: float = 3000.0, b: float = 20.0) -> float:
+        theta = math.radians(abs(theta_deg))
+        if math.tan(theta) <= b / a:
+            return 2 * a / math.cos(theta)
+        return 2 * b / math.sin(theta)
+
+    axis_bearing = 30.0  # theta below is always measured from this long axis, not the short one
+    expected_bin1_ft = rect_chord_m(22.5 - axis_bearing) * geometry.FT_PER_M
+    expected_bin5_ft = rect_chord_m(112.5 - axis_bearing) * geometry.FT_PER_M
+
+    assert bins[1] == pytest.approx(expected_bin1_ft, rel=0.03)
+    assert bins[5] == pytest.approx(expected_bin5_ft, rel=0.03)
+    # Bin 5 (nearest the short, 120 deg axis) is close to the 40 m width; bin 1 (nearest the long,
+    # 30 deg axis) is not close to the long side (19685 ft) precisely because of the 7.5 deg offset.
+    assert bins[5] == pytest.approx(40 * geometry.FT_PER_M, rel=0.05)
+    assert bins[1] < 6561 * 0.5  # nowhere near the long side, unlike a naive "nearest bin" guess
+
+
+@pytest.mark.parametrize("name", ["circle", "rect30", "lshape"])
+def test_extent_by_bearing_opposite_bins_match(lake_fixtures, name):
+    """A segment has two ends: bin i always equals bin (i + 8) % 16."""
+    directory, _ = lake_fixtures
+    poly = _load_projected(directory / f"{name}.geojson")
+    bins = geometry.extent_by_bearing(poly, convergence_deg=0.0)
+    for i in range(8):
+        assert bins[i] == bins[i + 8]
+
+
+def test_extent_by_bearing_max_is_near_the_longest_chord_for_a_convex_shape(lake_fixtures):
+    directory, expected = lake_fixtures
+    poly = _load_projected(directory / "circle.geojson")
+    chord_ft = expected["circle"]["chord_ft"]
+    bins = geometry.extent_by_bearing(poly, convergence_deg=0.0)
+    assert max(bins) <= chord_ft * 1.02          # small tolerance over the true longest chord
+    assert max(bins) >= chord_ft * 0.90          # within ~10% for a convex, near-isotropic shape
+
+
+def test_extent_by_bearing_does_not_span_an_island():
+    """A hole through the middle must split the east-west run: the answer is the longer single
+    piece, never the sum of both sides and never the un-holed full width.
+    """
+    outer = Polygon(
+        [(0, 0), (1000, 0), (1000, 1000), (0, 1000)],
+        holes=[[(400, 1), (600, 1), (600, 999), (400, 999)]],
+    )
+    bins = geometry.extent_by_bearing(outer, convergence_deg=0.0)
+    east_ft = bins[4]  # bearing 90 = east; every sampled row is blocked by the hole at x in [400,600]
+    assert east_ft == pytest.approx(400 * geometry.FT_PER_M, rel=0.02)
+    assert east_ft < 800 * geometry.FT_PER_M * 0.9   # not the sum of the two sides
+    assert east_ft < 1000 * geometry.FT_PER_M * 0.9  # not the un-holed width
 
 
 def test_longest_chord_falls_back_to_the_longest_interior_piece():

@@ -29,13 +29,14 @@ INDEX_FIELDS = {
 }
 
 
-def _lake(i, name, name_norm):
+def _lake(i, name, name_norm, chord_ft=None, extent_by_bearing=None):
     geom = box(LON0 + i * 0.05, LAT0, LON0 + i * 0.05 + 0.01, LAT0 + 0.01)
     return {
         "id": 1000 + i, "name": name, "name_norm": name_norm, "county": "Oakland",
         "township": "Rose Township", "lat": LAT0 + 0.005, "lon": LON0 + i * 0.05 + 0.005,
         "minx": LON0 + i * 0.05, "miny": LAT0, "maxx": LON0 + i * 0.05 + 0.01, "maxy": LAT0 + 0.01,
-        "area_acres": 120.0 + i, "chord_ft": 2500.0 + i, "chord_bearing_deg": 47.0,
+        "area_acres": 120.0 + i, "chord_ft": chord_ft if chord_ft is not None else 2500.0 + i,
+        "chord_bearing_deg": 47.0, "extent_by_bearing": extent_by_bearing,
         "geometry": geom,
     }
 
@@ -59,7 +60,11 @@ def work_dir(tmp_path, monkeypatch, fixtures_dir):
     (cfg.manual_dir / "mac_record.yaml").write_text("loaded: false\nentries: []\n")
     (cfg.manual_dir / "overrides.yaml").write_text("matches: []\nunmatch: []\nverdicts: []\n")
 
-    rows = [_lake(0, "Big School Lot Lake", "big school lot"), _lake(1, "Mud Lake", "mud"), _lake(2, None, "")]
+    rows = [
+        _lake(0, "Big School Lot Lake", "big school lot", extent_by_bearing=list(range(100, 1700, 100))),
+        _lake(1, "Mud Lake", "mud", extent_by_bearing=[500] * 16),
+        _lake(2, None, "", chord_ft=600.0, extent_by_bearing=None),  # below the 1000 ft threshold
+    ]
     lakes = gpd.GeoDataFrame(rows, geometry="geometry", crs="EPSG:4326")
     lakes.to_parquet(cfg.work_dir / "lakes.parquet", index=False)
     gpd.GeoDataFrame(
@@ -111,7 +116,7 @@ def test_build_writes_the_whole_pack(work_dir):
     cfg = work_dir
     assert build.run(cfg, argparse.Namespace(skip_basemap=True, skip_tiles=False)) == 0
     out = cfg.out_dir
-    for name in ("index.json", "restrictions.json", "rules.json", "pack.json",
+    for name in ("index.json", "restrictions.json", "rules.json", "lake_extents.json", "pack.json",
                  "lakes.pmtiles", "usable_water.pmtiles", "overlays.pmtiles"):
         assert (out / name).exists(), name
 
@@ -161,6 +166,27 @@ def test_restrictions_json_drops_rescinded_and_fills_lake_ids(work_dir):
     assert restrictions["cccccccccccc"]["lake_ids"] == [1002]
     assert restrictions["aaaaaaaaaaaa"]["raw_text"] == "…"
     assert restrictions["aaaaaaaaaaaa"]["rule_id"] == "R 281.763.3"
+
+
+def test_lake_extents_json_filtered_by_chord_and_listed_in_pack(work_dir):
+    cfg = work_dir
+    build.run(cfg, argparse.Namespace(skip_basemap=True, skip_tiles=True))
+    extents = json.loads((cfg.out_dir / "lake_extents.json").read_text())
+
+    # Lake 1000 (chord 2500 ft) and 1001 (chord 2501 ft) qualify; 1002 (chord 600 ft, no computed
+    # extent) is filtered out even though it's a real lake in index.json.
+    assert set(extents) == {"1000", "1001"}
+    assert extents["1000"] == list(range(100, 1700, 100))
+    assert extents["1001"] == [500] * 16
+    for values in extents.values():
+        assert len(values) == 16
+        assert all(isinstance(v, int) for v in values)
+
+    pack = json.loads((cfg.out_dir / "pack.json").read_text())
+    entry = next(f for f in pack["files"] if f["name"] == "lake_extents.json")
+    path = cfg.out_dir / "lake_extents.json"
+    assert entry["bytes"] == path.stat().st_size
+    assert entry["sha256"] == hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def test_pmtiles_layers_and_properties(work_dir):

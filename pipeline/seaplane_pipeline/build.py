@@ -1,7 +1,8 @@
 """Stage 7 (`build`): emit the served data pack into `data/out/`.
 
 Files (schemas in docs/data-contract.md): `lakes.pmtiles`, `usable_water.pmtiles`,
-`overlays.pmtiles`, `basemap.pmtiles`, `index.json`, `restrictions.json`, `rules.json`, `pack.json`.
+`overlays.pmtiles`, `basemap.pmtiles`, `index.json`, `restrictions.json`, `rules.json`,
+`lake_extents.json`, `pack.json`.
 
 Tiles are cut with tippecanoe using the flags the contract pins for the `lakes` layer. Tippecanoe
 2.17+ writes `.pmtiles` directly; older builds fall back to `.mbtiles` + `pmtiles convert`, which is
@@ -27,6 +28,7 @@ import httpx
 import pandas as pd
 import shapely
 
+from . import geometry as geometry_mod
 from . import gis, manual
 from . import match as match_mod
 from . import overlay as overlay_mod
@@ -214,6 +216,26 @@ def build_index(lakes: gpd.GeoDataFrame, verdicts: dict, overlays: dict, by_lake
     return entries
 
 
+def build_lake_extents(lakes: gpd.GeoDataFrame, min_chord_ft: float = geometry_mod.EXTENT_MIN_CHORD_FT) -> dict:
+    """`{"<lake_id>": [ft x 16]}` for lakes with `chord_ft` >= `min_chord_ft` and a computed extent.
+
+    Separate from `index.json` so that file stays under its size budget (see docs/data-contract.md,
+    "Briefing"). `extent_by_bearing` (from `geometry`) is `None`/missing for lakes below the
+    threshold -- those are skipped here too, defensively, even though the geometry stage already
+    only computes it above the same threshold.
+    """
+    out: dict[str, list[int]] = {}
+    for row in lakes.itertuples(index=False):
+        chord = _clean(getattr(row, "chord_ft", None))
+        if chord is None or chord < min_chord_ft:
+            continue
+        extent = getattr(row, "extent_by_bearing", None)
+        if extent is None or (hasattr(extent, "__len__") and len(extent) == 0):
+            continue
+        out[str(int(row.id))] = [int(v) for v in extent]
+    return out
+
+
 def build_restrictions(records: list[dict], matches: list[dict], synthetic: list[dict]) -> dict[str, dict]:
     """Active records only, keyed by restriction_id, with `lake_ids` filled in.
 
@@ -364,7 +386,10 @@ def run(cfg: Config, args) -> int:
     rules_json = json.loads((cfg.rules_dir / "rules.json").read_text())
     shutil.copyfile(cfg.rules_dir / "rules.json", out / "rules.json")
 
-    emitted = ["index.json", "restrictions.json", "rules.json"]
+    lake_extents = build_lake_extents(lakes)
+    (out / "lake_extents.json").write_text(json.dumps(lake_extents, separators=(",", ":")), encoding="utf-8")
+
+    emitted = ["index.json", "restrictions.json", "rules.json", "lake_extents.json"]
 
     if not getattr(args, "skip_tiles", False):
         by_id = {e["id"]: e for e in index}

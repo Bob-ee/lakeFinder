@@ -33,7 +33,8 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import shapely
-from pyproj import Geod, Transformer
+import shapely.affinity
+from pyproj import Geod, Proj, Transformer
 from shapely.geometry import LineString, MultiPolygon, Polygon
 
 from . import gis, ids
@@ -49,7 +50,12 @@ SHORE_BUFFER_M = 30.48  # 100 ft statewide slow-no-wake buffer
 BIG_LAKE_ACRES = 5000.0
 BIG_LAKE_CANDIDATES = 300
 
+EXTENT_BEARING_BINS = 16
+EXTENT_MIN_CHORD_FT = 1000.0
+EXTENT_SAMPLES = 40
+
 _GEOD = Geod(ellps="WGS84")
+_MEASURE_PROJ = Proj(MEASURE_CRS)
 
 
 def add_args(sp) -> None:
@@ -141,6 +147,76 @@ def longest_chord(poly, max_vertices: int = 200, max_candidates: int = 1000) -> 
         if best[0] >= dists[min(k + 1, len(dists) - 1)]:
             break  # no later candidate can beat this
     return best
+
+
+# --- extent by bearing ---------------------------------------------------------
+
+
+def meridian_convergence_deg(lon, lat):
+    """Angle (deg) from grid north (`MEASURE_CRS`'s +y) to true north at (lon, lat).
+
+    EPSG:3078 (Michigan Oblique Mercator) grid north is only true north on the projection's
+    central line; convergence reaches a couple of degrees at the ends of the state. `extent_by_bearing`
+    targets a *true* compass bearing, so every rotation below is corrected by this per-lake amount.
+    Vectorized: `lon`/`lat` may be scalars or arrays.
+    """
+    return _MEASURE_PROJ.get_factors(lon, lat, radians=False).meridian_convergence
+
+
+def _rotate_for_bearing(part, bearing_deg: float, convergence_deg: float):
+    """Rotate `part` (in `MEASURE_CRS`) so the true bearing `bearing_deg` aligns with +x."""
+    return shapely.affinity.rotate(part, bearing_deg - convergence_deg - 90.0, origin="centroid", use_radians=False)
+
+
+def _longest_segment(inter) -> float:
+    """Longest single `LineString` length in a line/polygon intersection result.
+
+    Islands and concavities can split one sample line into several pieces; the run must be one
+    uninterrupted segment, so this takes the longest single piece, never their sum.
+    """
+    if inter is None or inter.is_empty:
+        return 0.0
+    parts = shapely.get_parts(inter) if hasattr(inter, "geoms") else (inter,)
+    best = 0.0
+    for piece in parts:
+        if isinstance(piece, LineString) and not piece.is_empty and piece.length > best:
+            best = piece.length
+    return best
+
+
+def extent_by_bearing(poly, convergence_deg: float, n_samples: int = EXTENT_SAMPLES) -> list[int]:
+    """16 ints (ft): longest straight segment inside `poly` (`MEASURE_CRS`) along each bearing bin.
+
+    Bin `i` is centered on true bearing `i * 22.5` deg (0 = north). A segment has two ends, so only
+    8 directions are computed; bin `i` always equals bin `(i + 8) % 16`. Algorithm: rotate the
+    polygon (on the largest part, same as `longest_chord`) so the bearing becomes the x axis, sample
+    `n_samples` evenly spaced horizontal lines across its height, and take the longest single inside
+    segment per line -- not the sum of pieces (see `_longest_segment`).
+    """
+    part = largest_part(poly)
+    if part.is_empty:
+        return [0] * EXTENT_BEARING_BINS
+    values = [0.0] * 8
+    for k in range(8):
+        rotated = _rotate_for_bearing(part, k * 22.5, convergence_deg)
+        minx, miny, maxx, maxy = rotated.bounds
+        if maxy <= miny:
+            continue
+        pad = max((maxx - minx) * 0.01, 1.0)
+        ys = miny + (np.arange(n_samples) + 0.5) / n_samples * (maxy - miny)
+        coords = np.empty((n_samples, 2, 2))
+        coords[:, 0, 0] = minx - pad
+        coords[:, 0, 1] = ys
+        coords[:, 1, 0] = maxx + pad
+        coords[:, 1, 1] = ys
+        lines = shapely.linestrings(coords)
+        inter = shapely.intersection(rotated, lines)
+        best = 0.0
+        for g in inter:
+            best = max(best, _longest_segment(g))
+        values[k] = best
+    ft = [round(v * FT_PER_M) for v in values]
+    return ft + ft
 
 
 # --- stage -------------------------------------------------------------------
@@ -265,6 +341,20 @@ def run(cfg: Config, args) -> int:
     bearing = np.mod(np.round(az), 180.0)
     gdf["chord_bearing_deg"] = np.where(np.array(lengths) > 0, bearing, np.nan)
 
+    t1 = time.monotonic()
+    chord_ft = gdf["chord_ft"].to_numpy()
+    qualifies = chord_ft >= EXTENT_MIN_CHORD_FT
+    convergence = meridian_convergence_deg(gdf["lon"].to_numpy(), gdf["lat"].to_numpy())
+    extents: list = [None] * len(gdf)
+    proj_geoms = proj.to_numpy()
+    for i in np.flatnonzero(qualifies):
+        extents[i] = extent_by_bearing(proj_geoms[i], float(convergence[i]))
+    gdf["extent_by_bearing"] = extents
+    log.info(
+        "extent_by_bearing for %d of %d lakes (chord >= %.0f ft) in %.1fs",
+        int(qualifies.sum()), len(gdf), EXTENT_MIN_CHORD_FT, time.monotonic() - t1,
+    )
+
     bounds = gdf.geometry.bounds
     gdf["minx"] = bounds["minx"].round(6)
     gdf["miny"] = bounds["miny"].round(6)
@@ -274,7 +364,8 @@ def run(cfg: Config, args) -> int:
     cfg.work_dir.mkdir(parents=True, exist_ok=True)
     cols = [
         "id", "name", "name_norm", "county", "township", "lat", "lon",
-        "minx", "miny", "maxx", "maxy", "area_acres", "chord_ft", "chord_bearing_deg", "geometry",
+        "minx", "miny", "maxx", "maxy", "area_acres", "chord_ft", "chord_bearing_deg",
+        "extent_by_bearing", "geometry",
     ]
     out = gpd.GeoDataFrame(gdf[cols], geometry="geometry", crs=WGS84)
     out["name"] = out["name"].astype(object).where(out["name"].notna(), None)
