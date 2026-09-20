@@ -31,8 +31,14 @@ rsync -az --delete --human-readable --stats \
   --exclude '.venv/' --exclude 'node_modules/' --exclude '.pytest_cache/' --exclude '.ruff_cache/' \
   --exclude 'web/dev-dist/' --exclude '*.log' --exclude '.env' --exclude '.env.*' \
   --exclude 'data/raw/' --exclude 'data/work/' --exclude 'data/cache/' \
-  --exclude 'data/manual/settings.json' --exclude 'data/out/briefing.json' \
+  --exclude 'data/manual/settings.json' --exclude 'data/out/briefing.json' --exclude 'deploy/local.env' \
   "$REPO/" "$HOST:$DEST/"
+
+# First deploy only: start the server from this Mac's briefing settings rather than the KPTK defaults. After that
+# the server's file is its own.
+if [ -f "$REPO/data/manual/settings.json" ]; then
+  rsync -az --ignore-existing "$REPO/data/manual/settings.json" "$HOST:$DEST/data/manual/settings.json"
+fi
 
 if [ "${NO_INSTALL:-0}" = 1 ]; then
   echo "copied; install skipped"

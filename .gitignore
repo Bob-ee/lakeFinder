@@ -30,3 +30,6 @@ web/dev-dist/
 
 # written by the api service (home airport, limits, ntfy topic)
 data/manual/settings.json
+
+# per-server deploy choices (ports); lives on the server
+deploy/local.env

@@ -7,9 +7,16 @@
 #   deploy/install.sh --serve         also put `tailscale serve` in front of caddy (HTTPS on the tailnet)
 #   deploy/install.sh --dry-run DIR   write the plists into DIR and print what would happen; changes nothing
 #   deploy/install.sh --uninstall     stop and remove the jobs (add --daemon if that is how they were installed)
+#
+# Per-server choices live in deploy/local.env on the server (never pushed, never deleted by push.sh):
+#   LAKEFINDER_PORT=8080          caddy, on LAKEFINDER_BIND (default 127.0.0.1)
+#   LAKEFINDER_API_PORT=8000      the api, always on 127.0.0.1
+#   LAKEFINDER_HTTPS_PORT=443     what `tailscale serve` listens on: 443, 8443 or 10000
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck disable=SC1091
+if [ -f "$REPO/deploy/local.env" ]; then set -a; . "$REPO/deploy/local.env"; set +a; fi
 MODE=agent
 SERVE=0
 DRY=""
@@ -17,6 +24,7 @@ UNINSTALL=0
 PORT="${LAKEFINDER_PORT:-8080}"
 API_PORT="${LAKEFINDER_API_PORT:-8000}"
 BIND="${LAKEFINDER_BIND:-127.0.0.1}"
+HTTPS_PORT="${LAKEFINDER_HTTPS_PORT:-443}"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -24,7 +32,7 @@ while [ $# -gt 0 ]; do
     --serve) SERVE=1 ;;
     --dry-run) DRY="${2:?--dry-run needs a directory}"; shift ;;
     --uninstall) UNINSTALL=1 ;;
-    -h|--help) sed -n '2,10p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
   shift
@@ -58,6 +66,21 @@ need uv "brew install uv"
 need caddy "brew install caddy"
 UV="$(command -v uv)"
 CADDY="$(command -v caddy)"
+
+# The Mac App Store / standalone Tailscale keeps its CLI inside the app bundle.
+TAILSCALE="$(command -v tailscale || true)"
+[ -n "$TAILSCALE" ] || TAILSCALE=/Applications/Tailscale.app/Contents/MacOS/Tailscale
+[ -x "$TAILSCALE" ] || TAILSCALE=""
+
+# A port somebody else holds would leave launchd restarting a job that can never bind.
+port_holder() { lsof -nP -iTCP:"$1" -sTCP:LISTEN 2>/dev/null | awk 'NR>1{print $1}' | sort -u | tr '\n' ' '; }
+for p in "$PORT" "$API_PORT"; do
+  holder="$(port_holder "$p")"
+  case "$holder" in
+    ""|*caddy*|*[Pp]ython*|*uv*|*caffeinate*) ;;
+    *) die "port $p is in use by: $holder. Pick another in deploy/local.env (LAKEFINDER_PORT / LAKEFINDER_API_PORT)." ;;
+  esac
+done
 
 [ -f "$REPO/data/out/pack.json" ] || die "no data pack at $REPO/data/out (run deploy/push.sh from the dev Mac, or the pipeline here)"
 [ -f "$REPO/web/dist/index.html" ] || die "no web build at $REPO/web/dist (run deploy/push.sh from the dev Mac, or 'cd web && npm ci && npm run build' here)"
@@ -162,6 +185,16 @@ api_plist > "$STAGE/com.lakefinder.api.plist"
 web_plist > "$STAGE/com.lakefinder.web.plist"
 plutil -lint "$STAGE"/com.lakefinder.*.plist >/dev/null
 
+# One mode at a time. Agents can be removed without sudo; daemons cannot, so that direction is left to the owner.
+for label in "${LABELS[@]}"; do
+  if [ "$MODE" = daemon ]; then
+    launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+    rm -f "$HOME/Library/LaunchAgents/$label.plist"
+  elif [ -f "/Library/LaunchDaemons/$label.plist" ]; then
+    die "$label is installed as a LaunchDaemon. Remove it first: deploy/install.sh --uninstall --daemon"
+  fi
+done
+
 [ "$MODE" = daemon ] || mkdir -p "$PLIST_DIR"
 for label in "${LABELS[@]}"; do
   $SUDO launchctl bootout "$DOMAIN/$label" 2>/dev/null || true
@@ -188,12 +221,22 @@ curl -fsS "http://127.0.0.1:$PORT/data/pack.json" >/dev/null || die "caddy is up
 curl -fsS "http://127.0.0.1:$PORT/" >/dev/null || die "caddy is up but the app shell is not served"
 say "up: $(curl -fsS "http://127.0.0.1:$PORT/api/health")"
 
+SERVE_CMD="serve --bg --https=$HTTPS_PORT http://127.0.0.1:$PORT"
 if [ "$SERVE" = 1 ]; then
-  need tailscale "install Tailscale, or symlink its CLI into /usr/local/bin"
-  tailscale serve --bg "$PORT"
-  tailscale serve status
+  [ -n "$TAILSCALE" ] || die "tailscale CLI not found (looked on PATH and in /Applications/Tailscale.app)"
+  # Never take an HTTPS port that already serves something else on this machine.
+  if [ "$HTTPS_PORT" = 443 ]; then head_re='^https://[^: ]+ [(]'; else head_re="^https://[^ ]+:$HTTPS_PORT [(]"; fi
+  block="$("$TAILSCALE" serve status 2>/dev/null | awk -v re="$head_re" '$0 ~ re {on=1; next} on && /^$/ {on=0} on' || true)"
+  if [ -n "$block" ] && ! printf '%s' "$block" | grep -q "http://127.0.0.1:$PORT\$"; then
+    die "tailscale serve already uses HTTPS port $HTTPS_PORT for something else:
+$block
+Set LAKEFINDER_HTTPS_PORT (443, 8443 or 10000) in deploy/local.env."
+  fi
+  # shellcheck disable=SC2086
+  "$TAILSCALE" $SERVE_CMD
+  "$TAILSCALE" serve status | awk -v re="$head_re" '$0 ~ re {print; on=1; next} on && /^$/ {on=0} on'
 else
-  say "next: tailscale serve --bg $PORT   (HTTPS on the tailnet; the PWA needs it to install)"
+  say "next: tailscale $SERVE_CMD   (HTTPS on the tailnet; the PWA needs it to install)"
 fi
 
 # caffeinate covers idle sleep on mains power. A closed lid still sleeps the Mac unless disablesleep is set.
