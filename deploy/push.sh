@@ -20,7 +20,8 @@ if [ $# -gt 0 ] && [ "$1" = "--" ]; then shift; fi
 [ -f "$REPO/data/out/pack.json" ] || { echo "push: no data pack in data/out; run the pipeline first" >&2; exit 1; }
 
 if [ "${SKIP_BUILD:-0}" != 1 ]; then
-  (cd "$REPO/web" && npm ci --no-audit --no-fund && npm run build)
+  # npm ci deletes node_modules, which would pull the floor out from under a running dev server.
+  (cd "$REPO/web" && { [ -d node_modules ] || npm ci --no-audit --no-fund; } && npm run build)
 fi
 [ -f "$REPO/web/dist/index.html" ] || { echo "push: web/dist is missing" >&2; exit 1; }
 

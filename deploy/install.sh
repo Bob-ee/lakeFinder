@@ -13,6 +13,7 @@
 #   LAKEFINDER_API_PORT=8000      the api, always on 127.0.0.1
 #   LAKEFINDER_HTTPS_PORT=443     what `tailscale serve` listens on: 443, 8443 or 10000
 set -euo pipefail
+trap 'echo "install: failed at line $LINENO" >&2' ERR
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck disable=SC1091
@@ -73,7 +74,8 @@ TAILSCALE="$(command -v tailscale || true)"
 [ -x "$TAILSCALE" ] || TAILSCALE=""
 
 # A port somebody else holds would leave launchd restarting a job that can never bind.
-port_holder() { lsof -nP -iTCP:"$1" -sTCP:LISTEN 2>/dev/null | awk 'NR>1{print $1}' | sort -u | tr '\n' ' '; }
+# (lsof exits 1 when the port is free, which pipefail would turn into a silent exit.)
+port_holder() { { lsof -nP -iTCP:"$1" -sTCP:LISTEN 2>/dev/null || true; } | awk 'NR>1{print $1}' | sort -u | tr '\n' ' '; }
 for p in "$PORT" "$API_PORT"; do
   holder="$(port_holder "$p")"
   case "$holder" in

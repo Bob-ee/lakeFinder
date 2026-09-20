@@ -1,7 +1,8 @@
 # Handoff: seaplane lake map
 
-Rewritten 2026-09-20 for the next agent. Read this, then the docs in section 2 as you need them. Everything
-described here is committed on `main` (local; **not pushed** since `d793fca`, push when Bobby says).
+Rewritten 2026-09-20 for the next agent, updated the same evening after the first deploy. Read this, then the docs
+in section 2 as you need them. Everything described here is committed on `main` (local; **not pushed** since
+`d793fca`, push when Bobby says).
 
 Owner: Bobby. Aircraft: SeaRey amphibian. Base: KONZ (Grosse Ile, on the Detroit River). Home water: Lake St. Clair.
 Remote: https://github.com/Bob-ee/lakeFinder.
@@ -31,6 +32,7 @@ config (no new Michigan constants). A state without regulation data must read "n
 | `docs/nationwide.md` | What going national changes, the rule for new work, suggested sequence. |
 | `docs/briefing-design.md` | Briefing algorithm (scoring table, outlook, SPM wave model, live-feed quirks). Section 8 = numbers only Bobby can give. |
 | `docs/gis-sources.md` | Every data source with recipes; the 2026-09-19 addendum covers NHD, GNIS, bathymetry, NWS marine zones, St. Clair stations. |
+| `deploy/README.md` | How the app is deployed (no Docker: caddy + the api under launchd, pushed from the dev Mac). |
 | `docs/design.md` | Original spec (phases, legal model, client layout, disclaimer text). Older than the direction above. |
 | `docs/dnr-pages.md`, `docs/mdot-mac-record-request.md` | DNR page structure; the drafted MAC record request. |
 
@@ -38,12 +40,12 @@ config (no new Michigan constants). A state without regulation data must read "n
 
 | part | state | verify |
 |---|---|---|
-| `pipeline/` Python 3.12, uv | `fetch → parse-dnr → match → geometry → overlay → classify → wavefield → build`, plus `review`, `suggest`. Statewide warm run ≈ 8 min (`geometry` 2 min, `wavefield` 1.5 min, `build --skip-basemap` 35 s). | `cd pipeline && uv run pytest -q` (336) · `uv run ruff check seaplane_pipeline tests` |
+| `pipeline/` Python 3.12, uv | `fetch → parse-dnr → match → geometry → overlay → classify → wavefield → build`, plus `review`, `suggest`. Statewide warm run ≈ 8 min (`geometry` 2 min, `wavefield` 1.5 min, `build --skip-basemap` 35 s). | `cd pipeline && uv run pytest -q` (399) · `uv run ruff check seaplane_pipeline tests` |
 | `rules/` JS, zero deps | `engine/` (24 rules, verdict cap via `big_water_partial`) and `waves/` (wave math shared with the client). Shared fixtures in `rules/fixtures/` are the agreement between JS and Python. | `cd rules && npm test` (144) |
-| `api/` FastAPI, uv | Briefing generator, in-process scheduler (06/09/12/15/18/20/22 local), settings, airport lookup, wave-field reader, regions, `home_water` with observations and marine second opinion. `/api/wind/*` is an empty slot. | `cd api && uv run pytest -q` (324) · `uv run ruff check .` |
+| `api/` FastAPI, uv | Briefing generator, in-process scheduler (06/09/12/15/18/20/22 local), settings, airport lookup, wave-field reader, regions, `home_water` with observations and marine second opinion. `/api/wind/*` is an empty slot. | `cd api && uv run pytest -q` (339) · `uv run ruff check .` |
 | `web/` Vite, TS, MapLibre | Map, search, 3-snap sheet / iPad panel, client-side rules engine, Briefing tab + chip, settings dialog, Water section (wind dial, region list), wave overlay + legend, home-water action. No test runner. | `cd web && npm run typecheck && npm run build` |
-| hosting | `Caddyfile`, `docker-compose.yml` written. **Nothing is deployed.** | |
-| data | `data/out/` is a full pack (gitignored): 12,571 water bodies (10,783 lake, 1,780 river, 5 great_lake incl. Lake St. Clair, 3 connecting_water); 935 of 1,119 active DNR rules matched; verdicts 548 restricted / 287 conditional / 11,248 clear / 488 unknown; 81,436 wave points over 1,286 water bodies, 8,552 with depth. | `uv run seaplane all` rebuilds |
+| hosting | **Deployed on `labmac`** (Bobby's home server, tailnet): https://labmac.tail22b52.ts.net:10000. `deploy/push.sh labmac` updates it. `docker-compose.yml` is the unused alternative. | `curl https://labmac.tail22b52.ts.net:10000/api/health` |
+| data | `data/out/` is a full pack (gitignored): 12,571 water bodies (10,783 lake, 1,780 river, 5 great_lake incl. Lake St. Clair, 3 connecting_water); 942 of 1,118 active DNR rules matched; verdicts 544 restricted / 299 conditional / 11,240 clear / 488 unknown; 81,436 wave points over 1,286 water bodies, 8,552 with depth. | `uv run seaplane all` rebuilds |
 
 Run it locally: `cd api && uv run seaplane-api` · `cd web && npm run dev` · open `/?briefing=1` or `/?lake=657423876`
 (Lake St. Clair; Detroit River is `1625759164`). One-off briefing without touching the live file:
@@ -83,27 +85,37 @@ data/out/ served at /data/ ─▶ client (re-runs the rules engine and the wave 
   gusts"), so expect `gust_spread_ok` to move or a gust floor to be requested.
 - Setting his **home water** (button on the Lake St. Clair sheet), whether he wants the **ntfy push**, the MAC record
   request, and working the review queue in `overrides.suggested.yaml`.
-- He was running his own `seaplane-api` (port 8000) and `vite` (5173) while testing; the api process predates the
-  wave-field code and needs a restart to show regions. Leave his processes alone; use other ports.
+- He was running his own `seaplane-api` (port 8000) and `vite` (5173) on the dev Mac while testing; that api process
+  predates the wave-field code and needs a restart to show regions (the deployed one on labmac is current). Leave
+  his processes alone; use other ports.
+- **The LaunchDaemon install on labmac** (section 6A), then the app on his phone and iPad home screens.
 
 ## 6. Next work, in order
 
-**A. Deploy to the headless MacBook.** This is what makes the 18/20/22 runs real. No Docker on the Macs so far:
-brew `caddy` + two `launchd` jobs (api; weekly pipeline) is the likely route; `Caddyfile` takes `API_UPSTREAM=127.0.0.1:8000`;
-plist example in `api/README.md`; `tailscale serve` in front; the Mac must stay awake for the evening runs
-(`pmset` / `caffeinate`). Build `web/dist`, rsync `data/out` or run the pipeline there. Then phone + iPad home screen.
+**A. Deploy: done 2026-09-20, one step left for Bobby.** `labmac` is a shared home server (OrbStack containers,
+Jellyfin, two other `tailscale serve` sites on 443 and 8443), so lakeFinder has its own ports in
+`~/lakeFinder/deploy/local.env` there: caddy on 127.0.0.1:8100, the api on 127.0.0.1:8000, HTTPS on **10000**
+(`tailscale serve` only offers 443 / 8443 / 10000). Sleep was already disabled on that Mac. It is installed as
+**LaunchAgents** (smoke test, verified end to end from the dev Mac); Bobby chose LaunchDaemons, which needs his sudo
+password: `ssh -t labmac 'cd lakeFinder && deploy/install.sh --daemon --serve'` (removes the agents first). **The
+daemon path has not been run yet**; check `launchctl print system/com.lakefinder.api` and the two logs after it.
+Then: home-screen install on the phone and iPad, and watch that the 18:00 / 20:00 / 22:00 runs land in
+`outlook.runs`. The server's `settings.json` was seeded from the dev Mac once and is now its own file. A data or
+code change reaches the server only through `deploy/push.sh labmac`; there is no pipeline on the server.
 
-**B. Small fixes worth doing first (all known, all scoped):**
-1. 30 unnamed lakes read `restricted` with empty `restriction_ids`: synthetic federal restriction ids
-   (`manual._record`) hash `county|lake_name_raw|township|raw_text` and collide inside one refuge, so
-   `build_restrictions` keeps the last one's `lake_ids`. Put the lake id in the synthetic id.
-2. `index.json` is 4.85 MB of a 5 MB budget: drop `name_norm` from the payload (~310 KB; the client already has
-   `normalizeName`). Contract first.
-3. `parse-dnr`: Antrim header parsed as waterbody "Rivers" (8 rules), and "LAKE MACATAWA, PINE CREEK BAY" takes the
-   second half as the lake. `NAME_SUFFIX_RE` in `match.py` never trims a suffix that ends the string.
-4. Overrides to consider: Crawford "Lake Margrethe Channel in Harbor Beach Subdivision" (lost to the lake/river
+**B. Small fixes.** Done 2026-09-20: colliding federal ids (one record, many `lake_ids`), `name_norm` out of
+`index.json` (4.54 MB now), the Antrim "Rivers" header and "LAKE MACATAWA, PINE CREEK BAY", `NAME_SUFFIX_RE`,
+runway `length_ft`, and a rule that names only a connecting channel or canal is now `scope: "zone"` on the lakes it
+connects (12 lakes went restricted to conditional; see the contract's parsing rules). Still open:
+1. Overrides to consider: Crawford "Lake Margrethe Channel in Harbor Beach Subdivision" (lost to the lake/river
    gate); "Saugatuck Harbor" (Allegan) is unattached and may be a Kalamazoo River rule, not Lake Michigan.
-5. `home_airport.runways` has no `length_ft`, so parallel runways tie (aviationweather returns `dimension`).
+2. "LAKE OAKLAND CANAL" names only a canal in the reverse word order and stays lakewide. The trailing form is
+   ambiguous against "HI-LAND LAKE AND CONNECTING CANALS AND CHANNELS", which names the lake too.
+3. `no_vessels` and `no_motorboats` ignore `scope` in `rules.json`; a channel-only rule of either type would still
+   read restricted. None exists in the corpus today.
+4. MAC synthetic records have the same latent id collision the federal ones had (each entry carries its own
+   `lake_id`, and the record is not loaded yet).
+5. Antrim "Clam river" is unmatched: no Clam River polygon in the county's river layer.
 
 **C. Wave field, second pass.**
 - Wind per region instead of one forecast per water body (St. Clair is 25 miles across); the 0.1° forecast grid
@@ -153,6 +165,10 @@ lake unresolved".
 
 ## 8. Environment and working conventions
 
+- **Server `labmac`** (ssh works from the dev Mac, user `bobbywhiteley`, Apple silicon): brew `uv` + `caddy`, the
+  Tailscale CLI only inside the app bundle, checkout at `~/lakeFinder` (rsynced, not a git clone), logs in
+  `~/Library/Logs/lakefinder-{api,web}.log`. It runs Bobby's other services: never take ports 8080 / 8090 or the
+  443 / 8443 serve entries, and `deploy/install.sh` refuses to.
 - This Mac: uv, Python 3.12, node 24, npm 11, tippecanoe, pmtiles CLI, GDAL, Chrome. **No Docker, no Anthropic
   credentials** (the pipeline's optional LLM pass skips itself; the briefing must stay LLM-free by requirement).
 - Hosts: `gisago.mcgi.state.mi.us` resets TLS from here, use `gisagocss.state.mi.us`; `gis.fws.gov` 502s (Living
