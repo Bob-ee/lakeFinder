@@ -200,6 +200,24 @@ def test_federal_restrictions_reach_every_lake_through_the_rules_engine():
     assert grouped["401"][0]["restriction_id"] == grouped["402"][0]["restriction_id"]
 
 
+def test_a_structure_zone_is_conditional_and_names_the_structure(repo_root):
+    """End to end through the real engine: the same rule reads restricted lakewide."""
+    phrase = "the channel connecting Intermediate Lake to Hanley Lake"
+    lakes = [{"id": 1, "name": "Intermediate Lake", "chord_ft": 6000.0, "area_acres": 1569.0},
+             {"id": 2, "name": "Intermediate Lake", "chord_ft": 6000.0, "area_acres": 1569.0}]
+    restrictions = {
+        "1": [{"restriction_id": "z", "restriction_type": "slow_no_wake", "scope": "zone",
+               "scope_description": phrase, "status": "active", "hours": None, "season": None}],
+        "2": [{"restriction_id": "w", "restriction_type": "slow_no_wake", "scope": "lakewide",
+               "scope_description": None, "status": "active", "hours": None, "season": None}],
+    }
+    results = {r["id"]: r for r in classify.run_engine(
+        repo_root / "rules" / "rules.json", lakes, restrictions, mac_loaded=True)}
+    assert results[1]["verdict"] == "conditional"
+    assert phrase in results[1]["reasons"][0]["note"]
+    assert results[2]["verdict"] == "restricted"
+
+
 # --- big water -------------------------------------------------------------
 
 

@@ -106,6 +106,12 @@ One record per (lake mention, rule). `restrictions.json` is `{ "<restriction_id>
   `speed_limit` record.
 - "High speed" clauses that also ban towing are one `no_high_speed` (or `high_speed_hours`) record, not two.
 - A towing/skiing-only clause with no speed clause is `no_towing`.
+- A rule that names only a **connecting structure** ("Channel connecting Intermediate lake to Hanley lake",
+  "CHANNEL CONNECTING BLACK LAKE AND RAWSON LAKE", "canals connected to X Lake") still attaches to the lake(s) it
+  connects, because the structure has no polygon of its own, but as `scope: "zone"` with the structure phrase as
+  `scope_description`: the rule covers the channel, not the lake. A header that names the lake itself *and* its
+  channels ("BIG AND LITTLE SCHOOL LOT LAKES AND CONNECTING CHANNEL") stays as parsed. A river or stream named
+  outright is the water body, not a structure, and is unaffected.
 - Entries whose header or body starts with "Rescinded" get `status: "rescinded"` and `restriction_type: "other"`
   with `needs_review: false`.
 - A lake that straddles a county line appears once per county; both records keep their own `county` and the matcher

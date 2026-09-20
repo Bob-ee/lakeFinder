@@ -7,6 +7,7 @@ import json
 import pytest
 
 from seaplane_pipeline.names import (
+    connecting_structure,
     descriptor_segments,
     is_generic_name,
     normalize_name,
@@ -130,6 +131,62 @@ def test_descriptor_segments_feed_zone_descriptions() -> None:
     assert descriptor_segments("BUCKHORN LAKE, NORTH BASIN") == ["North Basin"]
     assert descriptor_segments("LAKE MACATAWA, PINE CREEK BAY") == ["Pine Creek Bay"]
     assert descriptor_segments("ORCHARD LAKE") == []
+
+
+#: (header or clause text, the structure phrase it names *only*, or None)
+CONNECTING_STRUCTURE_CASES = [
+    # names only the structure: the rule covers the channel, not the lakes it joins
+    ("CHANNEL CONNECTING BLACK LAKE AND RAWSON LAKE", "the channel connecting Black Lake and Rawson Lake"),
+    ("CHANNEL CONNECTING PAINTER AND JUNO LAKES", "the channel connecting Painter and Juno Lakes"),
+    ("CANAL CONNECTED TO DEWEY LAKE", "the canal connected to Dewey Lake"),
+    ("CANALS CONNECTED TO JUNO LAKE", "the canals connected to Juno Lake"),
+    ("CHANNEL CONNECTED TO PATTERSON LAKE", "the channel connected to Patterson Lake"),
+    ("CHANNEL CONNECTING TAMARACK LAKE TO HURON RIVER", "the channel connecting Tamarack Lake to Huron River"),
+    ("Channel connecting Intermediate lake to Hanley lake.",
+     "the channel connecting Intermediate Lake to Hanley Lake"),
+    ("Channel connecting Ellsworth lake to St. Clair lake.",
+     "the channel connecting Ellsworth Lake to St. Clair Lake"),
+    # names the lake itself as well as its channels: stays a rule about the lake
+    ("BIG AND LITTLE SCHOOL LOT LAKES AND CONNECTING CHANNEL", None),
+    ("MASTON AND MUSKELLONGE LAKES, CHANNEL CONNECTING", None),
+    ("WOLVERINE LAKE, ALL ARTIFICIAL CHANNELS AND CANALS CONNECTED TO", None),
+    ("HI-LAND LAKE AND CONNECTING CANALS AND CHANNELS", None),
+    ("HUFF LAKE & LAKE LOUISE, CHANNEL CONNECTING", None),
+    ("LAKE OAKLAND CANAL", None),
+    # a river or stream named outright is the water body, not a structure
+    ("Clam river from Torch lake to Clam lake.", None),
+    ("BLACK RIVER FROM MEYERS CREEK TO BLACK LAKE", None),
+    # the structure never resolved onto its lakes, so the name is still the structure
+    ("CHANNEL BETWEEN SYLVAN AND EMERALD LAKES", None),
+    ("CHANNEL FROM BEAR LAKE TO MUSKEGON LAKE", None),
+    ("CHANNELS", None),
+    ("SQUARE LAKE", None),
+    ("", None),
+]
+
+
+@pytest.mark.parametrize(("raw", "phrase"), CONNECTING_STRUCTURE_CASES)
+def test_connecting_structure(raw: str, phrase: str | None) -> None:
+    assert connecting_structure(raw) == phrase
+
+
+def test_connecting_structure_reads_as_a_noun_phrase() -> None:
+    """It is substituted into the engine's "... only in {scope_description}; ..." notes."""
+    for _raw, phrase in CONNECTING_STRUCTURE_CASES:
+        if phrase is None:
+            continue
+        assert phrase[0].islower(), phrase          # mid-sentence, so no leading capital
+        assert not phrase.endswith("."), phrase     # the note supplies its own punctuation
+        assert "  " not in phrase, phrase
+        assert phrase.startswith(("the ", "all ")), phrase
+
+
+def test_connecting_structure_does_not_fire_on_a_name_it_could_not_resolve() -> None:
+    """The guard: if the structure word survives into the name, nothing was resolved onto a lake."""
+    assert split_multi_lake_names("CHANNEL BETWEEN SYLVAN AND EMERALD LAKES") == [
+        "Channel Between Sylvan and Emerald Lake"
+    ]
+    assert connecting_structure("CHANNEL BETWEEN SYLVAN AND EMERALD LAKES") is None
 
 
 @pytest.mark.parametrize(

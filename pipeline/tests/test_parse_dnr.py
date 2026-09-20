@@ -175,6 +175,71 @@ def test_towing_only_clause_stays_no_towing(parsed) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Rules that name only a connecting structure
+# ---------------------------------------------------------------------------
+
+
+def test_a_connecting_structure_rule_is_scoped_to_the_structure(parsed) -> None:
+    """The rule covers the channel; the lake is only where it had to be attached."""
+    got = {
+        r.rule_id: (r.lake_name_raw, r.scope, r.scope_description)
+        for r in parsed["livingston"]
+        if r.rule_id in ("R 281.747.8", "R 281.747.9", "R 281.747.13")
+    }
+    assert got == {
+        "R 281.747.8": ("Tamarack Lake", "zone", "the channel connecting Tamarack Lake to Huron River"),
+        "R 281.747.9": ("Marl Lake", "zone", "the canal connected to Marl Lake"),
+        "R 281.747.13": ("Patterson Lake", "zone", "the channel connected to Patterson Lake"),
+    }
+
+
+def test_scoping_a_structure_rule_does_not_move_its_id(parsed) -> None:
+    """`scope` is not part of the id key, so these ids are the ones already published."""
+    got = {
+        r.rule_id: r.restriction_id
+        for r in parsed["livingston"]
+        if r.rule_id in ("R 281.747.8", "R 281.747.9", "R 281.747.13")
+    }
+    assert got == {
+        "R 281.747.8": "c30508daf6de",
+        "R 281.747.9": "e6f09f962b30",
+        "R 281.747.13": "a908ab64d531",
+    }
+
+
+def test_a_header_naming_the_lake_and_its_channel_stays_lakewide(parsed) -> None:
+    school = [r for r in parsed["oakland"] if r.rule_id == "R 281.763.3"]
+    assert {r.lake_name_raw for r in school} == {"Big School Lot Lake", "Little School Lot Lake"}
+    assert {r.scope for r in school} == {"lakewide"}
+    assert all(r.scope_description is None for r in school)
+
+    maston = [r for r in parsed["kent"] if r.rule_id == "R 281.741.5"]
+    assert {r.lake_name_raw for r in maston} == {"Maston Lake", "Muskellonge Lake"}
+    assert {r.scope for r in maston} == {"lakewide"}
+
+
+def test_a_structure_rule_that_described_its_own_zone_keeps_that_description(parsed) -> None:
+    """A boundary the clause spelled out is more specific than the header phrase."""
+    huff = [r for r in parsed["oakland"] if r.rule_id == "WC-63-95-003"]
+    assert {r.scope for r in huff} == {"zone"}
+    assert all("mouth of Huff lake" in (r.scope_description or "") for r in huff)
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("Channel connecting Ellsworth lake to St. Clair lake.",
+         "Channel connecting Ellsworth lake to St. Clair lake."),
+        ("Mt. Pleasant Pond. The boundaries shall be marked.", "Mt. Pleasant Pond."),
+        ("Foo Lake. The boundaries shall be marked.", "Foo Lake."),
+        ("No period at all", "No period at all"),
+    ],
+)
+def test_first_sentence_steps_over_abbreviations(text: str, expected: str) -> None:
+    assert parse_dnr.first_sentence(text) == expected
+
+
+# ---------------------------------------------------------------------------
 # A header that only labels the list under it (Antrim R 281.705.1)
 # ---------------------------------------------------------------------------
 
@@ -218,6 +283,19 @@ def test_generic_list_header_takes_its_names_from_the_clauses() -> None:
     assert len({r.restriction_id for r in records}) == len(records)
 
 
+def test_structure_clauses_are_scoped_to_the_structure_but_rivers_are_not() -> None:
+    entry = _list_entry("RIVERS AND CHANNELS", ANTRIM_PREAMBLE, ANTRIM_ITEMS)
+    by_name = {r.lake_name_raw: r for r in parse_dnr.records_for_entry(entry, "Antrim", "u", FETCHED_AT)}
+    # (a)-(c) name the river outright: the whole river is covered
+    for name in ("Clam river", "Grass river", "Intermediate river"):
+        assert (by_name[name].scope, by_name[name].scope_description) == ("lakewide", None), name
+    # (d) names only the channel, which has no polygon, so it lands on the lake as a zone
+    assert by_name["Intermediate lake"].scope == "zone"
+    assert by_name["Intermediate lake"].scope_description == (
+        "the channel connecting Intermediate Lake to Hanley Lake"
+    )
+
+
 def test_a_header_that_names_a_waterbody_still_wins_over_its_clauses() -> None:
     entry = _list_entry("TORCH LAKE", ANTRIM_PREAMBLE, ANTRIM_ITEMS)
     records = parse_dnr.records_for_entry(entry, "Antrim", "u", FETCHED_AT)
@@ -258,7 +336,9 @@ def test_clause_names_are_only_taken_when_every_clause_names_one() -> None:
     ],
 )
 def test_clause_lake_names(text: str, expected: list[str]) -> None:
-    assert parse_dnr._clause_lake_names(parse_dnr.Clause(label="(a)", text=text)) == expected
+    names, source = parse_dnr._clause_lake_names(parse_dnr.Clause(label="(a)", text=text))
+    assert names == expected
+    assert bool(source) == bool(expected)
 
 
 # ---------------------------------------------------------------------------

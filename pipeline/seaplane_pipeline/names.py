@@ -166,6 +166,23 @@ _LEADING_STRUCTURE_RE = re.compile(
     re.IGNORECASE,
 )
 
+#: The leading phrase of a header or clause that names *only* a connecting structure
+#: ("CHANNEL CONNECTING BLACK LAKE AND RAWSON LAKE", "canals connected to Juno Lake"). The
+#: structure has no polygon of its own, so `split_multi_lake_names` strips this and resolves the
+#: rule onto the lakes it joins; `connecting_structure` reports the phrase so the record can say
+#: the rule covers the channel rather than the lake (docs/data-contract.md, "Parsing rules").
+_STRUCTURE_HEAD_RE = re.compile(
+    r"^(?:the\s+)?(?:all\s+)?(?:artificial\s+|natural\s+)?"
+    r"(?:channels?|canals?|lagoons?)\s+"
+    r"(?:connecting|connected\s+to|connected|between|joining|to)\s+",
+    re.IGNORECASE,
+)
+#: A name that still opens with the structure noun was never resolved onto its lakes.
+_STRUCTURE_NOUN_RE = re.compile(
+    r"^(?:the\s+)?(?:all\s+)?(?:artificial\s+|natural\s+)?(?:channels?|canals?|lagoons?)\b",
+    re.IGNORECASE,
+)
+
 _SMALL_WORDS = frozenset({"and", "of", "the", "to", "in", "at", "on", "for", "a", "an", "or"})
 
 _SPLIT_RE = re.compile(r"\s*(?:,\s*and\s+|,\s*|\s+and\s+|\s*&\s*)\s*", re.IGNORECASE)
@@ -196,6 +213,57 @@ def title_case(raw: str) -> str:
         return low[:1].upper() + low[1:]
 
     return _WORD_RE.sub(fix, text)
+
+
+def _title_phrase(text: str) -> str:
+    """Title-case a phrase for prose, leaving words that are already mixed case alone.
+
+    Stronger than `title_case`, which trusts any non-shouting word: the DNR writes the generic in
+    lower case inside a sentence ("Hanley lake"), and that has to read as "Hanley Lake" once it is
+    substituted into a rule note. "McDonald" and "Hi-Land" are mixed case and survive untouched.
+    """
+    state = {"first": True}
+
+    def fix(m: re.Match[str]) -> str:
+        word = m.group(0)
+        first = state["first"]
+        state["first"] = False
+        low = word.lower()
+        if not first and low in _SMALL_WORDS:
+            return low
+        if word.isupper() or word.islower():
+            return low[:1].upper() + low[1:]
+        return word
+
+    return _WORD_RE.sub(fix, re.sub(r"\s+", " ", text).strip())
+
+
+def connecting_structure(raw: str | None) -> str | None:
+    """The connecting structure `raw` names, as a phrase, when that is *all* it names.
+
+    `"Channel connecting Intermediate lake to Hanley lake."` ->
+    `"the channel connecting Intermediate Lake to Hanley Lake"`, ready to drop into the rules
+    engine's "... only in {scope_description}" notes.
+
+    `None` when the text names a water body of its own, which covers three cases: the structure
+    word is not what the text opens with ("BIG AND LITTLE SCHOOL LOT LAKES AND CONNECTING
+    CHANNEL", "MASTON AND MUSKELLONGE LAKES, CHANNEL CONNECTING" -- both name the lakes too), the
+    opening is a river or stream rather than a structure, and the structure survived into the name
+    because `split_multi_lake_names` could not resolve it onto its lakes ("CHANNEL BETWEEN SYLVAN
+    AND EMERALD LAKES").
+    """
+    text = title_case(raw or "")
+    m = _STRUCTURE_HEAD_RE.match(text)
+    if not m:
+        return None
+    names = split_multi_lake_names(raw or "")
+    if not names or any(_STRUCTURE_NOUN_RE.match(n) for n in names):
+        return None
+    head = re.sub(r"\s+", " ", m.group(0)).strip().lower()
+    if not re.match(r"^(?:the|all)\b", head):
+        head = f"the {head}"
+    rest = _title_phrase(text[m.end():].strip(" .;,"))
+    return f"{head} {rest}".strip() if rest else None
 
 
 def _words(segment: str) -> list[str]:

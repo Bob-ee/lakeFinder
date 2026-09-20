@@ -44,7 +44,13 @@ from bs4 import BeautifulSoup, Tag
 
 from . import dnr_fetch
 from .config import Config
-from .names import descriptor_segments, is_generic_name, normalize_name, split_multi_lake_names
+from .names import (
+    connecting_structure,
+    descriptor_segments,
+    is_generic_name,
+    normalize_name,
+    split_multi_lake_names,
+)
 from .plss import parse_plss
 from .restriction import Hours, Plss, Restriction, Season
 
@@ -214,8 +220,10 @@ class Clause:
     label: str | None
     text: str
     #: Waterbody names this clause names itself, filled in only when the entry header names none
-    #: (see `clause_lake_names`). `None` means "use the entry's header names".
+    #: (see `assign_clause_lake_names`). `None` means "use the entry's header names".
     lake_names: list[str] | None = None
+    #: The text `lake_names` was read out of, so the scope can be read from the same words.
+    lake_names_source: str | None = None
 
 
 def _is_next_label(label: str, index: int, kind: str) -> bool:
@@ -269,19 +277,31 @@ def split_clauses(paragraphs: list[str]) -> tuple[str, list[Clause]]:
 #: Clam lake"); anything longer is prose about a waterbody named in the header.
 CLAUSE_NAME_MAX_WORDS = 6
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.;:])\s+")
+#: A short capitalised word before the period is an abbreviation inside the name, not the end of
+#: the sentence: "Channel connecting Ellsworth lake to St. Clair lake" is one clause, not two.
+_ABBREV_TAIL_RE = re.compile(r"\b[A-Z][A-Za-z]{0,2}\.$")
 
 
-def _clause_lake_names(clause: Clause) -> list[str]:
-    """The waterbody names one enumerated clause names itself, or `[]` when it names none."""
-    sentence = _SENTENCE_SPLIT_RE.split(clause.text.strip(), 1)[0].strip(" .;,")
+def first_sentence(text: str) -> str:
+    """The first sentence of `text`, stepping over abbreviation periods ("St.", "Mt.", "No.")."""
+    for m in _SENTENCE_SPLIT_RE.finditer(text):
+        head = text[: m.start()]
+        if not _ABBREV_TAIL_RE.search(head):
+            return head
+    return text
+
+
+def _clause_lake_names(clause: Clause) -> tuple[list[str], str]:
+    """`(names, source)` for a clause that names its own waterbody; `([], "")` when it names none."""
+    sentence = first_sentence(clause.text.strip()).strip(" .;,")
     if not sentence:
-        return []
+        return [], ""
     names = split_multi_lake_names(sentence)
     if not names:
-        return []
+        return [], ""
     if any(is_generic_name(n) or len(n.split()) > CLAUSE_NAME_MAX_WORDS for n in names):
-        return []
-    return names
+        return [], ""
+    return names, sentence
 
 
 def assign_clause_lake_names(header_names: list[str], clauses: list[Clause]) -> bool:
@@ -300,10 +320,11 @@ def assign_clause_lake_names(header_names: list[str], clauses: list[Clause]) -> 
     if len(clauses) < 2 or not all(c.label for c in clauses):
         return False
     derived = [_clause_lake_names(c) for c in clauses]
-    if not all(derived):
+    if not all(names for names, _ in derived):
         return False
-    for clause, names in zip(clauses, derived, strict=True):
+    for clause, (names, source) in zip(clauses, derived, strict=True):
         clause.lake_names = names
+        clause.lake_names_source = source
     return True
 
 
@@ -763,6 +784,7 @@ def records_for_entry(
 
     preamble, clauses = split_clauses(clause_paragraphs)
     assign_clause_lake_names(lake_names, clauses)
+    header_structure = connecting_structure(entry.lake_name_group)
 
     per_clause: list[tuple[Clause, list[ClauseResult]]] = []
     for clause in clauses:
@@ -778,6 +800,14 @@ def records_for_entry(
         season = extract_season(text)
         scope, description = detect_zone(clause.text, preamble, header=entry.lake_name_group)
         names = clause.lake_names or lake_names
+        # The rule names only the channel between these lakes, so it covers the channel, not the
+        # lake it had to be attached to for want of a polygon (docs/data-contract.md, "Parsing
+        # rules"). A boundary description the clause spelled out itself is more specific and wins.
+        structure = (
+            connecting_structure(clause.lake_names_source) if clause.lake_names else header_structure
+        )
+        if structure and scope == "lakewide":
+            scope, description = "zone", structure
         for result in results:
             for name in names:
                 records.append(
