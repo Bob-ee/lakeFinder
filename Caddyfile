@@ -1,21 +1,26 @@
 # Serves the built PWA and the data pack. TLS is terminated by Tailscale
 # (`tailscale serve` in front) so this listens on plain HTTP inside the tailnet.
-:8080 {
+:{$LISTEN_PORT:8080} {
+	# Compose keeps the defaults. A brew/launchd install (deploy/install.sh) sets BIND_ADDR=127.0.0.1 so only
+	# `tailscale serve` can reach it, and points DATA_ROOT / WEB_ROOT at the checkout.
+	bind {$BIND_ADDR:0.0.0.0}
 	encode zstd gzip
 
 	# Data pack: range requests are required for .pmtiles.
 	handle_path /data/* {
-		root * /srv/data
+		root * {$DATA_ROOT:/srv/data}
 		file_server {
 			precompressed
 		}
 		@pmtiles path *.pmtiles
 		header @pmtiles Content-Type application/octet-stream
 		header @pmtiles Accept-Ranges bytes
-		header Cache-Control "public, max-age=300"
-		# The briefing is rewritten several times a day by the api service.
+		# The briefing is rewritten several times a day by the api service. Two exclusive matchers: caddy runs a
+		# matcher-less `header` after the named ones, so a plain default would overwrite the briefing's no-cache.
 		@briefing path /briefing.json
+		@pack not path /briefing.json
 		header @briefing Cache-Control "no-cache"
+		header @pack Cache-Control "public, max-age=300"
 	}
 
 	# API (briefing + settings now, wind proxy in v2, saved-lake sync in v4).
@@ -26,10 +31,14 @@
 
 	# App shell.
 	handle {
-		root * /srv/web
+		root * {$WEB_ROOT:/srv/web}
 		try_files {path} /index.html
 		file_server
-		@sw path /sw.js /manifest.webmanifest
-		header @sw Cache-Control "no-cache"
+		# Vite content-hashes everything under /assets/. The rest (index.html behind any deep link, sw.js, the
+		# manifest) must revalidate, or a home-screen install keeps the old build.
+		@hashed path /assets/*
+		@shell not path /assets/*
+		header @hashed Cache-Control "public, max-age=31536000, immutable"
+		header @shell Cache-Control "no-cache"
 	}
 }

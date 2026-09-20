@@ -84,46 +84,21 @@ that sleeps. Consequences:
 
 ## Deploy on the headless MacBook (launchd)
 
-Save as `~/Library/LaunchAgents/com.lakefinder.api.plist`, then
-`launchctl load -w ~/Library/LaunchAgents/com.lakefinder.api.plist`.
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key>              <string>com.lakefinder.api</string>
-  <key>WorkingDirectory</key>   <string>/Users/bobby/lakeFinder/api</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>/opt/homebrew/bin/uv</string>
-    <string>run</string>
-    <string>seaplane-api</string>
-  </array>
-  <key>EnvironmentVariables</key>
-  <dict>
-    <key>SEAPLANE_DATA_OUT</key>     <string>/Users/bobby/lakeFinder/data/out</string>
-    <key>SEAPLANE_DATA_MANUAL</key>  <string>/Users/bobby/lakeFinder/data/manual</string>
-    <key>PATH</key>                  <string>/opt/homebrew/bin:/usr/bin:/bin</string>
-  </dict>
-  <key>RunAtLoad</key>          <true/>
-  <key>KeepAlive</key>          <true/>
-  <key>StandardOutPath</key>    <string>/Users/bobby/Library/Logs/lakefinder-api.log</string>
-  <key>StandardErrorPath</key>  <string>/Users/bobby/Library/Logs/lakefinder-api.log</string>
-</dict>
-</plist>
-```
+`deploy/push.sh <host>` from the dev Mac, which runs `deploy/install.sh` on the server: it writes and loads
+`com.lakefinder.api` (this service under `caffeinate -is`, `uv run --frozen --no-dev seaplane-api` on
+127.0.0.1:8000, `SEAPLANE_DATA_OUT` / `SEAPLANE_DATA_MANUAL` pointed at the checkout) and `com.lakefinder.web`
+(caddy). See `deploy/README.md`; `deploy/install.sh --dry-run <dir>` prints the plists.
 
 **The Mac must not sleep, or the 18:00/20:00/22:00 outlook runs will not happen.** A sleeping laptop
 wakes with all three times more than 90 minutes old, and the scheduler skips them by design — the
-evening outlook would simply never be there in the morning. Either:
+evening outlook would simply never be there in the morning.
 
 ```
 sudo pmset -a sleep 0 disablesleep 1      # mains-powered, lid closed, never sleeps
 ```
 
-or run the service under `caffeinate -is` in the plist's `ProgramArguments`. `pmset -g` shows what
-is currently set. Display sleep is fine; system sleep is not.
+The installed plist already runs the service under `caffeinate -is`, which covers idle sleep on mains power but
+not a closed lid; `pmset -g` shows what is currently set. Display sleep is fine; system sleep is not.
 
 `docker-compose.yml` has an `api` service (profile `api`) using the `Dockerfile` here if you would
 rather run it in Docker; it mounts the same data volume Caddy serves.
