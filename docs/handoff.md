@@ -1,198 +1,174 @@
-# Handoff: Michigan seaplane lake map
+# Handoff: seaplane lake map
 
-Written 2026-09-19 for the next agent picking this up; updated the same day after the briefing (step B) and rivers
-were built and Bobby set the direction in `docs/big-water-design.md` and `docs/nationwide.md`. **Read those two next.** Read this first, then `docs/design.md` (the spec) and
-`docs/data-contract.md` (the schemas every part is built against). `README.md` has the status table; `CLAUDE.md`
-has the one-screen orientation.
+Rewritten 2026-09-20 for the next agent. Read this, then the docs in section 2 as you need them. Everything
+described here is committed on `main` (local; **not pushed** since `d793fca`, push when Bobby says).
 
-Owner: Bobby. Aircraft: SeaRey. Remote: https://github.com/Bob-ee/lakeFinder, branch `main`.
+Owner: Bobby. Aircraft: SeaRey amphibian. Base: KONZ (Grosse Ile, on the Detroit River). Home water: Lake St. Clair.
+Remote: https://github.com/Bob-ee/lakeFinder.
 
-## 1. What is built (phase 1, "static map")
+## 1. What this is now
 
-Everything in design section 10 phase 1 exists, runs statewide, and is committed. Nine commits so far; the log
-reads as a build order.
+A self-hosted map + PWA that answers, for a seaplane pilot:
 
-| part | state | verify with |
+1. **Is there a known restriction on landing here?** Verdicts `restricted | conditional | clear | unknown`, always
+   with the rule text and citation. Never "legal".
+2. **Is it a day to fly, and tomorrow morning?** A deterministic, no-LLM briefing anchored on a home airport, rerun
+   on a schedule, with an evening outlook at 18:00 / 20:00 / 22:00 for planning the next morning.
+3. **Where on the water is it calm in this wind?** A per-point wave field for every water body of 100 acres or more,
+   grouped into named regions ("Anchor Bay 11 in, Big Muscamoot Bay 8 in, open middle 18 in").
+
+**Direction Bobby has set, and it overrides older docs:** he mostly flies Lake St. Clair and cares about *where in
+the lake*; whatever is built must work on **every** lake with **nothing hand-drawn per lake**; the app is headed for
+a **nationwide release to the seaplane community**, so Michigan is the pilot state. New code takes its region from
+config (no new Michigan constants). A state without regulation data must read "no data", never "clear".
+
+## 2. Docs, in the order they matter
+
+| doc | what it is |
+|---|---|
+| `docs/data-contract.md` | **Authoritative schemas** between all parts. Change it before code. Sections "Wave field" and "Briefing" are the newest. |
+| `docs/big-water-design.md` | Why and how of the wave field; section 7 lists what changed while building. |
+| `docs/nationwide.md` | What going national changes, the rule for new work, suggested sequence. |
+| `docs/briefing-design.md` | Briefing algorithm (scoring table, outlook, SPM wave model, live-feed quirks). Section 8 = numbers only Bobby can give. |
+| `docs/gis-sources.md` | Every data source with recipes; the 2026-09-19 addendum covers NHD, GNIS, bathymetry, NWS marine zones, St. Clair stations. |
+| `docs/design.md` | Original spec (phases, legal model, client layout, disclaimer text). Older than the direction above. |
+| `docs/dnr-pages.md`, `docs/mdot-mac-record-request.md` | DNR page structure; the drafted MAC record request. |
+
+## 3. State of each part
+
+| part | state | verify |
 |---|---|---|
-| `pipeline/` (Python 3.12, uv) | all 8 design stages plus `suggest`; `geometry` also computes `extent_by_bearing`; statewide run takes ~6 min warm | `cd pipeline && uv run pytest -q` (336 pass) and `uv run ruff check seaplane_pipeline tests` |
-| `rules/` (JS, zero deps) | 24 rules, shared fixtures, CLI used by the pipeline, module imported by the client | `cd rules && npm test` (144 pass: engine + `rules/waves/`) |
-| `web/` (Vite, TS, MapLibre) | map with verdict outlines, search, 3-snap sheet / iPad panel, `?lake=`, disclaimer, client-side rules engine | `cd web && npm run typecheck && npm run build` |
-| `api/` (FastAPI, Python 3.12, uv) | briefing generator with the evening outlook, in-process scheduler, settings, airport lookup; `/api/wind/*` is an empty slot | `cd api && uv run pytest -q` (324 pass) and `uv run ruff check .` |
-| briefing client | Briefing tab + chip under the search bar, outlook hour strip and run-history chips, settings dialog, `?briefing=1` | same web commands; screenshots were checked at 390 px and 1180 px, light and dark |
-| hosting | `Caddyfile`, `docker-compose.yml` written (api has rw data + manual mounts, `API_UPSTREAM` for a non-Docker install), **not deployed anywhere yet** | |
-| data | `data/out/` holds a full statewide pack (158 MB) including `lake_extents.json` (6,054 lakes) and a live `briefing.json`; gitignored, rebuild with `uv run seaplane all` | `pmtiles show data/out/lakes.pmtiles` |
+| `pipeline/` Python 3.12, uv | `fetch → parse-dnr → match → geometry → overlay → classify → wavefield → build`, plus `review`, `suggest`. Statewide warm run ≈ 8 min (`geometry` 2 min, `wavefield` 1.5 min, `build --skip-basemap` 35 s). | `cd pipeline && uv run pytest -q` (336) · `uv run ruff check seaplane_pipeline tests` |
+| `rules/` JS, zero deps | `engine/` (24 rules, verdict cap via `big_water_partial`) and `waves/` (wave math shared with the client). Shared fixtures in `rules/fixtures/` are the agreement between JS and Python. | `cd rules && npm test` (144) |
+| `api/` FastAPI, uv | Briefing generator, in-process scheduler (06/09/12/15/18/20/22 local), settings, airport lookup, wave-field reader, regions, `home_water` with observations and marine second opinion. `/api/wind/*` is an empty slot. | `cd api && uv run pytest -q` (324) · `uv run ruff check .` |
+| `web/` Vite, TS, MapLibre | Map, search, 3-snap sheet / iPad panel, client-side rules engine, Briefing tab + chip, settings dialog, Water section (wind dial, region list), wave overlay + legend, home-water action. No test runner. | `cd web && npm run typecheck && npm run build` |
+| hosting | `Caddyfile`, `docker-compose.yml` written. **Nothing is deployed.** | |
+| data | `data/out/` is a full pack (gitignored): 12,571 water bodies (10,783 lake, 1,780 river, 5 great_lake incl. Lake St. Clair, 3 connecting_water); 935 of 1,119 active DNR rules matched; verdicts 548 restricted / 287 conditional / 11,248 clear / 488 unknown; 81,436 wave points over 1,286 water bodies, 8,552 with depth. | `uv run seaplane all` rebuilds |
 
-Statewide numbers as of the last run (2026-09-19, rivers and big water included): 83 county pages, 1,134 restriction
-records, 12,571 water bodies (10,783 `lake`, 1,780 `river`, 5 `great_lake` incl. Lake St. Clair, 3
-`connecting_water`), 935 of 1,119 active restrictions matched, verdicts restricted 548 / conditional 287 / clear
-11,248 / unknown 488. Wave field: 81,436 sample points over 1,286 water bodies (`wave_points.bin` 4.9 MB), 8,552
-with a depth (Lake Erie, Lake St. Clair, Detroit and St. Clair Rivers, from the NCEI grid). 181 waterway rules attach to 157 river polygons; 24 of
-them could not be narrowed below the county and carry `reach_unresolved` (the sheet says the rule covers part of the
-river). Lake ids did not change when rivers were added.
+Run it locally: `cd api && uv run seaplane-api` · `cd web && npm run dev` · open `/?briefing=1` or `/?lake=657423876`
+(Lake St. Clair; Detroit River is `1625759164`). One-off briefing without touching the live file:
+`uv run seaplane-api briefing --once --out /tmp/b.json` (set `SEAPLANE_DATA_MANUAL` to a temp dir to try settings).
 
-The client was verified in headless Chrome against the real pack (see section 6 for the flags). Screenshots
-confirmed: disclaimer with build date, docked panel at 1180 px, verdict outlines, restriction list with rule text
-and DNR link, the "MAC record not loaded" notice, chord and bearing pair.
-
-## 2. How the pieces fit
+## 4. How the pieces fit
 
 ```
-DNR county pages ──crawl──▶ raw html ──parse-dnr──▶ restrictions.jsonl ─┐
-hydrography/PLSS/BAS/NPS/FWS/FAA ──fetch──▶ data/cache, data/raw        │
-                                     └──geometry──▶ lakes.parquet ──match──▶ matches.json
-                                                          │                   │
-                                          overlay ──▶ overlays.json           │
-                                                          └───── classify (node rules/engine/cli.js) ──▶ verdicts.json
-                                                                                 └── build ──▶ data/out/{index.json, restrictions.json,
-                                                                                               rules.json, *.pmtiles, pack.json}
-web dev server / Caddy serve data/out at /data/ ──▶ client loads index.json, re-runs the same rules engine per lake
+DNR pages ─▶ parse-dnr ─▶ restrictions ─┐
+state hydro + big-water layers ─▶ geometry ─▶ lakes.parquet ─▶ match ─▶ overlay ─▶ classify (node rules engine)
+                                     │                                                  │
+                                     └─▶ wavefield (points: fetch[16], run[8], depth, label) ─┴─▶ build ─▶ data/out/
+data/out/ served at /data/ ─▶ client (re-runs the rules engine and the wave math in the browser)
+                         └──▶ api reads index.json, lake_extents.json, wave_points.* ─▶ writes data/out/briefing.json
 ```
 
-- **Contract first.** If a field or file changes, edit `docs/data-contract.md` before code. Three agents built the
-  three parts in parallel against it and that is why they fit.
-- **One `selectLake(id)` path** in `web/src/state/index.ts` serves search, map tap, lists, and the URL param. Add
-  new entry points through it.
-- **Verdict never says "legal".** Four values, always with reasons and citation. Disclaimer text is design section 13.
-- Manual data lives in `data/manual/`: `overrides.yaml` (wins over matching), `mac_record.yaml`, and the generated
-  `overrides.suggested.yaml`.
+- **Contract first**, then parallel agents on disjoint directories, then integrate. That is how every piece here was
+  built and why they fit.
+- **Same math on both sides.** Verdicts: `rules/engine` runs in the pipeline and in the client. Waves: `rules/waves`
+  (JS) and `api/seaplane_api/briefing/wave.py` (Python) both pass `rules/fixtures/waves.json`;
+  `rules/fixtures/make_wave_fixtures.py` regenerates the fixtures.
+- **One `selectLake(id)` path** in `web/src/state/index.ts` for search, taps, lists, URL.
+- **Ids** hash `name_norm|lat|lon` and must not change for existing water: `KIND_ORDER` in `geometry.py` is
+  append-only for that reason. Every change so far verified the old id set byte-identical.
+- **Wording:** verdicts never say "legal"; briefing scores are `favorable | marginal | unfavorable` with the limiting
+  factor, never "go" or "safe"; on `great_lake` / `connecting_water` every flag means "part of this water".
+- Manual data in `data/manual/`: `overrides.yaml` (hand, wins over matching), `mac_record.yaml`,
+  `overrides.suggested.yaml` (generated), `settings.json` (**Bobby's live settings, gitignored; never overwrite it**).
 
-## 3. Decisions made along the way (deviations from the design doc)
+## 5. Waiting on Bobby
 
-1. **Basemap is z0–12, 125 MB.** The z14 Michigan extract is ~550 MB. Lakes carry their own z14 detail in
-   `lakes.pmtiles`. `seaplane build --basemap-maxzoom 14` if you want to revisit. Basemap glyphs and sprites still
-   load from protomaps.github.io while online; self-hosting them is part of the offline phase.
-2. **Hydrography host.** `gisago.mcgi.state.mi.us` (named in the design) resets TLS from this Mac; the pipeline
-   uses `gisagocss.state.mi.us`. Details and every dataset recipe: `docs/gis-sources.md`.
-3. **County and township** come from the Michigan Geographic Framework counties and minor civil divisions layers
-   joined on the lake centroid, not Census TIGER.
-4. **Hydrography has no permanent id**, so lake ids hash `name_norm|lat|lon` (contract section "Identifiers"). Ids
-   are stable as long as the polygon does not move; a re-digitized lake gets a new id.
-5. **`restriction_id` for multi-clause entries** appends the clause label so siblings differ (contract).
-6. **Two restriction types were added** after recon: `shore_buffer` (local echo of the statewide 100 ft rule) and
-   `not_applicable` (airboats, mooring, rafts, headcount limits). Both are `clear`.
-7. **No PWC rules exist** in the current DNR corpus; `no_pwc` is kept for the future and a hit flags review.
-8. **Airspace flag counts only surface-floor airspace** (`LOWER_VAL == 0`); Detroit's Class B shelves at 2,500 ft
-   and up are not a lake-landing concern. `--airspace-any-floor` restores the literal behavior.
-9. **Matcher scoring** (documented at the top of `pipeline/seaplane_pipeline/match.py`): exact 1.0, qualifier-
-   stripped 0.6, qualifier *conflict* (Little vs Big) 0.15 so it never auto-accepts, tokens, and a fuzzy tier that
-   can only reach the review band. Rivers, creeks, channels, and bays are tagged `kind: waterway` in
-   `unmatched.json` because they have no lake polygon.
-10. **LLM extraction is optional.** `parse-dnr --llm` runs only when Anthropic credentials exist (none on this Mac).
-    The regex pass classified every fixture entry without it (0% needs_review on fixtures, 3% statewide).
-11. **Rescinded rules** stay in `restrictions.jsonl` with `status: rescinded` and are dropped at build.
-12. **Selection highlight** in the client is driven by filtered layers rather than only feature-state, and the pulse
-    stops after three cycles so MapLibre can reach `idle` (needed for the fallback marker and for phase 2 wind
-    fetches). Reasoning in `web/src/map/index.ts`.
+- **Review of the wave field on water he knows.** Do the bay names and relative numbers on Lake St. Clair match what
+  he sees? This is the best calibration available. First ground truth (2026-09-19 15:00): buoy 45147 16 in mid-lake;
+  computed 18 in at the gust; marine model 14 in.
+- **Real limits** (wave height for the hull, gust spread, crosswind, VFR minimums, radius, morning window): all
+  placeholders, all editable in the app's briefing settings. Open-Meteo gusts read high (3 kt G12 scored "marginal,
+  gusts"), so expect `gust_spread_ok` to move or a gust floor to be requested.
+- Setting his **home water** (button on the Lake St. Clair sheet), whether he wants the **ntfy push**, the MAC record
+  request, and working the review queue in `overrides.suggested.yaml`.
+- He was running his own `seaplane-api` (port 8000) and `vite` (5173) while testing; the api process predates the
+  wave-field code and needs a restart to show regions. Leave his processes alone; use other ports.
 
-## 4. Known issues and open items
+## 6. Next work, in order
 
-- **Direction from Bobby (2026-09-19):** he flies mostly Lake St. Clair (his saved home airport is KONZ, Grosse Ile)
-  and wants to know *where on the lake* to land; the mechanism must work on every lake; the app is headed for a
-  nationwide community release. **Built the same day:** big water on the map, the `wavefield` pipeline stage, region
-  scoring and `home_water` in the briefing, the Water section and wave overlay in the client. Design:
-  `docs/big-water-design.md`; constraints: `docs/nationwide.md`; contract: "Wave field"; sources:
-  `docs/gis-sources.md` 2026-09-19 addendum. Bobby has not yet set a home water in his real settings (the sheet has
-  a "Make this my home water" button) and has not reviewed the result.
-- **Wave field, known limits:** Lake Huron and Lake Superior polygons stop at the international line (rays through
-  that edge read as the 100 km cap; whole-lake polygons come with the NHD move). One wind forecast per water body
-  (its centroid), so a 25 mile lake gets one wind. Depth exists only where the NCEI Erie / St. Clair grid reaches;
-  everything else uses the deep-water form (overstates shallow water). About 40 St. Clair shoreline points read
-  depth-unknown (DEM shore ramp) and come out higher than their neighbors. First ground truth, 2026-09-19 15:00:
-  buoy 45147 1.3 ft (16 in) mid-lake against a computed 18 in at the gust and 14 in from the marine model.
-- **Big water, known limits:** every flag on `great_lake` / `connecting_water` means "part of this water"; airspace is
-  fetched for Michigan only, so Lake Erie shows nothing for Ohio, Pennsylvania, New York, or Ontario; Lake Michigan's
-  `counties` wrongly includes Kent and Kalkaska (the state shoreline layer runs up the Grand and Elk rivers);
-  "Saugatuck Harbor" (Allegan) did not attach and may really be a Kalamazoo River rule: left in the review queue.
-- **Bug to fix (pre-existing):** 30 unnamed lakes read `restricted` with empty `restriction_ids`: synthetic federal
-  restriction ids hash `county|lake_name_raw|township|raw_text`, which collides for unnamed lakes in one refuge, so
-  `build_restrictions` keeps only the last one's `lake_ids`. Put the lake id in the synthetic id. Also `parse-dnr`
-  takes the second half of "LAKE MACATAWA, PINE CREEK BAY" as the lake name.
-- **Rivers:** ranked in the briefing only when they have wave points and a region with enough run (171 rivers have
-  points; nearly all read "run too short"). A county-level river rule marks every same-name polygon in the county restricted plus
-  `reach_unresolved`; conservative on purpose. 34 waterway rules remain unmatched: 8 are an Antrim `parse-dnr` header bug
-  (waterbody parsed as "Rivers"). `NAME_SUFFIX_RE` in `match.py` never trims a suffix that ends the string (worked
-  around on the waterway track only). One match was lost to the lake/river gate and wants an override: Crawford
-  "Lake Margrethe Channel in Harbor Beach Subdivision".
-- **`index.json` is 4.85 MB of the 5 MB budget**, and `lakes.pmtiles` is 27 MB. Cheapest lever:
-  drop `name_norm` from the payload (~330 KB; the client already imports `normalizeName`).
+**A. Deploy to the headless MacBook.** This is what makes the 18/20/22 runs real. No Docker on the Macs so far:
+brew `caddy` + two `launchd` jobs (api; weekly pipeline) is the likely route; `Caddyfile` takes `API_UPSTREAM=127.0.0.1:8000`;
+plist example in `api/README.md`; `tailscale serve` in front; the Mac must stay awake for the evening runs
+(`pmset` / `caffeinate`). Build `web/dist`, rsync `data/out` or run the pipeline there. Then phone + iPad home screen.
 
-- **Briefing limits are placeholders.** `docs/briefing-design.md` section 8 lists what only Bobby can supply (SeaRey
-  wave, crosswind, wind and gust numbers, VFR minimums, radius, morning window). He edits them in the app's briefing
-  settings; nothing needs code. First real run note: Open-Meteo gusts read high (3 kt G12 scored "marginal, gusts"
-  on the 8 kt gust-spread default), so expect him to loosen `gust_spread_ok` or ask for a gust floor.
-- **Ceiling comes only from the METAR and TAF** (neither Open-Meteo nor NWS hourly carries a cloud base). Hours the
-  TAF does not cover read `ceiling_known: false` and the ceiling factor is skipped. KPTK's TAF covers the next
-  morning from the 18:00 run on, so the evening outlook is normally covered.
-- **Briefing nits:** `home_airport.runways` has no length, so parallel runways tie and the label can name the shorter
-  one (add `length_ft`; aviationweather returns `dimension`). NDBC buoys are fetched and parsed but unused until the
-  pipeline tags Great Lakes shoreline lakes. The steep-chop rule exists (`wave.steep_chop`) but is not wired in.
-  `web/` has no test runner.
+**B. Small fixes worth doing first (all known, all scoped):**
+1. 30 unnamed lakes read `restricted` with empty `restriction_ids`: synthetic federal restriction ids
+   (`manual._record`) hash `county|lake_name_raw|township|raw_text` and collide inside one refuge, so
+   `build_restrictions` keeps the last one's `lake_ids`. Put the lake id in the synthetic id.
+2. `index.json` is 4.85 MB of a 5 MB budget: drop `name_norm` from the payload (~310 KB; the client already has
+   `normalizeName`). Contract first.
+3. `parse-dnr`: Antrim header parsed as waterbody "Rivers" (8 rules), and "LAKE MACATAWA, PINE CREEK BAY" takes the
+   second half as the lake. `NAME_SUFFIX_RE` in `match.py` never trims a suffix that ends the string.
+4. Overrides to consider: Crawford "Lake Margrethe Channel in Harbor Beach Subdivision" (lost to the lake/river
+   gate); "Saugatuck Harbor" (Allegan) is unattached and may be a Kalamazoo River rule, not Lake Michigan.
+5. `home_airport.runways` has no `length_ft`, so parallel runways tie (aviationweather returns `dimension`).
 
-- **Review queue.** 138 lake-named restrictions are unmatched and 76 matches are low-confidence. Bobby is working
-  through `data/manual/overrides.suggested.yaml` (regenerate with `uv run seaplane suggest`). When he adds entries
-  to `overrides.yaml`, rerun `match overlay classify build --skip-basemap`.
-- **MAC record.** Not obtained. Every lake carries `mac_pending`. Draft request: `docs/mdot-mac-record-request.md`.
-  When it arrives: fill `mac_record.yaml`, set `loaded: true`, rerun from `match`.
-- **480 unknown verdicts are the unnamed polygons over 20 acres.** By design; they still render gray so a pilot
-  sees "no data" rather than "clear".
-- **Unmatched restrictions do not appear on any lake**, so those lakes show clear. This is the biggest data-quality
-  risk and the reason the review queue matters. A future improvement: render unmatched-restriction section
-  centroids as a "restriction here, lake unresolved" marker so nothing is silently clear.
-- **Cross-county lakes** appear once per county in the DNR data; both records attach to one polygon and the sheet
-  shows both. Deduplicating by rule id in the sheet is a small client change if it looks noisy.
-- **Design open items** still open: SB 626/627 effect on R 259.401, whether Bobby's iPad has GPS, and the real
-  `min_chord_ft` for the SeaRey (2,000 ft placeholder flags 377 Oakland lakes).
-- **Node 24 `node --test <dir>` does not recurse**; `rules/package.json` uses a glob.
+**C. Wave field, second pass.**
+- Wind per region instead of one forecast per water body (St. Clair is 25 miles across); the 0.1° forecast grid
+  already exists in `api/.../lakes.py`.
+- Depth beyond the NCEI Erie / St. Clair grid: other NCEI Great Lakes grids (same `.flt` format, see
+  `bathymetry.py`), GLOBathy as an optional lake-level depth nationwide. About 40 St. Clair shore points read
+  depth-unknown (DEM shore ramp) and come out higher than their neighbors.
+- Lake Huron and Lake Superior polygons stop at the international line (rays through that edge count as the 100 km
+  cap). Whole-lake polygons come with NHD.
+- Saved landing spots snapping to the nearest sample point (`web/src/saved/` is still a stub); `steep_chop` exists in
+  `wave.py` but is not scored; NDBC is used only for home-water observations.
+- Rivers: 171 have points, nearly all read "run too short", which is right; a county-level river rule marks every
+  same-name polygon in the county restricted + `reach_unresolved` (conservative on purpose).
 
-## 5. Where to go next, in order
+**D. National groundwork** (`docs/nationwide.md`): move Michigan's polygons to USGS NHD (water = NHDWaterbody ∪
+NHDArea, dissolved; bound name queries by bbox; render each big water body once before trusting it; a second test
+lake for the 17% area gap seen on Cass Lake), pull Michigan constants into a region config, airspace beyond
+`STATE='MI'`, then a second state to discover the regulation-adapter interface. Hosting / accounts before inviting
+anyone; Open-Meteo's free tier is non-commercial.
 
-**A. Deploy to the headless MacBook (the rest of v1).** Design section 8. Decide Docker Compose (as written) versus
-brew `caddy` + `launchd` (fewer moving parts on macOS); the `Caddyfile` works for either. Steps: build `web/dist`,
-copy or rsync `data/out` (or run the pipeline there), Caddy on :8080 behind `tailscale serve`, confirm HTTPS on the
-tailnet, open it on the phone and iPad, add to home screen. Then a `launchd` (or cron container) job for the weekly
-pipeline with a diff notification (design phase 4 mentions this; the diff file already exists).
+**E. Original phases still open:** flight mode (location, follow-me, nearest list, `/api/wind/*` station layer;
+slots exist in `web/src/location/`, `web/src/lists/`, `api/seaplane_api/wind.py`), offline (plan in
+`web/src/sw/README.md`; test on the real iPad early), saved lakes + sync, MAC ingestion when the record arrives.
 
-**B. Daily briefing, big water, and the wave field: BUILT 2026-09-19** (`docs/briefing-design.md`, schemas in the contract's "Briefing" section).
-Deterministic, no LLM. Runs at 06, 09, 12, 15, 18, 20, 22 local; the 18:00, 20:00, and 22:00 runs are Bobby's
-"plan tomorrow morning" outlook (hourly sunrise-to-noon scoring, best window, fog factor, run history with trend,
-confidence, optional ntfy push). What is left: deploy it with step A (the api needs a `launchd` job, see
-`api/README.md`, and the Mac must stay awake for the evening runs), Bobby's real limits, and deciding on ntfy.
-To try it locally: `cd api && uv run seaplane-api` and `cd web && npm run dev`, then open `/?briefing=1`.
+**Standing data-quality risk:** an unmatched restriction appears on no lake, so that lake reads clear. 150 lake-named
+and 34 waterway rules are unmatched. Idea not built: draw unmatched rules at their PLSS section as "restriction here,
+lake unresolved".
 
-**C. Phase 2, flight mode.** Design sections 7.5, 7.7, 7.9. Client slots already exist and are wired as no-ops:
-`web/src/location/` (geolocation, follow-me, heading-up, wake lock), `web/src/lists/` (Nearest tab with forward
-cone; the row component has a `trailing` slot for distance/bearing), the recenter control (currently home view).
-Wind needs `/api/wind/*` on the `api` service: the service now exists (`api/seaplane_api/wind.py` is the documented
-empty slot, and `fetch/aviationweather.py`, `fetch/openmeteo.py`, `fetch/ndbc.py` already cover three of the
-sources); the Synoptic token is server-side. `chord_bearing_deg` is already in `index.json` for the crosswind component. The
-usable-water layer already renders at z12+.
+## 7. Decisions that are easy to undo by accident
 
-**D. Phase 3, offline.** Plan is written in `web/src/sw/README.md` (cache-first shell, OPFS pack with sha256, pmtiles
-OPFS `Source`, install prompt, pack versioning). `pack.json` already has sizes and sha256s. Test on the real iPad
-early; iOS storage behavior is the risk. Self-host basemap glyphs and sprites here.
+- Lake rows in the briefing are **water-only** (waves, run, ice); airport weather lives in the header and blocks.
+  Rank = score, then distance. Waves are computed at the **gust**.
+- Water crosswind is scored only when the run into the wind is too short and the long axis must be used.
+- Ceiling comes only from METAR / TAF (`ceiling_known: false` otherwise). No model ceiling is invented.
+- Lake-level fetch = max of the wind bin and its two neighbors; run = the wind bin. With a wave field, regions
+  replace both.
+- Artificial (clip) edge rule is **10 m** off a 2 km chord: 60 m painted 40 inch bands on Torch and Houghton.
+- GNIS `Channel` names label only rivers and connecting waters; a name needs 2 points, a compass sector 3.
+- Depth is sampled only on `great_lake` / `connecting_water` (a DEM cell under an inland lake is its surface).
+- Inland polygons are subtracted from big water, connecting waters from the Great Lakes (the state's Lake Michigan
+  polygon covers 97% of Torch Lake). Big water joins the **waterway** matching track only, so the inland "Lake Erie"
+  pond and "Saint Clair Lake" keep their own rules.
+- `big_water_partial` on the restriction record drives the verdict cap; do not add `kind` to the engine's lake input.
+- The marine wave API snaps to the nearest wet cell; values snapped more than 10 nm are dropped.
+- Basemap is z0–12 (125 MB); lakes carry their own z14 detail. Selection outline is thinner on rivers and big water.
+- The fetch-ray trial table in `docs/gis-sources.md` was cast on grid north; the shipped field uses true bearings.
 
-**E. Phase 4, personal layer and MAC.** `web/src/saved/` slot, IndexedDB store `saved` already created (db
-`seaplane`), star button currently toasts. Sync endpoint on the `api` service. MAC ingestion once the record arrives.
+## 8. Environment and working conventions
 
-**F. More of Bobby's ideas.** The briefing was the first; he may have more. Capture each in `docs/design.md` as a
-new numbered section (or `docs/ideas.md` if not yet decided), decide which step it belongs to, and update the
-contract first for anything that changes a schema. Ask him which should jump the queue.
-
-## 6. Environment and working conventions
-
-- Tools on this Mac: uv 0.10, Python 3.12 via uv, node 24, npm 11, tippecanoe 2.79, pmtiles CLI, GDAL 3.12, git,
-  Chrome. **No Docker.** No Anthropic credentials (`ant` CLI absent, no `ANTHROPIC_API_KEY`).
-- Headless Chrome screenshots of the client need software WebGL:
-  `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --use-angle=swiftshader
-  --enable-unsafe-swiftshader --ignore-gpu-blocklist --virtual-time-budget=20000 --screenshot=out.png <url>`.
-  Playwright is not installed; do not install heavy browser tooling without asking.
-- `web` dev and preview servers serve `/data/` from `../data/out` when `pack.json` exists there, else from
-  `web/dev-fixtures/` (`npm run fixtures` regenerates; pmtiles fixtures are gitignored). Range requests are handled
-  by the Vite plugin in `vite.config.ts`.
-- Bobby's working style: fan work out to subagents, cheaper models for recon and mechanical builds, stronger ones for
-  parsing, geometry, and UI integration; define the contract first so agents run in parallel; keep the main session
-  for integration and verification. He reads terse status updates and a final recap.
-- Commits: plain messages describing the change, `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`
-  trailer. Never commit `data/raw`, `data/work`, `data/out`, or `*.pmtiles`.
-- Run the four test suites before every commit (pipeline, rules, api, web typecheck + build); under 15 seconds combined.
-- Vite's dev server listens on `localhost` (IPv6), not `127.0.0.1`; curl it as `http://localhost:<port>`.
+- This Mac: uv, Python 3.12, node 24, npm 11, tippecanoe, pmtiles CLI, GDAL, Chrome. **No Docker, no Anthropic
+  credentials** (the pipeline's optional LLM pass skips itself; the briefing must stay LLM-free by requirement).
+- Hosts: `gisago.mcgi.state.mi.us` resets TLS from here, use `gisagocss.state.mi.us`; `gis.fws.gov` 502s (Living
+  Atlas mirror is used); OSM Overpass is blocked (and OSM is ODbL: avoid for core layers). NWS needs the User-Agent
+  `lakeFinder (https://github.com/Bob-ee/lakeFinder)`; never put an email address in a request.
+- Screenshots: `node web/scripts/screenshot.mjs <url> <out.png> <w> <h> [dark|light] [scrollTopPx]` drives headless
+  Chrome over CDP with software WebGL and seeds the disclaimer ack (`CDP_PORT` to run two at once). Playwright is not
+  installed; do not add heavy browser tooling without asking. Vite listens on `localhost` (IPv6), not `127.0.0.1`.
+- `web` dev server serves `/data/` from `../data/out` when `pack.json` exists, falling back per file to
+  `web/dev-fixtures/` (`npm run fixtures` regenerates them, including a synthetic wave field).
+- Node 24 `node --test <dir>` does not recurse; `rules/package.json` lists globs.
+- A local hook blocks writing files whose names contain findings, report, summary, or analysis.
+- **How Bobby works:** fan out to subagents (cheaper models for recon and mechanical work, stronger for geometry,
+  parsing, UI), contract first so they run in parallel, main session for decisions, integration, verification. He
+  wants terse status and a recap, and he will redirect mid-task; when he does, generalize rather than special-case.
+  Look at real output before calling anything done: most of the bugs fixed on 2026-09-19 were only visible in a real
+  run or a screenshot.
+- Commits: plain messages, `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>` trailer, all four suites green
+  first. Never commit `data/raw`, `data/work`, `data/out`, `data/cache`, `*.pmtiles`, or `data/manual/settings.json`.
