@@ -193,10 +193,12 @@ def build_index(lakes: gpd.GeoDataFrame, verdicts: dict, overlays: dict, by_lake
         verdict = verdicts.get(key) or {}
         ov = overlays.get(key) or {}
         name = _clean(getattr(row, "name", None))
+        # `name_norm` is deliberately not published: it cost ~310 KB of index.json's 5 MB budget and
+        # the client derives it with the same `normalizeName` by contract (docs/data-contract.md,
+        # `index.json`). It stays a column in lakes.parquet, which is what matching reads.
         entry = {
                 "id": lake_id,
                 "name": str(name) if name else None,
-                "name_norm": _clean(row.name_norm) or "",
                 "kind": _clean(getattr(row, "kind", None)) or "lake",
                 "county": _clean(row.county),
                 "township": _clean(row.township),

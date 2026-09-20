@@ -118,7 +118,10 @@ One record per (lake mention, rule). `restrictions.json` is `{ "<restriction_id>
 - Month-name seasons ("during September, October and November") → `season: {text, start: "09-01", end: "11-30"}`.
 
 Synthetic restrictions (`mac_*`, `federal_*`) are produced by the pipeline from `data/manual/mac_record.yaml` and
-the federal overlay, with `parser: "manual"` and `source_url` pointing at the record.
+the federal overlay, with `parser: "manual"` and `source_url` pointing at the record. A federal record is one per
+distinct hashed key (unit text, county, township, name): water bodies that share all four, which is every unnamed
+pond inside one refuge township, share **one** record whose `lake_ids` lists them all. They never produce several
+records with the same `restriction_id`.
 
 ### Match stage outputs (`data/work/`)
 
@@ -239,7 +242,7 @@ CLI for the pipeline: `node rules/engine/cli.js --rules rules/rules.json < input
 A JSON array, target under 5 MB. One entry per named hydrography polygon (plus unnamed ones over 20 acres).
 
 ```jsonc
-{"id": 1234567, "name": "Big School Lot Lake", "name_norm": "big school lot", "kind": "lake",
+{"id": 1234567, "name": "Big School Lot Lake", "kind": "lake",
  "county": "Oakland", "township": "Rose Township",
  "lat": 42.7712, "lon": -83.5901, "bbox": [-83.60, 42.76, -83.58, 42.78],
  "area_acres": 41.2, "chord_ft": 2350, "chord_bearing_deg": 47,
@@ -247,6 +250,11 @@ A JSON array, target under 5 MB. One entry per named hydrography polygon (plus u
  "access": "School Lot Lake BAS",      // launch name or null
  "federal_unit": "Seney National Wildlife Refuge"}   // present only when set; absent otherwise
 ```
+
+`name_norm` is **not** in the payload (it was until 2026-09-20; ~310 KB of the 5 MB budget). The client derives
+it with `normalizeName(name)` on load, which is the same function by contract ("Name normalization" above); the
+pipeline keeps `name_norm` as a column in `lakes.parquet` for matching. A reader must tolerate an older pack that
+still carries the key.
 
 `federal_unit` is the name behind the `federal_overlay` flag, written only on the entries that have
 one (172 of 12,571; a fixed `null` on every row would cost 260 KB of the 5 MB budget). The client
@@ -449,8 +457,13 @@ bin `(i + 8) % 16`. Computed in `geometry` as the lake column `extent_by_bearing
 
 ```jsonc
 {"home_airport": {"id": "KPTK", "name": "Oakland County Intl", "lat": 42.6655, "lon": -83.4187, "elev_ft": 981,
-                  "runways": [{"id": "09L/27R", "heading": 88}, {"id": "09R/27L", "heading": 88},
-                              {"id": "18/36", "heading": 172}]},   // heading: degrees TRUE of the first-named end
+                  "runways": [{"id": "09L/27R", "heading": 88, "length_ft": 5676},
+                              {"id": "09R/27L", "heading": 88, "length_ft": 6521},
+                              {"id": "18/36", "heading": 172, "length_ft": 2582}]},
+                              // heading: degrees TRUE of the first-named end. length_ft: optional (null or absent
+                              // in files written before 2026-09-20); breaks a crosswind/headwind tie between
+                              // parallel runways toward the longer one. The airport lookup fills it from
+                              // aviationweather's `dimension` ("6521x150").
  "timezone": "America/Detroit",
  "radius_nm": 40, "n_lakes": 8, "public_access_only": false,
  "home_water": null,                                          // or {"id": 7654321, "name": "Lake St. Clair"}: always briefed, ignores radius_nm

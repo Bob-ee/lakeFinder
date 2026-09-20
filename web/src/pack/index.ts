@@ -1,5 +1,9 @@
 import { DATA_FILES } from "../config";
+import { normalizeName } from "../search/normalize";
 import type { Lake, Pack, RestrictionIndex, RulesFile } from "../types";
+
+/** index.json on the wire: `name_norm` is optional (absent from packs built after 2026-09-20). */
+type LakeWire = Omit<Lake, "name_norm"> & { name_norm?: string };
 
 export interface LoadedData {
   pack: Pack | null;
@@ -45,16 +49,24 @@ export async function pmtilesExists(url: string): Promise<boolean> {
 /** index.json is the only hard requirement; everything else degrades. */
 export async function loadData(): Promise<LoadedData> {
   const missing: string[] = [];
-  const [pack, lakes, restrictions, rules] = await Promise.all([
+  const [pack, rawLakes, restrictions, rules] = await Promise.all([
     getJson<Pack>(DATA_FILES.pack, "pack.json", missing),
-    getJson<Lake[]>(DATA_FILES.index, "index.json", missing),
+    getJson<LakeWire[]>(DATA_FILES.index, "index.json", missing),
     getJson<RestrictionIndex>(DATA_FILES.restrictions, "restrictions.json", missing),
     getJson<RulesFile>(DATA_FILES.rules, "rules.json", missing),
   ]);
 
+  // `name_norm` is derived here, once, for every entry, per docs/data-contract.md's
+  // "index.json" section: not in the wire format, but always present on `Lake` after load.
+  // Recomputing unconditionally (rather than trusting an older pack's own key) keeps this the
+  // single source of truth.
+  const lakes: Lake[] = Array.isArray(rawLakes)
+    ? rawLakes.map((l) => ({ ...l, name_norm: normalizeName(l.name) }))
+    : [];
+
   return {
     pack,
-    lakes: Array.isArray(lakes) ? lakes : [],
+    lakes,
     restrictions: restrictions ?? {},
     rules,
     missing,

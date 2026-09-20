@@ -14,7 +14,7 @@ import geopandas as gpd
 import pytest
 from shapely.geometry import box
 
-from seaplane_pipeline import classify, match
+from seaplane_pipeline import classify, manual, match
 
 pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node not on PATH")
 
@@ -154,6 +154,52 @@ def test_run_end_to_end(tmp_path, monkeypatch, repo_root):
     assert mac["lake_ids"] == [2] and mac["source_url"] == "http://example.test"
 
 
+# --- synthetic federal records ---------------------------------------------
+
+
+def refuge_frame():
+    """Four ponds in one refuge: two unnamed in one township, one unnamed elsewhere, one named."""
+    frame = lakes_frame([
+        {"id": 401, "name": None},
+        {"id": 402, "name": None},
+        {"id": 403, "name": None},
+        {"id": 404, "name": "Lower Goose Pen Pool"},
+    ])
+    frame["township"] = ["Doyle Township", "Doyle Township", "Germfask Township", "Doyle Township"]
+    return frame
+
+
+SENEY = {"federal_unit": "Seney National Wildlife Refuge"}
+
+
+def test_federal_restrictions_merge_the_lakes_that_hash_to_one_id():
+    """Unnamed ponds sharing county, township and unit share one record (contract: one per id)."""
+    overlays = {"402": SENEY, "401": SENEY, "403": SENEY, "404": SENEY}
+    records = manual.federal_restrictions(refuge_frame(), overlays)
+
+    assert len({r["restriction_id"] for r in records}) == len(records)
+    by_ids = {tuple(r["lake_ids"]): r for r in records}
+    assert sorted(by_ids) == [(401, 402), (403,), (404,)]
+    assert all(r["restriction_type"] == "federal_no_landing" for r in records)
+    assert all(r["parser"] == "manual" for r in records)
+
+
+def test_federal_restriction_ids_do_not_depend_on_how_many_lakes_share_them():
+    """Keeping the id formula means an existing pack's federal ids survive the merge."""
+    one = manual.federal_restrictions(refuge_frame(), {"401": SENEY})
+    both = manual.federal_restrictions(refuge_frame(), {"401": SENEY, "402": SENEY})
+    assert [r["restriction_id"] for r in one] == [r["restriction_id"] for r in both]
+
+
+def test_federal_restrictions_reach_every_lake_through_the_rules_engine():
+    """The end the collision broke: each merged lake is still handed the record to classify."""
+    overlays = {"401": SENEY, "402": SENEY}
+    records = manual.federal_restrictions(refuge_frame(), overlays)
+    grouped = classify.restrictions_by_lake([], [], records)
+    assert sorted(grouped) == ["401", "402"]
+    assert grouped["401"][0]["restriction_id"] == grouped["402"][0]["restriction_id"]
+
+
 # --- big water -------------------------------------------------------------
 
 
@@ -171,6 +217,16 @@ def test_drop_big_water_federal_withholds_only_the_big_water_records():
     ]
     kept = classify.drop_big_water_federal(records, big_water_frame())
     assert [r["restriction_id"] for r in kept] == ["f2"]
+
+
+def test_drop_big_water_federal_keeps_the_inland_half_of_a_merged_record():
+    """A merged federal record covering both kinds keeps its inland lakes and loses the big water."""
+    records = [
+        {"restriction_id": "f1", "restriction_type": "federal_no_landing", "lake_ids": [301, 302]},
+    ]
+    kept = classify.drop_big_water_federal(records, big_water_frame())
+    assert [r["lake_ids"] for r in kept] == [[302]]
+    assert records[0]["lake_ids"] == [301, 302]  # the input record is not mutated
 
 
 def test_restrictions_by_lake_stamps_big_water_partial():

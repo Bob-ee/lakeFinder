@@ -29,10 +29,27 @@ def test_airport_info_maps_onto_the_home_airport_shape():
     assert got["id"] == "KPTK"
     assert got["elev_ft"] == 981  # `elev` is 299 metres on the wire, not feet
     assert got["runways"] == [
-        {"id": "09L/27R", "heading": 88},
-        {"id": "09R/27L", "heading": 88},
-        {"id": "18/36", "heading": 172},
+        {"id": "09L/27R", "heading": 88, "length_ft": 5676},
+        {"id": "09R/27L", "heading": 88, "length_ft": 6521},
+        {"id": "18/36", "heading": 172, "length_ft": 2582},
     ]
+
+
+@pytest.mark.parametrize(
+    "dimension, expected",
+    [
+        ("6521x150", 6521),
+        ("2582x75", 2582),
+        ("100x6521", 100),  # length is always the first number, whatever it means on odd data
+        ("6521", None),  # no "x": can't tell length from width
+        ("", None),
+        (None, None),
+        ("Nx150", None),
+        (150, None),  # not a string at all
+    ],
+)
+def test_dimension_parsing_is_tolerant_of_odd_or_missing_values(dimension, expected):
+    assert aviationweather._parse_length_ft(dimension) == expected
 
 
 def test_runway_alignment_is_true_not_magnetic():

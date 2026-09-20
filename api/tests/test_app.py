@@ -150,8 +150,8 @@ def test_get_airport_maps_the_live_shape(client, monkeypatch):
     assert body["name"] == "Pontiac/Oakland County Intl"
     assert body["lat"] == pytest.approx(42.6656) and body["lon"] == pytest.approx(-83.4205)
     assert body["elev_ft"] == 981  # `elev` is 299 metres on the wire
-    assert {"id": "18/36", "heading": 172} in body["runways"]
-    assert {"id": "09R/27L", "heading": 88} in body["runways"]
+    assert {"id": "18/36", "heading": 172, "length_ft": 2582} in body["runways"]
+    assert {"id": "09R/27L", "heading": 88, "length_ft": 6521} in body["runways"]
 
 
 def test_get_airport_404s_on_an_unknown_identifier(client, monkeypatch):

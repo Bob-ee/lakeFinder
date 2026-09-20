@@ -44,7 +44,7 @@ from bs4 import BeautifulSoup, Tag
 
 from . import dnr_fetch
 from .config import Config
-from .names import descriptor_segments, normalize_name, split_multi_lake_names
+from .names import descriptor_segments, is_generic_name, normalize_name, split_multi_lake_names
 from .plss import parse_plss
 from .restriction import Hours, Plss, Restriction, Season
 
@@ -213,6 +213,9 @@ def segment_entries(blocks: list[Block]) -> list[Entry]:
 class Clause:
     label: str | None
     text: str
+    #: Waterbody names this clause names itself, filled in only when the entry header names none
+    #: (see `clause_lake_names`). `None` means "use the entry's header names".
+    lake_names: list[str] | None = None
 
 
 def _is_next_label(label: str, index: int, kind: str) -> bool:
@@ -260,6 +263,48 @@ def split_clauses(paragraphs: list[str]) -> tuple[str, list[Clause]]:
         else:
             clauses[-1].text = f"{clauses[-1].text} ({label}) {text}".strip()
     return preamble, clauses
+
+
+#: A clause that names its own waterbody names it in a few words ("Clam river from Torch lake to
+#: Clam lake"); anything longer is prose about a waterbody named in the header.
+CLAUSE_NAME_MAX_WORDS = 6
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.;:])\s+")
+
+
+def _clause_lake_names(clause: Clause) -> list[str]:
+    """The waterbody names one enumerated clause names itself, or `[]` when it names none."""
+    sentence = _SENTENCE_SPLIT_RE.split(clause.text.strip(), 1)[0].strip(" .;,")
+    if not sentence:
+        return []
+    names = split_multi_lake_names(sentence)
+    if not names:
+        return []
+    if any(is_generic_name(n) or len(n.split()) > CLAUSE_NAME_MAX_WORDS for n in names):
+        return []
+    return names
+
+
+def assign_clause_lake_names(header_names: list[str], clauses: list[Clause]) -> bool:
+    """Fill `Clause.lake_names` when the entry header only labels the list under it.
+
+    The DNR sometimes heads an entry with a category instead of a waterbody -- Antrim's
+    "RIVERS AND CHANNELS - R281.705.1", whose eight lettered clauses each name one river or
+    channel. Taking the header as the waterbody hangs every clause off a lake called "Rivers".
+
+    Applies only when *every* header name is generic (`names.is_generic_name`), the entry is a
+    lettered or numbered list of at least two clauses, and *every* clause names a waterbody of its
+    own; otherwise the header names stand, unchanged, for the whole entry. Returns whether it fired.
+    """
+    if not header_names or not all(is_generic_name(n) for n in header_names):
+        return False
+    if len(clauses) < 2 or not all(c.label for c in clauses):
+        return False
+    derived = [_clause_lake_names(c) for c in clauses]
+    if not all(derived):
+        return False
+    for clause, names in zip(clauses, derived, strict=True):
+        clause.lake_names = names
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -717,6 +762,7 @@ def records_for_entry(
         return _assign_ids(records)
 
     preamble, clauses = split_clauses(clause_paragraphs)
+    assign_clause_lake_names(lake_names, clauses)
 
     per_clause: list[tuple[Clause, list[ClauseResult]]] = []
     for clause in clauses:
@@ -731,8 +777,9 @@ def records_for_entry(
         hours = extract_hours(text, dst_sentence)
         season = extract_season(text)
         scope, description = detect_zone(clause.text, preamble, header=entry.lake_name_group)
+        names = clause.lake_names or lake_names
         for result in results:
-            for name in lake_names:
+            for name in names:
                 records.append(
                     Restriction(
                         rule_id=entry.rule_id,

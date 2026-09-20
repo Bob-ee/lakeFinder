@@ -27,6 +27,9 @@ class _Base(BaseModel):
 class Runway(_Base):
     id: str = "09R/27L"
     heading: int = 88  # degrees TRUE of the first-named end (see fetch/aviationweather.py)
+    # Optional: null/absent in files written before 2026-09-20, which must keep loading. Breaks a
+    # crosswind/headwind tie between parallel runways toward the longer one (briefing/aero.py).
+    length_ft: int | None = None
 
 
 class HomeAirport(_Base):
@@ -39,9 +42,9 @@ class HomeAirport(_Base):
     # The older defaults (91 / 179) were magnetic; KPTK's variation is 07W.
     runways: list[Runway] = Field(
         default_factory=lambda: [
-            Runway(id="09L/27R", heading=88),
-            Runway(id="09R/27L", heading=88),
-            Runway(id="18/36", heading=172),
+            Runway(id="09L/27R", heading=88, length_ft=5676),
+            Runway(id="09R/27L", heading=88, length_ft=6521),
+            Runway(id="18/36", heading=172, length_ft=2582),
         ]
     )
 

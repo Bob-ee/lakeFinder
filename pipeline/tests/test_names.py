@@ -6,7 +6,12 @@ import json
 
 import pytest
 
-from seaplane_pipeline.names import descriptor_segments, normalize_name, split_multi_lake_names
+from seaplane_pipeline.names import (
+    descriptor_segments,
+    is_generic_name,
+    normalize_name,
+    split_multi_lake_names,
+)
 
 # Cases taken from docs/data-contract.md "Name normalization". Kept here so the
 # suite is meaningful even if the shared JS fixture is unavailable.
@@ -95,6 +100,11 @@ SPLIT_CASES = [
     ("WOLVERINE LAKE, ALL ARTIFICIAL CHANNELS AND CANALS CONNECTED TO", ["Wolverine Lake"]),
     ("HI-LAND LAKE AND CONNECTING CANALS AND CHANNELS", ["Hi-Land Lake"]),
     ("MUD BAY, PORTAGE LAKE", ["Portage Lake"]),
+    # A segment headed by a part word is a part of the lake before it, even when a waterbody word
+    # sits inside it ("creek", "river"): it is Lake Macatawa's bay, not a waterbody of its own.
+    ("LAKE MACATAWA, PINE CREEK BAY", ["Lake Macatawa"]),
+    ("CASS LAKE, GERUNDEGUT BAY AND CANALS AND CHANNELS", ["Cass Lake"]),
+    ("TORCH RIVER AND TORCH LAKE ADJACENT TO ITS MOUTH", ["Torch River", "Torch Lake Adjacent to Its Mouth"]),
     ("BLACK RIVER FROM MEYERS CREEK TO BLACK LAKE", ["Black River"]),
     ("LAKE OAKLAND CANAL", ["Lake Oakland"]),
     ("TWIN LAKES", ["Twin Lake"]),
@@ -118,4 +128,25 @@ def test_split_keeps_every_name_normalizable() -> None:
 def test_descriptor_segments_feed_zone_descriptions() -> None:
     assert descriptor_segments("CEDAR ISLAND LAKE, CERTAIN BAYS") == ["Certain Bays"]
     assert descriptor_segments("BUCKHORN LAKE, NORTH BASIN") == ["North Basin"]
+    assert descriptor_segments("LAKE MACATAWA, PINE CREEK BAY") == ["Pine Creek Bay"]
     assert descriptor_segments("ORCHARD LAKE") == []
+
+
+@pytest.mark.parametrize(
+    ("name", "generic"),
+    [
+        ("Rivers", True),
+        ("Channels", True),
+        ("Connecting", True),
+        ("RIVERS AND CHANNELS", True),
+        ("Waters", True),
+        ("", True),
+        ("Clam River", False),
+        ("Lake 16", False),            # a number identifies it
+        ("Unnamed Lake", False),       # the DNR's own name for it
+        ("Outlet Lake", False),        # "outlet" is part of a real name, not a category
+        ("Grand Traverse Bay", False),
+    ],
+)
+def test_is_generic_name(name: str, generic: bool) -> None:
+    assert is_generic_name(name) is generic

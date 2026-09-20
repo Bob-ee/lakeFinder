@@ -921,6 +921,8 @@ function main() {
   const usableFeatures = [];
   /** id -> sample points, in the order they go into wave_points.bin. */
   const waveFields = new Map();
+  /** id -> name_norm, kept out of the written index.json (data-contract.md) but needed to sort it. */
+  const norms = new Map();
   for (const lake of LAKES) {
     const id = lakeId(lake.key);
     const ring = lakeRing(lake.lon, lake.lat, lake.majorM, lake.minorM, lake.rot, id);
@@ -935,10 +937,10 @@ function main() {
     if (m.chordFt < FALLBACK_RULES.aircraft.min_chord_ft) flags.push("chord_below_minimum");
     if (!lake.name) flags.push("needs_review");
 
+    norms.set(id, normalizeName(lake.name));
     index.push({
       id,
       name: lake.name,
-      name_norm: normalizeName(lake.name),
       kind: lake.kind ?? "lake",
       county: lake.county ?? null,
       ...(lake.counties ? { counties: lake.counties } : {}),
@@ -977,7 +979,7 @@ function main() {
     const points = waveFieldFor(lake, ring, eroded, m);
     if (points.length > 0) waveFields.set(id, points);
   }
-  index.sort((a, b) => (a.name_norm || "￿").localeCompare(b.name_norm || "￿"));
+  index.sort((a, b) => (norms.get(a.id) || "￿").localeCompare(norms.get(b.id) || "￿"));
 
   // --- overlays -----------------------------------------------------------
   const bas = index

@@ -27,7 +27,8 @@ export class SearchIndex {
 
   load(lakes: Lake[]): void {
     this.lakes = [...lakes].sort((a, b) => compareLakes(a, b));
-    this.norms = this.lakes.map((l) => l.name_norm || normalizeName(l.name) || "");
+    // `name_norm` is always filled by the time index.json reaches here (pack/index.ts).
+    this.norms = this.lakes.map((l) => l.name_norm);
     this.byId.clear();
     for (const l of this.lakes) this.byId.set(l.id, l);
   }

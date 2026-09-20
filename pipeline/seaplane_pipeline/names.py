@@ -215,11 +215,24 @@ _POSITION_PREFIX_RE = re.compile(
 )
 
 
+#: Part words that, when a segment *ends* in one, name an area of the waterbody named beside it
+#: rather than a waterbody of their own: "LAKE MACATAWA, PINE CREEK BAY" is one lake and its bay,
+#: not two lakes. Kept to sub-area nouns -- "channel", "canal", "outlet" and "waters" are not here
+#: because they trail real names ("Seven Lakes Channels", "Detroit River and Connected Waters"),
+#: where `_strip_structure` does the trimming instead.
+PART_HEAD_WORDS = frozenset({"bay", "bays", "basin", "basins", "arm", "arms", "tip", "lagoon", "lagoons"})
+
+
 def _is_descriptor(segment: str) -> bool:
+    """True when the segment names a *part* of a waterbody rather than one of its own."""
     ws = _words(segment)
     if not ws:
         return True
     if _POSITION_PREFIX_RE.match(segment.strip()):
+        return True
+    # The head is the last word outside any parenthetical: "Squaw Lake (lagoon)" heads on "lake".
+    head = _words(_PAREN_RE.sub(" ", segment))
+    if head and head[-1] in PART_HEAD_WORDS:
         return True
     if any(w in WATERBODY_WORDS for w in ws):
         return False
@@ -358,6 +371,37 @@ def split_multi_lake_names(raw: str) -> list[str]:
                     return [p + generic for p in stripped]
 
     return [_singular_generic(text)]
+
+
+#: Words that name a *category* of water rather than any particular one. A header built only from
+#: these ("RIVERS AND CHANNELS", "CHANNELS", "CONNECTING CHANNELS") labels the list beneath it
+#: instead of naming a waterbody. Deliberately narrower than `DESCRIPTOR_WORDS`: "bay", "outlet",
+#: "arm" and the civil-division words are left out because real names are built from them
+#: ("Outlet Lake", "Grand Traverse Bay").
+GENERIC_ONLY_WORDS = frozenset(
+    {
+        "lake", "lakes", "pond", "ponds", "reservoir", "reservoirs", "flowage", "flowages",
+        "river", "rivers", "creek", "creeks", "stream", "streams", "bayou", "bayous",
+        "millpond", "millponds", "impoundment", "impoundments", "waterway", "waterways",
+        "water", "waters", "channel", "channels", "canal", "canals", "lagoon", "lagoons",
+        "connecting", "connected", "tributary", "tributaries", "drain", "drains",
+        "all", "certain", "following", "other", "various", "numbered",
+    }
+)
+
+_NAME_TOKEN_RE = re.compile(r"[A-Za-z0-9']+")
+
+
+def is_generic_name(name: str | None) -> bool:
+    """True when every word in `name` is a category word, so it identifies no waterbody.
+
+    `"Rivers"` and `"Connecting"` are generic; `"Lake 16"`, `"Unnamed Lake"` and `"Clam River"`
+    are not. `parse_dnr` uses it to notice a header that only labels the enumerated list under it.
+    """
+    tokens = [t.lower() for t in _NAME_TOKEN_RE.findall(name or "")]
+    if not tokens:
+        return True
+    return all(t in GENERIC_ONLY_WORDS or t in _SMALL_WORDS for t in tokens)
 
 
 def descriptor_segments(raw: str) -> list[str]:

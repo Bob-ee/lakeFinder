@@ -175,6 +175,93 @@ def test_towing_only_clause_stays_no_towing(parsed) -> None:
 
 
 # ---------------------------------------------------------------------------
+# A header that only labels the list under it (Antrim R 281.705.1)
+# ---------------------------------------------------------------------------
+
+
+def _list_entry(header: str, preamble: str, items: list[str]) -> parse_dnr.Entry:
+    entry = parse_dnr.Entry(
+        header=header,
+        rule_id="R 281.705.1",
+        title="Slow-no wake speed.",
+        lake_names=parse_dnr.split_multi_lake_names(header),
+        lake_name_group=header,
+        paragraphs=[preamble, *items],
+    )
+    entry.raw_text = "\n".join([entry.header, *entry.paragraphs])
+    return entry
+
+
+ANTRIM_ITEMS = [
+    "(a) Clam river from Torch lake to Clam lake.",
+    "(b) Grass river from Clam lake to lake Bellaire.",
+    "(c) Intermediate river from lake Bellaire to Intermediate lake.",
+    "(d) Channel connecting Intermediate lake to Hanley lake.",
+]
+ANTRIM_PREAMBLE = (
+    "1. On the following rivers and channels, county of Antrim, state of Michigan, "
+    "no operator of any motorboat shall exceed a slow-no wake speed:"
+)
+
+
+def test_generic_list_header_takes_its_names_from_the_clauses() -> None:
+    """"RIVERS AND CHANNELS" names no waterbody; each lettered clause names its own."""
+    entry = _list_entry("RIVERS AND CHANNELS", ANTRIM_PREAMBLE, ANTRIM_ITEMS)
+    assert entry.lake_names == ["Rivers"]  # what the header alone yields
+    records = parse_dnr.records_for_entry(entry, "Antrim", "u", FETCHED_AT)
+    assert [r.lake_name_raw for r in records] == [
+        "Clam river", "Grass river", "Intermediate river", "Intermediate lake",
+    ]
+    assert [r.clause for r in records] == ["(a)", "(b)", "(c)", "(d)"]
+    assert {r.restriction_type for r in records} == {"slow_no_wake"}
+    assert all(r.lake_name_group == "RIVERS AND CHANNELS" for r in records)
+    assert len({r.restriction_id for r in records}) == len(records)
+
+
+def test_a_header_that_names_a_waterbody_still_wins_over_its_clauses() -> None:
+    entry = _list_entry("TORCH LAKE", ANTRIM_PREAMBLE, ANTRIM_ITEMS)
+    records = parse_dnr.records_for_entry(entry, "Antrim", "u", FETCHED_AT)
+    assert {r.lake_name_raw for r in records} == {"Torch Lake"}
+
+
+def test_a_generic_header_over_prose_keeps_the_header_name() -> None:
+    """Lenawee's "CONNECTING CHANNELS" has one unlabelled clause: nothing to take a name from."""
+    entry = _list_entry(
+        "CONNECTING CHANNELS",
+        "4. On the waters of the channels connecting Wolf lake and Allens lake, Allens lake and "
+        'Meadow lake, also known as the "River Shannon", no operator of any motorboat shall '
+        "exceed a slow-no wake speed.",
+        [],
+    )
+    records = parse_dnr.records_for_entry(entry, "Lenawee", "u", FETCHED_AT)
+    assert [r.lake_name_raw for r in records] == ["Connecting"]
+
+
+def test_clause_names_are_only_taken_when_every_clause_names_one() -> None:
+    entry = _list_entry(
+        "RIVERS AND CHANNELS",
+        ANTRIM_PREAMBLE,
+        ["(a) Clam river from Torch lake to Clam lake.", "(b) All other connecting channels."],
+    )
+    records = parse_dnr.records_for_entry(entry, "Antrim", "u", FETCHED_AT)
+    assert {r.lake_name_raw for r in records} == {"Rivers"}
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("Clam river from Torch lake to Clam lake.", ["Clam river"]),
+        ("Channel connecting Intermediate lake to Hanley lake.", ["Intermediate lake"]),
+        ("All other connecting channels.", []),                 # generic: names nothing
+        ("", []),
+        ("A" + " word" * 20 + " lake.", []),                    # prose, not a name
+    ],
+)
+def test_clause_lake_names(text: str, expected: list[str]) -> None:
+    assert parse_dnr._clause_lake_names(parse_dnr.Clause(label="(a)", text=text)) == expected
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 

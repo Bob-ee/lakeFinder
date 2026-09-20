@@ -150,7 +150,17 @@ WATERWAY_RE = re.compile(
     r"outlets?|cuts?|sloughs?|marsh(es)?|swamps?|floodings?|backwaters?|bays?)\b",
     re.IGNORECASE,
 )
-NAME_SUFFIX_RE = re.compile(r"\s+(-|–|—|including|incl\.?|and channels?|and tributaries|and the|near|at|in)\s+.*$", re.IGNORECASE)
+#: The tail of a DNR header that is not part of the waterbody's name. Two halves, deliberately:
+#: the structural keywords may *end* the header ("Fox River and Tributaries", "Round Lake and
+#: channels"), while the prepositions have to be followed by the place they point at, so a real
+#: name that happens to end in one is never trimmed.
+NAME_SUFFIX_RE = re.compile(
+    r"\s+(?:"
+    r"(?:-|–|—|including|incl\.?|and\s+channels?|and\s+tributaries|and\s+the)(?:\s+.*)?"
+    r"|(?:near|at|in)\s+.+"
+    r")$",
+    re.IGNORECASE,
+)
 
 
 LAKE_GENERIC_RE = re.compile(

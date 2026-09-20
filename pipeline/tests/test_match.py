@@ -347,6 +347,26 @@ def test_restriction_kind_splits_lakes_from_waterways():
         assert match.restriction_kind(name) == "lake", name
 
 
+def test_name_suffix_trims_a_structural_keyword_that_ends_the_header():
+    """The suffix keywords may be the last thing in the header (they used to need a tail)."""
+    assert match.NAME_SUFFIX_RE.sub("", "Fox River and Tributaries") == "Fox River"
+    assert match.NAME_SUFFIX_RE.sub("", "Round Lake and channels") == "Round Lake"
+    assert match.NAME_SUFFIX_RE.sub("", "Round Lake and channel") == "Round Lake"
+    assert match.NAME_SUFFIX_RE.sub("", "Wolverine Lake - Slow-No Wake") == "Wolverine Lake"
+    assert match.NAME_SUFFIX_RE.sub("", "Base Line Lake including the canals") == "Base Line Lake"
+    assert match.name_variants("Fox River and Tributaries") == ["fox river"]
+
+
+def test_name_suffix_leaves_a_real_name_that_ends_in_a_preposition_alone():
+    """"near"/"at"/"in" only cut when they point at a place; the word alone is part of the name."""
+    for name in ("Lake Margrethe Channel in Harbor Beach Subdivision", "Otter Lake near Hale"):
+        assert match.NAME_SUFFIX_RE.sub("", name) != name
+    for name in ("Lake In", "Portage Lake At", "Higgins Lake Near", "Torch Lake"):
+        assert match.NAME_SUFFIX_RE.sub("", name) == name
+    # ...and the structural keywords are still not part of a longer word.
+    assert match.NAME_SUFFIX_RE.sub("", "Nearing Lake") == "Nearing Lake"
+
+
 def test_lake_headers_never_see_river_polygons():
     """"Torch Lake" must not land on the Torch River polygon, and it is the only thing in the county."""
     lakes = make_waterbodies([

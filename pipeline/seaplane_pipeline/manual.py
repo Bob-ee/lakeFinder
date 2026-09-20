@@ -147,7 +147,15 @@ def mac_restrictions(cfg: Config, matcher=None) -> tuple[list[dict], bool]:
 
 
 def federal_restrictions(lakes, overlays: dict) -> list[dict]:
-    """A `federal_no_landing` record per lake whose centroid sits inside an NPS/FWS unit."""
+    """`federal_no_landing` records for the lakes whose centroid sits inside an NPS/FWS unit.
+
+    One record per distinct `restriction_id`, not per lake. The id hashes
+    `county|lake_name_raw|township|raw_text` (`ids.restriction_id`), and every unnamed pond inside
+    one refuge township hashes the same -- so those water bodies share a single record whose
+    `lake_ids` lists them all (docs/data-contract.md, "Synthetic restrictions"). Emitting one record
+    per lake instead would hand `build_restrictions`, which keys by `restriction_id`, several
+    records under the same key and keep only the last one's `lake_ids`.
+    """
     by_id: dict[int, dict] = {}
     if lakes is not None:
         for row in lakes.itertuples(index=False):
@@ -156,7 +164,7 @@ def federal_restrictions(lakes, overlays: dict) -> list[dict]:
                 "county": _scalar(getattr(row, "county", None)),
                 "township": _scalar(getattr(row, "township", None)),
             }
-    out: list[dict] = []
+    out: dict[str, dict] = {}
     for key, ov in overlays.items():
         unit = ov.get("federal_unit")
         if not unit:
@@ -167,15 +175,18 @@ def federal_restrictions(lakes, overlays: dict) -> list[dict]:
             f"{unit}: 36 CFR 2.17 prohibits operating or using aircraft on lands or waters "
             "other than at locations designated for that purpose; no designated seaplane area is on file."
         )
-        out.append(
-            _record(
-                county=lake.get("county"),
-                lake_name_raw=name,
-                township=lake.get("township"),
-                raw_text=raw,
-                restriction_type="federal_no_landing",
-                source_url=FEDERAL_SOURCE,
-                lake_ids=[int(key)],
-            )
+        rec = _record(
+            county=lake.get("county"),
+            lake_name_raw=name,
+            township=lake.get("township"),
+            raw_text=raw,
+            restriction_type="federal_no_landing",
+            source_url=FEDERAL_SOURCE,
+            lake_ids=[int(key)],
         )
-    return out
+        existing = out.get(rec["restriction_id"])
+        if existing is None:
+            out[rec["restriction_id"]] = rec
+        else:
+            existing["lake_ids"] = sorted({*existing["lake_ids"], int(key)})
+    return list(out.values())

@@ -24,7 +24,7 @@ pytestmark = pytest.mark.skipif(
 
 LAT0, LON0 = 42.70, -83.60
 INDEX_FIELDS = {
-    "id", "name", "name_norm", "kind", "county", "township", "lat", "lon", "bbox",
+    "id", "name", "kind", "county", "township", "lat", "lon", "bbox",
     "area_acres", "chord_ft", "chord_bearing_deg", "verdict", "flags", "restriction_ids", "access",
 }
 
@@ -140,6 +140,8 @@ def test_index_entries_carry_every_contract_field(work_dir):
     assert len(index) == 3
     for entry in index:
         assert set(entry) == INDEX_FIELDS
+        # name_norm is not published: the client derives it (docs/data-contract.md, index.json).
+        assert "name_norm" not in entry
 
     by_id = {e["id"]: e for e in index}
     assert by_id[1000]["name"] == "Big School Lot Lake"
@@ -154,6 +156,17 @@ def test_index_entries_carry_every_contract_field(work_dir):
     assert by_id[1002]["restriction_ids"] == ["cccccccccccc"]  # synthetic federal record
     assert by_id[1001]["restriction_ids"] == []           # its only rule is rescinded
     assert by_id[1001]["access"] is None
+
+
+def test_build_restrictions_publishes_every_lake_of_a_merged_synthetic_record():
+    """`build_restrictions` keys by restriction_id, so a shared id must arrive already merged."""
+    synthetic = [{
+        "restriction_id": "ffffffffffff", "restriction_type": "federal_no_landing",
+        "status": "active", "lake_ids": [1002, 1001, 1001],
+    }]
+    published = build.build_restrictions([], [], synthetic)
+    assert list(published) == ["ffffffffffff"]
+    assert published["ffffffffffff"]["lake_ids"] == [1001, 1002]
 
 
 def test_restrictions_json_drops_rescinded_and_fills_lake_ids(work_dir):

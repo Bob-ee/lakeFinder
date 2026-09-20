@@ -2,7 +2,6 @@
   {
     "id": 461406506,
     "name": "Lake Angelus",
-    "name_norm": "angelus",
     "kind": "lake",
     "county": "Oakland",
     "township": "City of Lake Angelus",
@@ -29,7 +28,6 @@
   {
     "id": 797249953,
     "name": "Big Fixture Lake",
-    "name_norm": "big fixture",
     "kind": "great_lake",
     "county": null,
     "counties": [
@@ -57,7 +55,6 @@
   {
     "id": 1191379730,
     "name": "Big School Lot Lake",
-    "name_norm": "big school lot",
     "kind": "lake",
     "county": "Oakland",
     "township": "Rose Township",
@@ -84,7 +81,6 @@
   {
     "id": 460478574,
     "name": "Cass Lake",
-    "name_norm": "cass",
     "kind": "lake",
     "county": "Oakland",
     "township": "West Bloomfield Township",
@@ -107,7 +103,6 @@
   {
     "id": 1126253882,
     "name": "Fixture Channel",
-    "name_norm": "fixture channel",
     "kind": "connecting_water",
     "county": null,
     "counties": [
@@ -141,7 +136,6 @@
   {
     "id": 442037361,
     "name": "Huron River",
-    "name_norm": "huron river",
     "kind": "river",
     "county": "Oakland",
     "township": "Milford Township",
@@ -169,7 +163,6 @@
   {
     "id": 756544397,
     "name": "Huron River",
-    "name_norm": "huron river",
     "kind": "river",
     "county": "Oakland",
     "township": "Commerce Township",
@@ -197,7 +190,6 @@
   {
     "id": 22736109,
     "name": "Little School Lot Lake",
-    "name_norm": "little school lot",
     "kind": "lake",
     "county": "Oakland",
     "township": "Rose Township",
@@ -225,7 +217,6 @@
   {
     "id": 223057208,
     "name": "Loon Lake",
-    "name_norm": "loon",
     "kind": "lake",
     "county": "Oakland",
     "township": "Wixom",
@@ -248,7 +239,6 @@
   {
     "id": 1663026972,
     "name": "Mud Lake",
-    "name_norm": "mud",
     "kind": "lake",
     "county": "Oakland",
     "township": "Rose Township",
@@ -276,7 +266,6 @@
   {
     "id": 368858589,
     "name": "Pontiac Lake",
-    "name_norm": "pontiac",
     "kind": "lake",
     "county": "Oakland",
     "township": "Waterford Township",
@@ -301,7 +290,6 @@
   {
     "id": 260200585,
     "name": "Round Lake",
-    "name_norm": "round",
     "kind": "lake",
     "county": "Oakland",
     "township": "Springfield Township",
@@ -324,7 +312,6 @@
   {
     "id": 314179109,
     "name": "Union Lake",
-    "name_norm": "union",
     "kind": "lake",
     "county": "Oakland",
     "township": "Commerce Township",
@@ -349,7 +336,6 @@
   {
     "id": 1487578877,
     "name": null,
-    "name_norm": "",
     "kind": "lake",
     "county": "Oakland",
     "township": "Highland Township",

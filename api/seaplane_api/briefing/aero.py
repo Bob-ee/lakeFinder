@@ -28,41 +28,51 @@ def crosswind_kt(wind_dir_deg: float, wind_kt: float, heading_deg: float) -> flo
 class RunwayEnd:
     id: str  # "27L"
     heading: int  # degrees true
+    length_ft: int | None = None  # the physical strip's length; shared by both of its ends
 
 
 def runway_ends(runways: list[dict]) -> list[RunwayEnd]:
-    """Expand `[{"id": "09R/27L", "heading": 91}]` into both landable ends.
+    """Expand `[{"id": "09R/27L", "heading": 91, "length_ft": 6521}]` into both landable ends.
 
     `heading` is the true heading of the *first-named* end; the reciprocal gets the other id.
     A single-ended id ("18") still yields both directions, the second one named "<id> rev" so the
-    template never prints a bare heading.
+    template never prints a bare heading. `length_ft` is optional (absent on files written before
+    2026-09-20) and carries through to both ends unchanged.
     """
     ends: list[RunwayEnd] = []
     for rwy in runways:
         ident = str(rwy.get("id", "")).strip()
         heading = round(float(rwy.get("heading", 0)))
+        length_ft = rwy.get("length_ft")
         parts = [p.strip() for p in ident.split("/") if p.strip()]
         first = parts[0] if parts else f"{heading:03d}"
         second = parts[1] if len(parts) > 1 else f"{first} rev"
-        ends.append(RunwayEnd(first, heading % 360))
-        ends.append(RunwayEnd(second, (heading + 180) % 360))
+        ends.append(RunwayEnd(first, heading % 360, length_ft))
+        ends.append(RunwayEnd(second, (heading + 180) % 360, length_ft))
     return ends
 
 
 def best_runway(runways: list[dict], wind_dir_deg: float, wind_kt: float) -> RunwayEnd | None:
-    """The end with the least crosswind, breaking ties toward the one with a headwind.
+    """The end with the least crosswind, breaking ties toward headwind and then toward length.
 
-    With no wind information every end is equal, so the first one is returned rather than `None`.
+    Unknown `length_ft` sorts as shortest, so it never wins a length tie-break against a runway
+    whose length is known; when every runway's length is unknown the length tie-break is a wash and
+    the first one listed wins, same as before `length_ft` existed.
+
+    With no wind information there is no crosswind or headwind to compare, so ties go to the
+    longest known length (falling back to the first-named end of that runway, then to the first
+    runway listed); with every length unknown too, the first end listed wins, same as before.
     """
     ends = runway_ends(runways)
     if not ends:
         return None
     if wind_kt <= 0:
-        return ends[0]
+        known = [e for e in ends if e.length_ft is not None]
+        return max(known, key=lambda e: e.length_ft) if known else ends[0]
 
-    def key(end: RunwayEnd) -> tuple[float, float]:
+    def key(end: RunwayEnd) -> tuple[float, float, int]:
         xw, hw = wind_components(wind_dir_deg, wind_kt, end.heading)
-        return (round(abs(xw), 3), -hw)
+        return (round(abs(xw), 3), -hw, -(end.length_ft or 0))
 
     return min(ends, key=key)
 

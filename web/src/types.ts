@@ -109,6 +109,12 @@ export type RestrictionIndex = Record<string, Restriction>;
 export interface Lake {
   id: number;
   name: string | null;
+  /**
+   * Not in the wire format (dropped 2026-09-20, ~310 KB of the 5 MB budget); `loadData`
+   * (pack/index.ts) fills it in with `normalizeName(name)` for every entry as index.json is
+   * parsed, so it is always present here even though an older pack's JSON may still carry
+   * the key (ignored either way).
+   */
   name_norm: string;
   kind: WaterbodyKind;
   /** null on `great_lake` / `connecting_water`, which touch many counties (see `counties`). */

@@ -19,6 +19,7 @@ def test_defaults_match_the_data_contract():
     assert [(r.id, r.heading) for r in s.home_airport.runways] == [
         ("09L/27R", 88), ("09R/27L", 88), ("18/36", 172),
     ]
+    assert [r.length_ft for r in s.home_airport.runways] == [5676, 6521, 2582]
     assert s.schedule.run_times_local == ["06:00", "09:00", "12:00", "15:00", "18:00", "20:00", "22:00"]
     assert s.outlook.times_local == ["18:00", "20:00", "22:00"]
     assert (s.outlook.morning_start, s.outlook.morning_end_local, s.outlook.min_window_hours) == (
@@ -67,6 +68,22 @@ def test_unknown_keys_are_rejected_at_every_level():
 def test_bad_values_are_rejected(payload):
     with pytest.raises(ValidationError):
         settings_from_dict(payload)
+
+
+def test_a_runway_without_length_ft_still_loads():
+    """Files written before 2026-09-20 have no `length_ft` key on a runway at all."""
+    s = settings_from_dict({"home_airport": {"runways": [{"id": "09R/27L", "heading": 88}]}})
+    assert s.home_airport.runways[0].length_ft is None
+
+
+def test_a_runway_with_length_ft_null_or_set_loads():
+    s = settings_from_dict(
+        {"home_airport": {"runways": [
+            {"id": "09L/27R", "heading": 88, "length_ft": None},
+            {"id": "09R/27L", "heading": 88, "length_ft": 6521},
+        ]}}
+    )
+    assert [r.length_ft for r in s.home_airport.runways] == [None, 6521]
 
 
 def test_home_water_is_optional_and_an_older_file_without_it_still_loads():

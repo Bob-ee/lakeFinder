@@ -16,6 +16,10 @@ Shapes verified live on 2026-09-19:
 so nothing is converted. Checked against two airports with large, opposite variation: KSEA 16L/34R
 comes back as 180 (true alignment 180.6, magnetic 164 with 16E variation) and KBOS 04L/22R as 20
 (magnetic 35 with 15W variation). A magnetic value would have read 164 and 35.
+
+`dimension` is a string like `"6521x150"` (length x width, feet); the length is parsed into
+`length_ft`. Anything that does not parse as `<int>x<int>` (missing, malformed, non-numeric) becomes
+`None` rather than raising, per the contract's "optional" note on `home_airport.runways[].length_ft`.
 """
 from __future__ import annotations
 
@@ -75,6 +79,19 @@ async def fetch_airport(c: httpx.AsyncClient, ident: str) -> tuple[dict | None, 
     return data[0], None
 
 
+def _parse_length_ft(dimension: Any) -> int | None:
+    """`"6521x150"` (length x width, feet) -> `6521`. Anything odd or missing -> `None`."""
+    if not isinstance(dimension, str):
+        return None
+    length, sep, _width = dimension.partition("x")
+    if not sep:  # no "x": not the documented shape, can't tell length from width
+        return None
+    try:
+        return int(float(length.strip()))
+    except (ValueError, TypeError):
+        return None
+
+
 def to_home_airport(raw: dict[str, Any]) -> dict:
     """Map the airport-info object onto the contract's `home_airport` shape.
 
@@ -86,7 +103,11 @@ def to_home_airport(raw: dict[str, Any]) -> dict:
         alignment = r.get("alignment")
         if alignment is None:
             continue
-        runways.append({"id": str(r.get("id") or "").strip(), "heading": round(float(alignment)) % 360})
+        runways.append({
+            "id": str(r.get("id") or "").strip(),
+            "heading": round(float(alignment)) % 360,
+            "length_ft": _parse_length_ft(r.get("dimension")),
+        })
     return {
         "id": raw.get("icaoId") or raw.get("faaId") or raw.get("iataId") or "",
         "name": " ".join(str(raw.get("name") or "").split()).title(),

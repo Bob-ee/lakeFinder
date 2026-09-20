@@ -9,6 +9,13 @@ from seaplane_api.briefing import aero
 
 KPTK_RUNWAYS = [{"id": "09R/27L", "heading": 91}, {"id": "18/36", "heading": 179}]
 
+# The real bug: two parallel runways, same heading, different lengths.
+KPTK_PARALLEL_RUNWAYS = [
+    {"id": "09L/27R", "heading": 88, "length_ft": 5676},
+    {"id": "09R/27L", "heading": 88, "length_ft": 6521},
+    {"id": "18/36", "heading": 172, "length_ft": 2582},
+]
+
 
 def test_crosswind_hand_calcs():
     # 30 degrees off: half the wind is crosswind, sqrt(3)/2 is headwind.
@@ -30,6 +37,14 @@ def test_runway_ends_expand_both_directions():
     assert [(e.id, e.heading) for e in ends] == [
         ("09R", 91), ("27L", 271), ("18", 179), ("36", 359),
     ]
+    assert [e.length_ft for e in ends] == [None, None, None, None]  # older files carry no length_ft
+
+
+def test_runway_ends_carries_length_ft_to_both_ends_of_a_runway():
+    ends = aero.runway_ends(KPTK_PARALLEL_RUNWAYS)
+    assert [(e.id, e.length_ft) for e in ends] == [
+        ("09L", 5676), ("27R", 5676), ("09R", 6521), ("27L", 6521), ("18", 2582), ("36", 2582),
+    ]
 
 
 def test_best_runway_picks_least_crosswind_then_headwind():
@@ -45,7 +60,34 @@ def test_best_runway_picks_least_crosswind_then_headwind():
 
 def test_best_runway_with_no_runways_or_no_wind():
     assert aero.best_runway([], 250, 12) is None
+    # Calm wind, no length data at all (an older settings file): the first end listed wins, exactly
+    # as before `length_ft` existed.
     assert aero.best_runway(KPTK_RUNWAYS, 250, 0).id == "09R"
+
+
+def test_best_runway_breaks_a_parallel_tie_toward_the_longer_runway():
+    """The bug this feature fixes: 09L/27R and 09R/27L share a heading, so wind straight down it
+    gives every end zero crosswind and the same headwind/tailwind. The longer physical runway
+    (09R/27L, 6521 ft) must win over the one listed first (09L/27R, 5676 ft)."""
+    assert aero.best_runway(KPTK_PARALLEL_RUNWAYS, 88, 10).id == "09R"
+    assert aero.best_runway(KPTK_PARALLEL_RUNWAYS, 268, 10).id == "27L"
+
+
+def test_best_runway_with_all_lengths_unknown_keeps_first_listed_on_a_parallel_tie():
+    unknown = [{"id": "09L/27R", "heading": 88}, {"id": "09R/27L", "heading": 88}]
+    assert aero.best_runway(unknown, 88, 10).id == "09L"
+
+
+def test_best_runway_a_known_length_beats_an_unknown_one_on_a_tie():
+    mixed = [{"id": "09L/27R", "heading": 88}, {"id": "09R/27L", "heading": 88, "length_ft": 6521}]
+    assert aero.best_runway(mixed, 88, 10).id == "09R"
+
+
+def test_best_runway_calm_wind_prefers_the_longest_known_runway():
+    assert aero.best_runway(KPTK_PARALLEL_RUNWAYS, 0, 0).id == "09R"
+    # A length tie between a runway's own two ends goes to the first-named one.
+    same_length = [{"id": "09L/27R", "heading": 88, "length_ft": 5000}, {"id": "18/36", "heading": 172, "length_ft": 5000}]
+    assert aero.best_runway(same_length, 999, 0).id == "09L"
 
 
 def test_pressure_and_density_altitude_hand_calcs():

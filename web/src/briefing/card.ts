@@ -1,5 +1,6 @@
 import { BRIEFING, BRIEFING_DISCLAIMER } from "../config";
 import { lakeRow } from "../lists/row";
+import { normalizeName } from "../search/normalize";
 import type { Lake } from "../types";
 import { ageMinutes, el, formatRelative, formatThousands } from "../ui/format";
 import { icon } from "../ui/icons";
@@ -443,7 +444,7 @@ function standInLake(row: BriefingLake): Lake {
   return {
     id: row.id,
     name: row.name,
-    name_norm: "",
+    name_norm: normalizeName(row.name),
     kind: row.kind ?? "lake",
     county: "not in this data pack",
     township: null,

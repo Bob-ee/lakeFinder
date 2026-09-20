@@ -29,10 +29,15 @@ const ABBREV: Record<string, string> = {
 /** Step 3: generic words stripped from the front and back, but never if they are the only word. */
 const GENERIC = new Set(["lake", "pond", "reservoir", "impoundment", "flowage", "basin"]);
 
-export function localNormalizeName(raw: string | null | undefined): string {
-  if (raw == null) return "";
+/**
+ * Runs steps 1-4 (and implicitly 5) of the contract on one segment: the main name, or one
+ * parenthetical qualifier. See the contract's "Implementation decision" for why a parenthetical
+ * is handled as its own segment rather than inline text (e.g. "Crooked Lake (Big)" -> "crooked"
+ * + "big" -> "crooked big", not "crooked lake big").
+ */
+function normalizeSegment(raw: string): string {
   // 1. lowercase, strip diacritics.
-  let s = String(raw)
+  let s = raw
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
     .toLowerCase();
@@ -48,6 +53,19 @@ export function localNormalizeName(raw: string | null | undefined): string {
   while (words.length > 1 && GENERIC.has(words[0]!)) words.shift();
   while (words.length > 1 && GENERIC.has(words[words.length - 1]!)) words.pop();
   return words.join(" ");
+}
+
+export function localNormalizeName(raw: string | null | undefined): string {
+  if (raw == null) return "";
+  const parenSegments: string[] = [];
+  const main = String(raw).replace(/\(([^)]*)\)/g, (_match, inner) => {
+    parenSegments.push(inner);
+    return " ";
+  });
+  return [main, ...parenSegments]
+    .map(normalizeSegment)
+    .filter((segment) => segment.length > 0)
+    .join(" ");
 }
 
 /** Prefers the shared rules engine's implementation when it is present. */

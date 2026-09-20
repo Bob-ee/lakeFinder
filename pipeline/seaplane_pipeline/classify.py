@@ -145,14 +145,22 @@ def apply_reach_flags(results: list[dict], matches: list[dict]) -> int:
 
 
 def drop_big_water_federal(records: list[dict], lakes) -> list[dict]:
-    """Withhold `federal_no_landing` on `great_lake` / `connecting_water`; see the module docstring."""
+    """Withhold `federal_no_landing` on `great_lake` / `connecting_water`; see the module docstring.
+
+    A federal record carries every water body that hashed to its id (`manual.federal_restrictions`),
+    so big water is withheld id by id *and* lake by lake: a record covering both keeps only its
+    inland ids, and is dropped entirely when nothing inland is left.
+    """
     kinds = match.kinds_by_lake(lakes)
     kept, dropped = [], 0
     for rec in records:
         ids = [int(i) for i in rec.get("lake_ids") or []]
-        if ids and all(kinds.get(i) in match.BIG_WATER_KINDS for i in ids):
+        inland = [i for i in ids if kinds.get(i) not in match.BIG_WATER_KINDS]
+        if ids and not inland:
             dropped += 1
             continue
+        if len(inland) != len(ids):
+            rec = {**rec, "lake_ids": inland}
         kept.append(rec)
     if dropped:
         log.info("withheld %d federal_no_landing records on big water (flag only, no verdict)", dropped)
