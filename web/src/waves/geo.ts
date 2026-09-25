@@ -1,6 +1,7 @@
 import type { Feature, FeatureCollection } from "geojson";
 import { metresToInches, waveHeight, windBin } from "@rules/waves/index.js";
 import { FETCH_UNIT_M, RUN_UNIT_FT } from "@rules/waves/index.js";
+import { waveBand } from "./ramp";
 import type { WaveState } from "./section";
 
 /**
@@ -23,7 +24,7 @@ const MAX_CACHED = 8;
 const cache = new Map<number, Feature[]>();
 
 export function waveGeo(state: WaveState): WaveGeo {
-  const { lake, field, wind, minRunFt } = state;
+  const { lake, field, wind, minRunFt, limits } = state;
   const bin = windBin(wind.dir);
   const runBin = bin % 8;
 
@@ -32,7 +33,7 @@ export function waveGeo(state: WaveState): WaveGeo {
     features = field.points.map((p) => ({
       type: "Feature" as const,
       geometry: { type: "Point" as const, coordinates: [p.lon, p.lat] },
-      properties: { hs_in: 0, usable: true },
+      properties: { hs_in: 0, usable: true, band: "ok", text: "0" },
     }));
     if (cache.size >= MAX_CACHED) cache.clear();
     cache.set(lake.id, features);
@@ -43,21 +44,33 @@ export function waveGeo(state: WaveState): WaveGeo {
     const depth = p.depth_dm === 0xffff ? null : p.depth_dm / 10;
     const { hsM } = waveHeight(wind.kt, p.fetch[bin]! * FETCH_UNIT_M, depth);
     const props = features[i]!.properties!;
-    props["hs_in"] = metresToInches(hsM);
-    // A sheltered spot you cannot get out of is not a landing spot; it is drawn faintly
-    // rather than dropped, because a pilot should still see that it was measured.
-    props["usable"] = p.run[runBin]! * RUN_UNIT_FT >= minRunFt;
+    const hsIn = metresToInches(hsM);
+    // A sheltered spot you cannot get out of is not a landing spot; it is drawn as a hollow
+    // ring rather than dropped, because a pilot should still see that it was measured.
+    const usable = p.run[runBin]! * RUN_UNIT_FT >= minRunFt;
+    props["hs_in"] = hsIn;
+    props["usable"] = usable;
+    props["band"] = waveBand(hsIn, usable, limits);
+    props["text"] = String(hsIn);
   }
 
+  // Regions arrive calm to rough, so the index is also the label's placement priority:
+  // when two labels collide the calmer region keeps its place.
   const regions: Feature[] = [];
-  for (const region of state.regions) {
+  for (const [rank, region] of state.regions.entries()) {
     if (region.point == null) continue;
     const p = field.points[region.point];
     if (!p) continue;
     regions.push({
       type: "Feature",
       geometry: { type: "Point", coordinates: [p.lon, p.lat] },
-      properties: { label: region.label, hs_in: region.hs_in },
+      properties: {
+        label: region.label,
+        hs_in: region.hs_in,
+        text: `${region.label} ${region.hs_in} in`,
+        band: waveBand(region.hs_in, true, limits),
+        rank,
+      },
     });
   }
 

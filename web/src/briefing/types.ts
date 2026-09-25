@@ -152,6 +152,11 @@ export interface BriefingRegion {
   run_ft: number | null;
   lat: number;
   lon: number;
+  /**
+   * That region's own forecast (its 0.1 degree cell), so the two ends of a big lake can
+   * differ. Absent on a briefing written before per-region wind existed.
+   */
+  wind?: Wind | null;
   score?: Score;
 }
 
@@ -196,6 +201,7 @@ export interface BriefingLake {
   hs_open_in?: number | null;
   /** Calm to rough, at most 4 on a ranked row and every region on `home_water`. */
   regions?: BriefingRegion[];
+  /** The best region's wind with a wave field (calmest region's when none is usable), else the centroid's. */
   wind: Wind;
   distance_nm: number;
   bearing_deg: number;

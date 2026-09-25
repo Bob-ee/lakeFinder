@@ -1,11 +1,10 @@
 /* Wave field: the Water section in the sheet, the wind control, the map key, and the
    home-water block in the briefing card.
 
-   Colour note. The ramp itself lives in src/waves/ramp.ts, because the map needs it as a
-   MapLibre expression, the legend as a gradient and the sheet as per-region swatches; the
-   comment at the top of that file is the reasoning. Nothing here reuses the verdict palette or the
-   weather-score palette: the only colour in this stylesheet is --wave-color, set per
-   element from the ramp, plus the neutral surface tokens.
+   Colour note. The wave bands live in src/waves/ramp.ts, because the map needs them as
+   MapLibre expressions; the comment at the top of that file is the reasoning.
+   `applyWaveBandVars` publishes them as --wave-<band>-fill / --wave-<band>-ring, which is
+   the only wave colour used here. Nothing reuses the verdict or weather-score palettes.
 
    Everything a thumb touches is at least 44 px, because this is read in a cockpit with the
    phone clamped to a yoke: the dial is a 148 px target, its two step buttons and the speed
@@ -243,13 +242,42 @@
   opacity: 0.6;
 }
 
+/* The map's dot, in the DOM: same fill, same ring cue. A 20 px box keeps rows aligned
+   whichever band it holds. */
 .wave-swatch {
   flex: 0 0 auto;
-  width: 10px;
-  height: 26px;
-  border-radius: 3px;
-  border: 1px solid var(--border);
-  background: var(--wave-color, var(--surface-2));
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+}
+
+.wave-swatch::before {
+  content: "";
+  box-sizing: border-box;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--wave-ok-fill);
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+.wave-swatch--marginal::before {
+  background: var(--wave-marginal-fill);
+}
+
+.wave-swatch--over::before {
+  width: 18px;
+  height: 18px;
+  background: var(--wave-over-fill);
+  border: 3px solid var(--wave-over-ring);
+  box-shadow: none;
+}
+
+.wave-swatch--norun::before {
+  background: transparent;
+  border: 2px solid var(--wave-norun-ring);
+  box-shadow: none;
 }
 
 .wave-region-text {
@@ -350,20 +378,23 @@
   color: var(--text-muted);
 }
 
-.wave-key-bar {
-  height: 12px;
-  margin-top: 6px;
-  border-radius: 3px;
-  border: 1px solid var(--border);
+.wave-key-bands {
+  display: grid;
+  gap: 1px;
+  margin-top: 4px;
 }
 
-.wave-key-ticks {
+.wave-key-band {
   display: flex;
-  justify-content: space-between;
-  margin-top: 2px;
-  font-size: 10px;
-  color: var(--text-muted);
+  align-items: center;
+  gap: 6px;
+}
+
+.wave-key-band-text {
+  font-size: 13px;
+  font-weight: 650;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .wave-key-wind {
@@ -501,7 +532,7 @@
 .brief-region-trail {
   flex: 0 0 auto;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
   font-variant-numeric: tabular-nums;
 }
@@ -509,6 +540,19 @@
 .brief-region-in {
   font-size: 14px;
   font-weight: 700;
+}
+
+/* The region's own wind over its run, stacked so a long bay name keeps its width. */
+.brief-region-detail {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.25;
+}
+
+.brief-region-wind {
+  font-size: 12px;
+  font-weight: 650;
 }
 
 .brief-region-run {

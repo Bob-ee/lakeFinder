@@ -1,111 +1,136 @@
 import type { ResolvedTheme } from "../ui/theme";
 
 /**
- * Colour ramp for wave height on the map and in the sheet.
+ * Wave-height bands for the map, the map key and the sheet.
  *
- * It must not be the verdict palette (red / amber / green / grey) and must not be the
- * weather-score palette (blue / violet / magenta, see styles/briefing.css), because a dot
- * on the water must never read as "this lake is legally clear" or "the weather is
- * favourable". That rules out most of the hue circle: the map already spends red, amber,
- * green and grey on verdicts, teal on boating access sites, blue on the basemap water and
- * violet on the federal overlay.
+ * The number is the answer; colour only sorts it against the pilot's own limits. So there is
+ * no continuous ramp any more: every point falls in one of four bands, keyed to the briefing
+ * settings `wave_ok_in` and `wave_max_in` (the same limits that score a lake in the
+ * briefing), and every band differs from the others by more than hue.
  *
- * What is left, and what a sea-state plot wants anyway, is a *luminance* ramp rather than a
- * hue ramp: a cividis-style deep-navy-to-yellow scale. It is monotonic in lightness, so it
- * orders correctly in greyscale and under every kind of colour blindness; its dark end is
- * far darker than the score blue and its light end sits in the one hue nothing else in the
- * app uses. Yellow for rough also points attention the right way: the loud colour is the
- * water you do not want.
+ *   ok        hs <= wave_ok_in                     dark, small solid dot
+ *   marginal  wave_ok_in < hs <= wave_max_in       mid, solid dot
+ *   over      hs > wave_max_in                     light, larger dot with a heavy ring
+ *   norun     run into this wind too short          hollow ring, no fill
  *
- * It is continuous rather than banded because the question is "which corner of this lake",
- * and a lake in one wind usually spans only a few inches; bands would flatten the whole
- * field to one or two colours and hide the answer. The scale itself is absolute inches, so
- * the same colour means the same water on every lake and can be compared with the
- * `wave_ok_in` limit in the briefing settings.
+ * Colour choice. The owner is colour blind (type unknown), so the bands are separated first
+ * by lightness, at least ~20 L* apart in each theme, which survives every kind of colour
+ * blindness and greyscale; then by the ring and size cues above; then by hue along a
+ * viridis-like navy / teal / yellow path, which protan, deutan and tritan viewers all
+ * still see as ordered. `node web/scripts/wave-palette-cvd.mjs` simulates the three types
+ * (Machado 2009, full severity) and prints the pairwise CIEDE2000 between bands.
  *
- * Both ends have to survive being drawn on water, which is light blue in the light theme
- * and near-black in the dark one, so the dark theme lifts the whole ramp and every dot gets
- * a thin ring in the surface colour.
+ * It must not be the verdict palette (red / amber / green / grey) or the weather-score
+ * palette (blue / violet / magenta): a dot on the water must never read as "this lake is
+ * clear" or "the weather is favourable". Yellow for over the limit also points attention the
+ * right way: the loudest mark is the water you do not want.
+ *
+ * The dark theme lifts the calm end, which would otherwise vanish into near-black water.
  */
 
-export interface WaveStop {
-  /** Wave height in whole inches. */
-  at: number;
-  color: string;
+export type WaveBand = "ok" | "marginal" | "over" | "norun";
+
+export interface WaveLimits {
+  /** `limits.wave_ok_in`: at or under this is within the limit. */
+  okIn: number;
+  /** `limits.wave_max_in`: over this is over the limit. */
+  maxIn: number;
 }
 
-const RAMP: Record<ResolvedTheme, WaveStop[]> = {
-  light: [
-    { at: 0, color: "#00305f" },
-    { at: 4, color: "#3f5877" },
-    { at: 8, color: "#7c7b78" },
-    { at: 12, color: "#bcaf6f" },
-    { at: 16, color: "#ffe23f" },
-  ],
-  dark: [
-    { at: 0, color: "#41618f" },
-    { at: 4, color: "#6a7d8c" },
-    { at: 8, color: "#93907e" },
-    { at: 12, color: "#c6b672" },
-    { at: 16, color: "#ffe94a" },
-  ],
+export interface BandStyle {
+  fill: string;
+  /** Ring around the dot. For `norun` this is the only thing drawn. */
+  ring: string;
+}
+
+export const WAVE_BANDS: WaveBand[] = ["ok", "marginal", "over", "norun"];
+
+export const BAND_STYLE: Record<ResolvedTheme, Record<WaveBand, BandStyle>> = {
+  light: {
+    ok: { fill: "#17396b", ring: "#ffffff" },
+    marginal: { fill: "#1f9e89", ring: "#ffffff" },
+    over: { fill: "#fde725", ring: "#11181c" },
+    norun: { fill: "transparent", ring: "#5c3d1e" },
+  },
+  dark: {
+    ok: { fill: "#3f5f9f", ring: "#0d1117" },
+    marginal: { fill: "#2fae8f", ring: "#0d1117" },
+    over: { fill: "#fde725", ring: "#f6f8fa" },
+    norun: { fill: "transparent", ring: "#e6edf3" },
+  },
 };
 
-/** Ring around each dot, so both ends of the ramp separate from the water under them. */
-export const WAVE_DOT_RING: Record<ResolvedTheme, string> = {
-  light: "#ffffff",
-  dark: "#0d1117",
-};
+/** Relative dot size; the over-limit dot is bigger so size alone tells it apart. */
+export const BAND_SCALE: Record<WaveBand, number> = { ok: 1, marginal: 1, over: 1.25, norun: 1 };
 
-/** Ticks under the legend's gradient bar. The top one is open-ended. */
-export const WAVE_LEGEND_TICKS = ["0", "4", "8", "12", "16+"];
-
-export function waveStops(theme: ResolvedTheme): WaveStop[] {
-  return RAMP[theme];
-}
-
-/** The ramp colour for a wave height in whole inches, interpolated between the stops. */
-export function waveColor(hsIn: number | null | undefined, theme: ResolvedTheme): string {
-  const stops = RAMP[theme];
-  const last = stops[stops.length - 1]!;
-  if (hsIn == null || !Number.isFinite(hsIn)) return last.color;
-  if (hsIn <= stops[0]!.at) return stops[0]!.color;
-  for (let i = 1; i < stops.length; i++) {
-    const hi = stops[i]!;
-    if (hsIn > hi.at) continue;
-    const lo = stops[i - 1]!;
-    return mix(lo.color, hi.color, (hsIn - lo.at) / (hi.at - lo.at));
-  }
-  return last.color;
-}
-
-/** `linear-gradient(...)` stops for the legend bar, in the same order as the ramp. */
-export function waveGradient(theme: ResolvedTheme): string {
-  const stops = RAMP[theme];
-  const span = stops[stops.length - 1]!.at - stops[0]!.at;
-  const parts = stops.map((s) => `${s.color} ${Math.round(((s.at - stops[0]!.at) / span) * 100)}%`);
-  return `linear-gradient(to right, ${parts.join(", ")})`;
+/** The band a wave height falls in. A point with too short a run is `norun` whatever its height. */
+export function waveBand(hsIn: number | null | undefined, usable: boolean, limits: WaveLimits): WaveBand {
+  if (!usable || hsIn == null || !Number.isFinite(hsIn)) return "norun";
+  if (hsIn <= limits.okIn) return "ok";
+  if (hsIn <= limits.maxIn) return "marginal";
+  return "over";
 }
 
 /**
- * The same ramp as a MapLibre `interpolate` expression over the `hs_in` feature property,
- * so the GPU does the blend and a wind change only has to rewrite the property.
+ * The key's wording for each band, from the limits: "≤ 8 in", "9–12 in", "> 12 in",
+ * "no run". Heights are whole inches, so the marginal band starts one inch over the limit.
+ * With `wave_ok_in` equal to `wave_max_in` there is no marginal band and it returns null.
  */
-export function waveColorExpression(theme: ResolvedTheme): unknown[] {
-  const expr: unknown[] = ["interpolate", ["linear"], ["coalesce", ["get", "hs_in"], 0]];
-  for (const stop of RAMP[theme]) expr.push(stop.at, stop.color);
+export function bandText(band: WaveBand, limits: WaveLimits): string | null {
+  const { okIn, maxIn } = limits;
+  switch (band) {
+    case "ok":
+      return `≤ ${okIn} in`;
+    case "marginal":
+      if (maxIn <= okIn) return null;
+      return okIn + 1 === maxIn ? `${maxIn} in` : `${okIn + 1}–${maxIn} in`;
+    case "over":
+      return `> ${Math.max(okIn, maxIn)} in`;
+    case "norun":
+      return "no run";
+  }
+}
+
+/** Longer wording for tooltips and screen readers. */
+export const BAND_WORD: Record<WaveBand, string> = {
+  ok: "within your wave limit",
+  marginal: "marginal for your wave limit",
+  over: "over your wave limit",
+  norun: "run too short into this wind",
+};
+
+/**
+ * Publishes the band colours as CSS custom properties (`--wave-ok-fill`, `--wave-ok-ring`,
+ * ...) so the key and the sheet's swatches draw from the same table as the map. Call it at
+ * start and on every theme change.
+ */
+export function applyWaveBandVars(theme: ResolvedTheme, root: HTMLElement = document.documentElement): void {
+  for (const band of WAVE_BANDS) {
+    const style = BAND_STYLE[theme][band];
+    root.style.setProperty(`--wave-${band}-fill`, style.fill);
+    root.style.setProperty(`--wave-${band}-ring`, style.ring);
+  }
+}
+
+function bandMatch<T>(pick: (band: WaveBand) => T): unknown[] {
+  const expr: unknown[] = ["match", ["get", "band"]];
+  for (const band of WAVE_BANDS.slice(0, 3)) expr.push(band, pick(band));
+  expr.push(pick("norun"));
   return expr;
 }
 
-function mix(a: string, b: string, t: number): string {
-  const ca = rgb(a);
-  const cb = rgb(b);
-  const f = Math.max(0, Math.min(1, t));
-  const out = ca.map((v, i) => Math.round(v + (cb[i]! - v) * f));
-  return `rgb(${out[0]}, ${out[1]}, ${out[2]})`;
-}
-
-function rgb(hex: string): number[] {
-  const n = Number.parseInt(hex.slice(1), 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+/** MapLibre expressions over the `band` feature property, for the circle layer. */
+export function waveBandPaint(theme: ResolvedTheme): {
+  fill: unknown[];
+  fillOpacity: unknown[];
+  ring: unknown[];
+  scale: unknown[];
+} {
+  const styles = BAND_STYLE[theme];
+  return {
+    fill: bandMatch((b) => (b === "norun" ? styles.ok.fill : styles[b].fill)),
+    fillOpacity: bandMatch((b) => (b === "norun" ? 0 : 1)),
+    ring: bandMatch((b) => styles[b].ring),
+    scale: bandMatch((b) => BAND_SCALE[b]),
+  };
 }

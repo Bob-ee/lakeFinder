@@ -1,5 +1,6 @@
 import { getHealth, getSettings, putSettings } from "./api";
 import type { HomeWater, Settings } from "./types";
+import type { WaveLimits } from "../waves/ramp";
 
 /**
  * The one place the client reads and writes `settings.home_water`.
@@ -91,6 +92,18 @@ export const homeWater = new HomeWaterStore();
  * when the service is not reachable; the caller passes that in so this module does not
  * need the config.
  */
+/**
+ * `limits.wave_ok_in` and `limits.wave_max_in`, which band the wave field on the map. Each
+ * falls back on its own, so a half-filled settings file still bands sensibly.
+ */
+export async function waveLimits(fallback: WaveLimits): Promise<WaveLimits> {
+  const settings = await homeWater.load();
+  const ok = settings?.limits?.wave_ok_in;
+  const max = settings?.limits?.wave_max_in;
+  const valid = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0;
+  return { okIn: valid(ok) ? ok : fallback.okIn, maxIn: valid(max) ? max : fallback.maxIn };
+}
+
 export async function minRunFt(fallback: number): Promise<number> {
   const settings = await homeWater.load();
   const value = settings?.limits?.min_run_ft;

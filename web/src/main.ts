@@ -8,7 +8,7 @@ import "./styles/briefing.css";
 import "./styles/waves.css";
 
 import { BriefingController, readBriefingParam } from "./briefing";
-import { minRunFt } from "./briefing/home-water";
+import { minRunFt, waveLimits } from "./briefing/home-water";
 import { WAVES } from "./config";
 import { Tabs, detailPlaceholder } from "./lists";
 import { MapController } from "./map";
@@ -18,6 +18,7 @@ import { renderDetail, renderPeek, type DetailInput } from "./sheet/detail";
 import { AppState, readUrlParam, type Selection } from "./state";
 import { waveGeo } from "./waves/geo";
 import { WaveLegend } from "./waves/legend";
+import { applyWaveBandVars } from "./waves/ramp";
 import { WaveFieldLoader } from "./waves/load";
 import { WaterSection, type WaveState } from "./waves/section";
 import { defaultWindFor, forecastWindFor } from "./waves/wind";
@@ -29,6 +30,7 @@ import { toast } from "./ui/toast";
 
 async function boot(): Promise<void> {
   const theme = new Theme();
+  applyWaveBandVars(theme.resolved);
   const app = document.getElementById("app");
   if (!app) throw new Error("#app missing from index.html");
 
@@ -121,7 +123,7 @@ async function boot(): Promise<void> {
 
   theme.onChange((resolved) => {
     map.setTheme(resolved);
-    legend.paintRamp();
+    applyWaveBandVars(resolved);
   });
   sheet.onSnapChange(() => map.resize());
   window.addEventListener("resize", () => map.resize());
@@ -174,7 +176,10 @@ async function boot(): Promise<void> {
 
     const field = await waves.field(selection.lake.id);
     if (token !== waterToken || !field) return;
-    const minRun = await minRunFt(WAVES.defaultMinRunFt);
+    const [minRun, limits] = await Promise.all([
+      minRunFt(WAVES.defaultMinRunFt),
+      waveLimits(WAVES.defaultLimits),
+    ]);
     if (token !== waterToken || !slot.isConnected) return;
 
     const briefed = briefing.store.briefing;
@@ -188,6 +193,7 @@ async function boot(): Promise<void> {
       lake: selection.lake,
       field,
       minRunFt: minRun,
+      limits,
       initialWind: defaultWindFor(briefed, selection.lake.id),
       forecast: forecastWindFor(briefed, selection.lake.id),
       onChange: paint,

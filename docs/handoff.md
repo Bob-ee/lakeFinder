@@ -45,7 +45,7 @@ config (no new Michigan constants). A state without regulation data must read "n
 | `api/` FastAPI, uv | Briefing generator, in-process scheduler (06/09/12/15/18/20/22 local), settings, airport lookup, wave-field reader, regions, `home_water` with observations and marine second opinion. `/api/wind/*` is an empty slot. | `cd api && uv run pytest -q` (339) · `uv run ruff check .` |
 | `web/` Vite, TS, MapLibre | Map, search, 3-snap sheet / iPad panel, client-side rules engine, Briefing tab + chip, settings dialog, Water section (wind dial, region list), wave overlay + legend, home-water action. No test runner. | `cd web && npm run typecheck && npm run build` |
 | hosting | **Deployed on `labmac`** (Bobby's home server, tailnet): https://labmac.tail22b52.ts.net:10000. `deploy/push.sh labmac` updates it. `docker-compose.yml` is the unused alternative. | `curl https://labmac.tail22b52.ts.net:10000/api/health` |
-| data | `data/out/` is a full pack (gitignored): 12,571 water bodies (10,783 lake, 1,780 river, 5 great_lake incl. Lake St. Clair, 3 connecting_water); 942 of 1,118 active DNR rules matched; verdicts 544 restricted / 299 conditional / 11,240 clear / 488 unknown; 81,436 wave points over 1,286 water bodies, 8,552 with depth. | `uv run seaplane all` rebuilds |
+| data | `data/out/` is a full pack (gitignored): 12,571 water bodies (10,783 lake, 1,780 river, 5 great_lake incl. Lake St. Clair, 3 connecting_water); 942 of 1,118 active DNR rules matched; verdicts 544 restricted / 299 conditional / 11,240 clear / 488 unknown; 81,436 wave points over 1,286 water bodies, 41,015 with depth (after the 2026-09-25 rebuild). | `uv run seaplane all` rebuilds |
 
 Run it locally: `cd api && uv run seaplane-api` · `cd web && npm run dev` · open `/?briefing=1` or `/?lake=657423876`
 (Lake St. Clair; Detroit River is `1625759164`). One-off briefing without touching the live file:
@@ -111,18 +111,23 @@ connects (12 lakes went restricted to conditional; see the contract's parsing ru
    gate); "Saugatuck Harbor" (Allegan) is unattached and may be a Kalamazoo River rule, not Lake Michigan.
 2. "LAKE OAKLAND CANAL" names only a canal in the reverse word order and stays lakewide. The trailing form is
    ambiguous against "HI-LAND LAKE AND CONNECTING CANALS AND CHANNELS", which names the lake too.
-3. `no_vessels` and `no_motorboats` ignore `scope` in `rules.json`; a channel-only rule of either type would still
-   read restricted. None exists in the corpus today.
+3. ~~`no_vessels` and `no_motorboats` ignore `scope`~~ **done 2026-09-25** (831fbac): zone-scoped ones are
+   `conditional`. The corpus did have them: 12 records on 12 water bodies (Rouge River ×4, Saint Joseph River ×3, Au
+   Train, Flint, Pere Marquette, Two Hearted, Whites Lake) go restricted → conditional. Needs `seaplane classify` +
+   `build` + `deploy/push.sh labmac` to reach the served data.
 4. MAC synthetic records have the same latent id collision the federal ones had (each entry carries its own
    `lake_id`, and the record is not loaded yet).
 5. Antrim "Clam river" is unmatched: no Clam River polygon in the county's river layer.
 
 **C. Wave field, second pass.**
-- Wind per region instead of one forecast per water body (St. Clair is 25 miles across); the 0.1° forecast grid
-  already exists in `api/.../lakes.py`.
-- Depth beyond the NCEI Erie / St. Clair grid: other NCEI Great Lakes grids (same `.flt` format, see
-  `bathymetry.py`), GLOBathy as an optional lake-level depth nationwide. About 40 St. Clair shore points read
-  depth-unknown (DEM shore ramp) and come out higher than their neighbors.
+- **Wind per region: done 2026-09-25** (f96939a). Each region takes the forecast of its centroid's 0.1° cell
+  (KONZ: 63 cells instead of 45, still two Open-Meteo calls); `regions[]` rows carry `wind`. Candidates also keep only
+  regions with water inside `radius_nm` (before, a far region could be a candidate's "best water"); the home water
+  keeps all. First real run: St. Clair regions ranged 4-12 kt in one morning.
+- **Depth: done 2026-09-25** (c507542): every NCEI Great Lakes grid (Erie, Huron, Michigan, Superior; data-driven
+  `GRID_SOURCES` with bboxes) plus a 2-cell shore snap. Points with depth 8,552 → 41,015 of 81,436. 131 St. Clair
+  shoal / Flats points stay unknown (grid above datum, nothing wet within 2 cells); ~60% of the St. Clair River too
+  (the Erie grid has it as land). Still open: GLOBathy as an optional lake-level depth nationwide.
 - Lake Huron and Lake Superior polygons stop at the international line (rays through that edge count as the 100 km
   cap). Whole-lake polygons come with NHD.
 - Saved landing spots snapping to the nearest sample point (`web/src/saved/` is still a stub); `steep_chop` exists in

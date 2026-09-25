@@ -406,6 +406,9 @@ function rankedLakeRow(row: BriefingLake, b: Briefing, opts: BriefingCardDeps): 
   if (row.hs_open_in != null && row.hs_open_in - row.hs_in >= OPEN_WATER_GAP_IN) {
     trailing.append(el("span", "brief-trail-sub", `open water ${row.hs_open_in} in`));
   }
+  // The row's wind is its best region's own forecast, which on a big lake can differ from
+  // the airport's; it is what the wave figure above was computed from.
+  trailing.append(el("span", "brief-trail-sub", `wind ${formatWind(row.wind)}`));
   trailing.append(
     el("span", "brief-trail-sub", `${row.distance_nm} nm · ${pad3(row.bearing_deg)}°`),
   );
@@ -541,7 +544,10 @@ function homeWaterSection(
   return sec;
 }
 
-/** One region of the home water: score bar, label, wave height, run. Tapping frames it. */
+/**
+ * One region of the home water: score bar, label, wave height, then that region's own wind
+ * over its run. Tapping frames it.
+ */
 function homeRegionRow(
   row: BriefingLake,
   region: BriefingRegion,
@@ -558,15 +564,19 @@ function homeRegionRow(
   item.append(el("span", "brief-region-label", region.label));
 
   const trail = el("span", "brief-region-trail");
-  if (usable) {
-    trail.append(el("span", "brief-region-in", `${region.hs_in} in`));
-    if (region.run_ft != null) {
-      trail.append(el("span", "brief-region-run", `${formatThousands(region.run_ft)} ft`));
-    }
-  } else {
-    trail.append(el("span", "brief-region-run", "run too short into this wind"));
+  if (usable) trail.append(el("span", "brief-region-in", `${region.hs_in} in`));
+  const detail = el("span", "brief-region-detail");
+  if (region.wind) detail.append(el("span", "brief-region-wind", formatWind(region.wind)));
+  if (!usable) {
+    detail.append(el("span", "brief-region-run", "run too short into this wind"));
+  } else if (region.run_ft != null) {
+    detail.append(el("span", "brief-region-run", `${formatThousands(region.run_ft)} ft`));
   }
+  trail.append(detail);
   item.append(trail);
+  if (region.wind) {
+    item.title = `${region.label}: wind ${formatWind(region.wind)}`;
+  }
 
   item.addEventListener("click", () => opts.onSelectRegion(row.id, region.lat, region.lon));
   return item;
@@ -670,3 +680,4 @@ function scorePill(score: Score, text?: string): HTMLElement {
 function pad3(n: number): string {
   return String(Math.round(n)).padStart(3, "0");
 }
+

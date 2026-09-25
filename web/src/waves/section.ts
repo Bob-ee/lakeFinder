@@ -6,7 +6,6 @@ import {
 } from "../config";
 import type { Lake } from "../types";
 import { el, formatThousands } from "../ui/format";
-import { currentTheme } from "../ui/theme";
 import {
   DEPTH_UNKNOWN,
   FETCH_UNIT_M,
@@ -18,7 +17,7 @@ import {
 import type { WavePoint, WaveRegion } from "@rules/waves/index.js";
 import { WindControl } from "./control";
 import type { WaveField } from "./load";
-import { waveColor } from "./ramp";
+import { BAND_WORD, waveBand, type WaveBand, type WaveLimits } from "./ramp";
 import type { ForecastWind, WindSetting } from "./wind";
 
 /**
@@ -35,6 +34,8 @@ export interface WaveState {
   field: WaveField;
   wind: WindSetting;
   minRunFt: number;
+  /** The pilot's wave limits, which band every point and region. */
+  limits: WaveLimits;
   regions: WaveRegion[];
 }
 
@@ -43,6 +44,8 @@ export interface WaterSectionOptions {
   field: WaveField;
   /** `limits.min_run_ft` from the briefing settings, or the contract's 2,000 ft fallback. */
   minRunFt: number;
+  /** `limits.wave_ok_in` / `wave_max_in`, or the contract defaults. */
+  limits: WaveLimits;
   initialWind: WindSetting;
   /** The briefing's wind for this water body, when there is one. */
   forecast: ForecastWind | null;
@@ -66,6 +69,7 @@ export class WaterSection {
       field: opts.field,
       wind: { ...opts.initialWind },
       minRunFt: opts.minRunFt,
+      limits: opts.limits,
       regions: [],
     };
 
@@ -154,13 +158,8 @@ export class WaterSection {
     row.setAttribute("role", "listitem");
     row.classList.toggle("is-unusable", !usable);
 
-    const swatch = el("span", "wave-swatch");
-    swatch.style.setProperty(
-      "--wave-color",
-      waveColor(region.hs_in ?? region.hs_all_in, currentTheme()),
-    );
-    swatch.setAttribute("aria-hidden", "true");
-    row.append(swatch);
+    const band = waveBand(region.hs_in, usable, this.state.limits);
+    row.append(waveSwatch(band));
 
     const text = el("span", "wave-region-text");
     const nameLine = el("span", "wave-region-name", region.label);
@@ -186,7 +185,7 @@ export class WaterSection {
     row.append(trail);
 
     row.title = usable
-      ? `${region.label}: ${region.hs_in} in over ${region.n_usable} of ${region.n_points} sample points, ` +
+      ? `${region.label}: ${region.hs_in} in, ${BAND_WORD[band]}, over ${region.n_usable} of ${region.n_points} sample points, ` +
         `${formatThousands(region.run_ft)} ft of run into this wind`
       : `${region.label}: no sample point has ${formatThousands(this.state.minRunFt)} ft of run into this wind`;
 
@@ -224,4 +223,15 @@ export class WaterSection {
     }
     return best;
   }
+}
+
+/**
+ * The same mark the map draws for a band, as a small DOM dot: the key and the region list
+ * both use it, so the shape cue (heavy ring for over the limit, hollow for no run) reads the
+ * same everywhere. Colours come from the CSS variables `applyWaveBandVars` sets.
+ */
+export function waveSwatch(band: WaveBand): HTMLElement {
+  const swatch = el("span", `wave-swatch wave-swatch--${band}`);
+  swatch.setAttribute("aria-hidden", "true");
+  return swatch;
 }

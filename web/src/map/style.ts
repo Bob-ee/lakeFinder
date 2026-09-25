@@ -8,7 +8,7 @@ import type {
 import { BASEMAP_ASSETS, DATA_FILES, USABLE_WATER_MIN_ZOOM, WAVES } from "../config";
 import type { ResolvedTheme } from "../ui/theme";
 import type { Verdict } from "../types";
-import { WAVE_DOT_RING, waveColorExpression } from "../waves/ramp";
+import { waveBandPaint } from "../waves/ramp";
 
 export const SOURCE = {
   basemap: "protomaps",
@@ -33,6 +33,7 @@ export const LAYER = {
   airports: "overlay-airports",
   airportLabels: "overlay-airport-labels",
   wavePoints: "wave-points-circle",
+  wavePointLabels: "wave-point-labels",
   waveRegionLabels: "wave-region-labels",
 } as const;
 
@@ -272,18 +273,23 @@ function overlayLayers(theme: ResolvedTheme): LayerSpecification[] {
 }
 
 /**
- * The selected water body's wave field: one circle per sample point, coloured by the wave
- * height for the wind the sheet is asking about, and the region labels at their
- * representative points once the zoom can fit them.
+ * The selected water body's wave field: one circle per sample point, banded against the
+ * pilot's wave limits (see waves/ramp.ts), the region labels with their inches, and, zoomed
+ * in, each point's own inches.
  *
- * Two plain GeoJSON sources that start empty and are updated in place. They are always in
- * the style, even with no selection, so switching lakes is one `setData` rather than a
- * source add and a layer add; an empty collection costs nothing to render. Both layers sit
- * last, so the wave field draws over the verdict outlines and the selection highlight
- * instead of hiding under them.
+ * Plain GeoJSON sources that start empty and are updated in place. They are always in the
+ * style, even with no selection, so switching lakes is one `setData` rather than a source
+ * add and a layer add; an empty collection costs nothing to render. The layers sit last, so
+ * the wave field draws over the verdict outlines and the selection highlight instead of
+ * hiding under them, and region labels sit above point labels so they win placement.
  */
 function waveLayers(theme: ResolvedTheme): LayerSpecification[] {
   const dark = theme === "dark";
+  const band = waveBandPaint(theme);
+  const scale = band.scale as ExpressionSpecification;
+  const text = dark ? "#f0f3f6" : "#0b1014";
+  const halo = dark ? "#0d1117" : "#ffffff";
+  const muted = dark ? "#b1bac4" : "#4b535d";
   return [
     {
       id: LAYER.wavePoints,
@@ -292,15 +298,51 @@ function waveLayers(theme: ResolvedTheme): LayerSpecification[] {
       paint: {
         // Small enough that a 400-point lake reads as a field of dots with water showing
         // between them rather than as a blanket over the lake, and big enough to still be
-        // there at the zoom a whole Great Lake fits on a phone.
-        "circle-radius": ["interpolate", ["linear"], ["zoom"], 7, 1.6, 10, 3, 13, 6, 16, 11],
-        "circle-color": waveColorExpression(theme) as unknown as ExpressionSpecification,
-        // A point with too short a run into this wind is not a landing spot, so it fades
-        // rather than disappearing: it was measured, it just is not an answer.
-        "circle-opacity": ["case", ["get", "usable"], 0.92, 0.35],
-        "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 7, 0.5, 12, 1.2],
-        "circle-stroke-color": WAVE_DOT_RING[theme],
-        "circle-stroke-opacity": ["case", ["get", "usable"], 0.75, 0.3],
+        // there at the zoom a whole Great Lake fits on a phone. Over the limit is bigger.
+        "circle-radius": [
+          "interpolate", ["linear"], ["zoom"],
+          7, ["*", 1.8, scale],
+          10, ["*", 3.2, scale],
+          13, ["*", 6, scale],
+          16, ["*", 10, scale],
+        ],
+        "circle-color": band.fill as ExpressionSpecification,
+        "circle-opacity": band.fillOpacity as ExpressionSpecification,
+        // The ring is the second cue after lightness: a thin surface-coloured edge on the
+        // two calmer bands, a heavy ink ring on over the limit, and on "no usable run"
+        // the ring is all there is.
+        "circle-stroke-width": [
+          "interpolate", ["linear"], ["zoom"],
+          7, ["match", ["get", "band"], "over", 1, "norun", 0.9, 0.5],
+          12, ["match", ["get", "band"], "over", 2.2, "norun", 1.8, 1.1],
+          16, ["match", ["get", "band"], "over", 3, "norun", 2.4, 1.4],
+        ],
+        "circle-stroke-color": band.ring as ExpressionSpecification,
+        "circle-stroke-opacity": 0.95,
+      },
+    },
+    {
+      id: LAYER.wavePointLabels,
+      type: "symbol",
+      source: SOURCE.wavePoints,
+      minzoom: WAVES.pointLabelMinZoom,
+      layout: {
+        "text-field": ["get", "text"],
+        "text-font": ["Noto Sans Medium"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 13, 11, 16, 13],
+        // Beside the dot rather than on it, so the band colour stays visible; the anchor
+        // moves round the dot before the label gives up its place.
+        "text-variable-anchor": ["left", "right", "top", "bottom"],
+        "text-radial-offset": ["interpolate", ["linear"], ["zoom"], 13, 0.7, 16, 1.0],
+        "text-padding": 3,
+        "text-allow-overlap": false,
+        "text-optional": true,
+        "symbol-sort-key": ["get", "hs_in"],
+      },
+      paint: {
+        "text-color": ["case", ["get", "usable"], text, muted],
+        "text-halo-color": halo,
+        "text-halo-width": 1.6,
       },
     },
     {
@@ -309,21 +351,24 @@ function waveLayers(theme: ResolvedTheme): LayerSpecification[] {
       source: SOURCE.waveRegions,
       minzoom: WAVES.labelMinZoom,
       layout: {
-        "text-field": ["get", "label"],
-        "text-font": ["Noto Sans Regular"],
-        "text-size": ["interpolate", ["linear"], ["zoom"], 10, 11, 14, 14],
-        "text-offset": [0, -1.2],
+        "text-field": ["get", "text"],
+        "text-font": ["Noto Sans Medium"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 9, 11.5, 14, 14.5],
+        "text-offset": [0, -0.9],
         "text-anchor": "bottom",
-        "text-padding": 6,
+        "text-padding": 4,
+        "text-max-width": 12,
         // Rather than stack labels on top of each other on a crowded bay, drop the ones
-        // that do not fit; the sheet's list always has all of them.
+        // that do not fit, rougher first; the sheet's list always has all of them.
+        "symbol-sort-key": ["get", "rank"],
         "text-allow-overlap": false,
         "text-optional": true,
       },
       paint: {
-        "text-color": dark ? "#e6edf3" : "#11181c",
-        "text-halo-color": dark ? "#0d1117" : "#ffffff",
-        "text-halo-width": 1.8,
+        "text-color": text,
+        "text-halo-color": halo,
+        "text-halo-width": 2.4,
+        "text-halo-blur": 0.3,
       },
     },
   ];

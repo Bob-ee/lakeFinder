@@ -194,8 +194,15 @@ export const WAVES = {
   fallbackWind: { dir: 270, kt: 10 },
   /** Cockpit-usable range for the speed control. Above this nobody is landing. */
   maxWindKt: 35,
-  /** Region labels appear on the map from here up; below it they collide. */
-  labelMinZoom: 10.5,
+  /** Contract defaults for `limits.wave_ok_in` / `wave_max_in` when the service is not reachable. */
+  defaultLimits: { okIn: 8, maxIn: 12 },
+  /**
+   * Region labels ("Anchor Bay 6 in") from here up, which is about where a big lake's dots
+   * separate. Collision drops the ones that do not fit, calmest region placed first.
+   */
+  labelMinZoom: 9,
+  /** Per-point inches from here up; collision keeps them from piling on each other. */
+  pointLabelMinZoom: 13,
 } as const;
 
 /**
