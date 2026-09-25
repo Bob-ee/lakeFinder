@@ -1,17 +1,29 @@
 {
-  "version": "2026-09-19",
+  "version": "2026-09-25",
   "aircraft": { "name": "SeaRey", "min_chord_ft": 2000, "min_takeoff_mph": 40 },
   "aggregate": "worst_of",
   "rules": [
     {
+      "id": "no-vessels-zone",
+      "when": { "restriction_type": "no_vessels", "scope": "zone" },
+      "verdict": "conditional",
+      "note": "All vessels are prohibited in {scope_description}; a seaplane on the water counts as a vessel there. The rest of the water may be usable."
+    },
+    {
       "id": "no-vessels",
-      "when": { "restriction_type": "no_vessels" },
+      "when": { "restriction_type": "no_vessels", "scope": "lakewide" },
       "verdict": "restricted",
       "note": "All vessels are prohibited here; a seaplane on the water counts as a vessel."
     },
     {
+      "id": "no-motorboats-zone",
+      "when": { "restriction_type": "no_motorboats", "scope": "zone" },
+      "verdict": "conditional",
+      "note": "Motorboats are prohibited in {scope_description} (the electric-only exception does not help a seaplane); the rest of the water may be usable."
+    },
+    {
       "id": "no-motorboats",
-      "when": { "restriction_type": "no_motorboats" },
+      "when": { "restriction_type": "no_motorboats", "scope": "lakewide" },
       "verdict": "restricted",
       "note": "Motorboats are prohibited (the electric-only exception does not help a seaplane)."
     },

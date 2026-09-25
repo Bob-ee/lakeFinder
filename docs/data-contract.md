@@ -81,8 +81,8 @@ One record per (lake mention, rule). `restrictions.json` is `{ "<restriction_id>
 
 | value | meaning | default verdict |
 |---|---|---|
-| `no_vessels` | all vessels / boating prohibited | restricted |
-| `no_motorboats` | motorboats prohibited (electric-only counts) | restricted |
+| `no_vessels` | all vessels / boating prohibited | lakewide: restricted; zone: conditional |
+| `no_motorboats` | motorboats prohibited (electric-only counts) | lakewide: restricted; zone: conditional |
 | `slow_no_wake` | slow-no-wake / no-wake speed; may carry `hours` or `season` | lakewide: restricted; zone: conditional; with hours/season: conditional |
 | `no_high_speed` | high-speed boating / planing prohibited; may carry `hours`/`season` | same as slow_no_wake |
 | `high_speed_hours` | high speed permitted only during `hours` (or `season`) | conditional |

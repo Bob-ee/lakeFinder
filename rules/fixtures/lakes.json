@@ -133,5 +133,23 @@
     ],
     "options": {},
     "expect": {"verdict": "restricted", "flags": []}
+  },
+  {
+    "name": "a no_vessels rule naming only a connecting channel is a zone, not lakewide restricted",
+    "lake": {"id": 117, "name": "Channel Zone Lake", "chord_ft": 2500, "area_acres": 60, "public_access": true, "federal_unit": null},
+    "restrictions": [
+      {"restriction_id": "b15", "rule_id": null, "restriction_type": "no_vessels", "scope": "zone", "scope_description": "the channel connecting to Twin Lake", "hours": null, "season": null, "speed_mph": null, "needs_review": false}
+    ],
+    "options": {},
+    "expect": {"verdict": "conditional", "flags": []}
+  },
+  {
+    "name": "a no_motorboats rule naming only a connecting canal is a zone, not lakewide restricted",
+    "lake": {"id": 118, "name": "Canal Zone Lake", "chord_ft": 2500, "area_acres": 60, "public_access": true, "federal_unit": null},
+    "restrictions": [
+      {"restriction_id": "b16", "rule_id": null, "restriction_type": "no_motorboats", "scope": "zone", "scope_description": "the canal connecting to Mill Pond", "hours": null, "season": null, "speed_mph": null, "needs_review": false}
+    ],
+    "options": {},
+    "expect": {"verdict": "conditional", "flags": []}
   }
 ]

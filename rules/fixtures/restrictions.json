@@ -25,7 +25,7 @@
     "expect": {"matched_rule": "no-vessels", "verdict": "restricted"}
   },
   {
-    "name": "no_vessels in a zone still restricted",
+    "name": "no_vessels in a zone is conditional, not lakewide restricted",
     "restriction": {
       "restriction_id": "aaaaaaaaaaa2",
       "rule_id": "R 281.700.2",
@@ -47,7 +47,7 @@
       "needs_review": false,
       "lake_ids": [1]
     },
-    "expect": {"matched_rule": "no-vessels", "verdict": "restricted"}
+    "expect": {"matched_rule": "no-vessels-zone", "verdict": "conditional"}
   },
   {
     "name": "no_motorboats lakewide",
@@ -75,7 +75,7 @@
     "expect": {"matched_rule": "no-motorboats", "verdict": "restricted"}
   },
   {
-    "name": "no_motorboats in a zone still restricted",
+    "name": "no_motorboats in a zone is conditional, not lakewide restricted",
     "restriction": {
       "restriction_id": "aaaaaaaaaaa4",
       "rule_id": null,
@@ -97,7 +97,7 @@
       "needs_review": false,
       "lake_ids": [2]
     },
-    "expect": {"matched_rule": "no-motorboats", "verdict": "restricted"}
+    "expect": {"matched_rule": "no-motorboats-zone", "verdict": "conditional"}
   },
   {
     "name": "slow_no_wake lakewide, no hours or season",
