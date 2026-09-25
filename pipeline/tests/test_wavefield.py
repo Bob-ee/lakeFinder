@@ -481,6 +481,111 @@ def test_depth_reader_handles_big_endian(tmp_path):
     assert grid.depth_dm([-83.0], [42.5]).tolist() == [40]
 
 
+def test_shore_snap_takes_nearest_wet_cell_within_two_cells(tmp_path):
+    # Row 0 is lake, rows 1-4 are the DEM shore ramp (land above the datum), row 5 is nodata.
+    values = np.array(
+        [
+            [-3.0, -3.0, -4.0, -3.0, -3.0, -3.0],
+            [0.2, 0.2, 0.2, 0.2, 0.2, 0.2],
+            [0.4, 0.4, 0.4, 0.4, 0.4, 0.4],
+            [0.6, 0.6, 0.6, 0.6, 0.6, 0.6],
+            [0.8, 0.8, 0.8, 0.8, 0.8, 0.8],
+            [-9999.0] * 6,
+        ]
+    )
+    grid = _tiny_grid(tmp_path, values, ulx=-83.0, uly=42.5, cell=0.001)
+    lon = [-82.998, -82.998, -82.998, -82.998, -82.998]
+    lat = [42.499, 42.498, 42.497, 42.496, 42.495]  # rows 1, 2, 3, 4, 5
+    exact = grid.depth_dm(lon, lat)
+    assert exact.tolist() == [wf.DEPTH_UNKNOWN] * 5
+    snapped = grid.depth_dm(lon, lat, snap_cells=2)
+    # One and two cells from the lake: straight up (4.0 m under the point's column). Three cells out
+    # and beyond (and the nodata row) stay unknown: no depth is invented where the grid has none.
+    assert snapped.tolist() == [40, 40, wf.DEPTH_UNKNOWN, wf.DEPTH_UNKNOWN, wf.DEPTH_UNKNOWN]
+
+
+def test_shore_snap_prefers_nearest_then_deeper(tmp_path):
+    values = np.array(
+        [
+            [-9.0, 0.5, 0.5, 0.5, -2.0],
+            [0.5, 0.5, 0.5, 0.5, 0.5],
+            [-1.0, 0.5, 0.5, 0.5, -5.0],
+        ]
+    )
+    grid = _tiny_grid(tmp_path, values, ulx=-83.0, uly=42.5, cell=0.001)
+    # From row 1, col 1 the nearest wet cells are (0,0) and (2,0), one diagonal step each (col 4 is
+    # three cells away, outside the radius); of the tie the deeper one (9 m) wins.
+    got = grid.depth_dm([-82.999], [42.499], snap_cells=2)
+    assert got.tolist() == [90]
+    # A wet cell in the point's own cell is never replaced by a deeper neighbour.
+    assert grid.depth_dm([-83.0], [42.498], snap_cells=2).tolist() == [10]
+
+
+def test_grids_exact_hit_in_any_grid_beats_a_snap(tmp_path):
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    # Grid a: the point's cell is land with lake one cell west. Grid b: the same point is wet.
+    a = _tiny_grid(tmp_path / "a", np.array([[-7.0, 0.3, 0.3]]), ulx=-83.0, uly=42.5)
+    b = _tiny_grid(tmp_path / "b", np.array([[0.3, -1.5, 0.3]]), ulx=-83.0, uly=42.5)
+    lon, lat = [-82.999, -82.998, -70.0], [42.5, 42.5, 42.5]
+    assert bathymetry.DepthGrids([a, b]).depth_dm(lon, lat).tolist() == [15, 70, wf.DEPTH_UNKNOWN]
+    # In list order the first grid with an exact wet cell wins.
+    c = _tiny_grid(tmp_path, np.array([[-2.0, -2.0, -2.0]]), ulx=-83.0, uly=42.5)
+    assert bathymetry.DepthGrids([c, b]).depth_dm([-82.999], [42.5]).tolist() == [20]
+    assert bathymetry.DepthGrids([a, b], snap_cells=0).depth_dm(lon, lat).tolist() == [
+        15, wf.DEPTH_UNKNOWN, wf.DEPTH_UNKNOWN
+    ]
+
+
+def test_grid_selection_by_bbox():
+    keys = [g.key for g in bathymetry.grids_for_bbox((-83.2, 42.2, -82.4, 42.7))]  # Lake St. Clair
+    assert keys == ["bathymetry_erie"]
+    keys = [g.key for g in bathymetry.grids_for_bbox((-84.6, 45.7, -84.4, 45.9))]  # Straits of Mackinac
+    assert keys == ["bathymetry_huron", "bathymetry_michigan"]
+    assert bathymetry.grids_for_bbox((-100.0, 30.0, -99.0, 31.0)) == []
+    whole = [g.key for g in bathymetry.grids_for_bbox((-90.5, 41.6, -82.3, 48.4))]
+    assert whole == [g.key for g in bathymetry.GRID_SOURCES]
+    for src in bathymetry.GRID_SOURCES:
+        w, s, e, n = src.bbox
+        assert w < e and s < n
+        assert src.url.endswith(src.filename) and src.folder == src.filename.split(".")[0]
+
+
+def test_grid_datasets_are_registered_from_the_source_list():
+    from seaplane_pipeline import gis
+    from seaplane_pipeline.config import MICHIGAN_BBOX
+
+    for src in bathymetry.grids_for_bbox(MICHIGAN_BBOX):
+        ds = gis.DATASETS[src.key]
+        assert (ds.filename, ds.url, ds.store) == (src.filename, src.url, "cache")
+
+
+def test_load_grid_reads_every_cached_grid(tmp_path, monkeypatch):
+    import io
+    import tarfile
+
+    from seaplane_pipeline.config import Config
+
+    monkeypatch.setattr(Config, "data_dir", property(lambda self: tmp_path))
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    src = bathymetry.GRID_SOURCES[1]
+    with tarfile.open(cache / src.filename, "w:gz") as tf:
+        for name, payload in (
+            (f"{src.folder}/{src.folder}.flt", np.array([[-6.0]], dtype="<f4").tobytes()),
+            (
+                f"{src.folder}/{src.folder}.hdr",
+                b"NCOLS 1\nNROWS 1\nULXMAP -83.0\nULYMAP 44.0\nXDIM 0.001\nYDIM 0.001\nNODATA -9999\n",
+            ),
+        ):
+            info = tarfile.TarInfo(name)
+            info.size = len(payload)
+            tf.addfile(info, io.BytesIO(payload))
+    grids = bathymetry.load_grid(Config())
+    assert grids is not None and len(grids.grids) == 1
+    assert grids.depth_dm([-83.0], [44.0]).tolist() == [60]
+
+
 def test_no_bathymetry_means_unknown_everywhere(tmp_path, monkeypatch):
     from seaplane_pipeline.config import Config
 

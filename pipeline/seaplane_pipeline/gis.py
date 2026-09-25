@@ -25,6 +25,7 @@ from pathlib import Path
 
 import httpx
 
+from .bathymetry import grids_for_bbox
 from .config import GNIS_STATES, MICHIGAN_BBOX, USER_AGENT, Config
 
 log = logging.getLogger(__name__)
@@ -218,19 +219,6 @@ DATASETS: dict[str, Dataset] = {
         params={"where": "STATE='MI'", "outFields": "*", **_BBOX_PARAMS},
         note="490 Michigan airports/heliports/seaplane bases, context layer only.",
     ),
-    "bathymetry_erie": Dataset(
-        key="bathymetry_erie",
-        filename="erie_lld.flt.tar.gz",
-        store="cache",
-        kind="direct",
-        url="https://www.ngdc.noaa.gov/mgg/greatlakes/erie/data/binary_float/erie_lld.flt.tar.gz",
-        note=(
-            "NCEI 'Bathymetry of Lake Erie and Lake Saint Clair' (DOI 10.7289/V5KS6PHK), the lld grid: "
-            "7,201 x 2,401 cells of 3 arc-seconds over 84W-78W / 41N-43N, NAD83, metres relative to Low "
-            "Water Datum positive up, nodata -9999. 22.5 MB packed, 69 MB raw ESRI float + .hdr, so it "
-            "needs no raster library. Covers Lake St. Clair; every other water body stays depth-unknown."
-        ),
-    ),
 }
 
 # GNIS Domestic Names, one bulk file per state (docs/gis-sources.md addendum). The state list lives in
@@ -255,6 +243,13 @@ def gnis_dataset(state: str) -> Dataset:
 
 for _state in GNIS_STATES:
     DATASETS[f"gnis_{_state.lower()}"] = gnis_dataset(_state)
+
+# Depth grids: the region takes every grid in `bathymetry.GRID_SOURCES` whose bbox meets its own, so a
+# grid is added to that list and nowhere else. Large and date-independent, so cached.
+for _grid in grids_for_bbox(MICHIGAN_BBOX):
+    DATASETS[_grid.key] = Dataset(
+        key=_grid.key, filename=_grid.filename, store="cache", kind="direct", url=_grid.url, note=_grid.note
+    )
 
 
 def dest_path(cfg: Config, ds: Dataset) -> Path:

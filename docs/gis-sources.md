@@ -498,6 +498,15 @@ from this Mac (406 on the main host and the kumi mirror).
 - Great Lakes and St. Clair: NOAA NCEI "Bathymetry of Lake Erie and Lake Saint Clair" (DOI 10.7289/V5KS6PHK), grid
   extract at `https://www.ncei.noaa.gov/maps/grid-extract/`, GeoTIFF / NetCDF / XYZ, meters below Low Water Datum.
   Cell size for St. Clair not confirmed (other NCEI lake grids are 3 arc-seconds).
+- **2026-09-25: the other NCEI lake grids, wired in.** Same recipe as Erie, one archive per lake at
+  `https://www.ngdc.noaa.gov/mgg/greatlakes/{lake}/data/binary_float/{lake}_lld.flt.tar.gz`, all 3 arc-second NAD83
+  float grids in metres relative to Low Water Datum, positive up, nodata -9999 (checked against each `.hdr`; deepest
+  cells -220 Huron, -275 Michigan, -401 Superior match the published maxima). Huron (doi:10.7289/V5G15XS5) 40 MB,
+  84.5W-79.68W / 43N-46.5N, covers Saginaw Bay; Michigan (doi:10.7289/V5B85627) 47 MB, 88W-84.5W / 41.62N-46.09N;
+  Superior 100 MB, 92.2W-84W / 46N-49.5N, which NCEI labels a draft ("incomplete", no DOI). Erie's grid tops out at
+  43N and has the St. Clair River mostly as land cells, so about 60% of that river stays depth-unknown. Ontario
+  (doi:10.7289/V56H4FBH) exists in the same form and is not needed for Michigan. The list and its bboxes live in
+  `pipeline/seaplane_pipeline/bathymetry.py` (`GRID_SOURCES`); `seaplane fetch --only bathymetry_<lake>`.
 - Everywhere else: GLOBathy (modeled depth for 1.4 M lakes, CC0) as an optional mean / max depth attribute. State
   lake maps and LAGOS-US cover only well-studied lakes.
 
