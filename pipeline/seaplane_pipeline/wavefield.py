@@ -126,9 +126,10 @@ MIN_SECTOR_POINTS = 3
 #: Baltimore Channel, 2 in" outranks Anchor Bay on the strength of one sample.
 MIN_NAMED_POINTS = 2
 
-#: Depth is only sampled on these kinds. The one grid in hand covers Lake Erie and Lake St. Clair, and
-#: a DEM cell under an inland lake carries that lake's *surface* elevation, so sampling everything
-#: would invent depths. "Everything outside the Great Lakes stays unknown for now" (data contract).
+#: Depth is only sampled on these kinds. The grids in hand are the NCEI Great Lakes grids
+#: (`bathymetry.GRID_SOURCES`), and a DEM cell under an inland lake carries that lake's *surface*
+#: elevation, so sampling everything would invent depths. "Everything outside the Great Lakes stays
+#: unknown for now" (data contract).
 DEPTH_KINDS = ("great_lake", "connecting_water")
 
 #: GNIS feature classes that can name part of a water body.

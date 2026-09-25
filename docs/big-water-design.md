@@ -121,5 +121,12 @@ them, since they exist only for the Great Lakes and coasts.
   up the Detroit River; inland water is subtracted from big water and connecting waters from the Great Lakes.
 - **Crosswind on water** is scored only when the run into the wind is too short and the long axis would have to be
   used; scoring it always made Lake St. Clair "marginal, crosswind" against its 28 mile chord.
+- **Depth on all of Michigan's big water (2026-09-25).** The NCEI Huron, Michigan and Superior grids joined the
+  Erie / St. Clair one as a source list with bboxes (`bathymetry.GRID_SOURCES`). The St. Clair shore points that
+  read depth-unknown were not nodata: their cells are the grid's shore ramp, 0.1 to 1 m *above* Low Water Datum,
+  so they read as land. A point now takes the nearest wet cell within 2 cells (~190 m) and stays unknown beyond.
+  Points with a depth went from 8,552 to 41,015 of 81,436 (St. Clair 1,766 to 1,824 of 1,955; Huron, Michigan,
+  Superior and the St. Marys River from none to nearly all). 131 St. Clair points stay unknown: shoal and Flats
+  cells above the datum with no lake cell within 2, left alone rather than guessed.
 - **First real output** (KONZ, wind 072/12 G14): Lake St. Clair regions from Campau / Fisher / Little Muscamoot Bay
   5 in, Big Muscamoot 8, Anchor Bay 11, L'anse Creuse 13, to the open middle 18 and the downwind west end 19.

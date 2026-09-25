@@ -385,7 +385,13 @@ the lake-level numbers (`lake_extents.json`, fetch = three-bin arc), exactly as 
   `bin = floor(d / 22.5 + 0.5) % 16` and reads `fetch[bin]`.
 - `run[8]`: length of the straight line through the point along bearing bin `i` (and `i + 8`) inside the water
   body's own usable water, both directions summed. Wind bin `b` reads `run[b % 8]`.
-- `depth_dm`: depth at the point in decimeters, `65535` when unknown.
+- `depth_dm`: depth at the point in decimeters below the grid's Low Water Datum, `65535` when unknown. Sources are
+  the grids in `bathymetry.GRID_SOURCES` (the NCEI Great Lakes grids today), each with a bbox; a region uses the
+  grids whose bbox meets its own. A cell is **wet** when its elevation is below the datum. Two passes, grids in
+  list order within each: (1) the point's own cell, first wet cell wins; (2) for points still unknown, the nearest
+  wet cell within **2 cells** (ground distance; a tie goes to the deeper cell). This absorbs the grids' shore ramp,
+  which does not line up with the water polygons. Farther than 2 cells from any wet cell (on land, at the datum or
+  above, at nodata, or off every grid) the depth stays unknown; nothing is interpolated.
 - `label`: index into `labels`. A GNIS name (feature classes Bay, Channel, Harbor; point inside or within 200 m of
   the water body) when one is near enough, otherwise a position descriptor: `middle`, or `north end`, `northeast
   side`, `east end`, `southeast side`, `south end`, `southwest side`, `west end`, `northwest side`. Every point has
