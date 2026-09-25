@@ -434,6 +434,9 @@ label's points. A label with no usable point has `hs_in: null`. Regions sort by 
 ties by label. The **best region** is the first with a non-null `hs_in`; the water body's open-water figure is the
 largest `hs_all_in`.
 
+The wind may differ per label (the briefing's per-region wind, below): the same rule applies, each label using its
+own `wind_dir` and `wind_kt`. The client's Water section still applies one wind, from its dial, to every label.
+
 ### Water body kinds
 
 `kind` is `lake | river | great_lake | connecting_water`. `great_lake` covers the Great Lakes and Lake St. Clair;
@@ -525,8 +528,10 @@ Unknown keys are rejected; missing keys are filled from the defaults, so an olde
             "hs_in": 3, "run_ft": 4100,          // the best region's numbers when regions is non-empty
             "region": "west end",                // best region label, null without a wave field
             "hs_open_in": 7,                     // roughest region (hs_all_in); null without a wave field
-            "regions": [{"label": "west end", "hs_in": 3, "run_ft": 4100, "lat": 42.61, "lon": -83.37}],  // calm to rough, max 4
-            "wind": {"dir": 250, "kt": 10, "gust": 15}, "distance_nm": 6.1, "bearing_deg": 118,
+            "regions": [{"label": "west end", "hs_in": 3, "run_ft": 4100, "lat": 42.61, "lon": -83.37,
+                         "wind": {"dir": 250, "kt": 10, "gust": 15}}],  // calm to rough, max 4; wind = that region's forecast
+            "wind": {"dir": 250, "kt": 10, "gust": 15}, // the best region's wind with a wave field, else the centroid's
+            "distance_nm": 6.1, "bearing_deg": 118,
             "verdict": "conditional", "frozen": false}],
  "home_water": {"id": 7654321, "name": "Lake St. Clair", "kind": "great_lake", "score": "favorable", "limiting": null,
                 "wind": {"dir": 250, "kt": 10, "gust": 15},
@@ -549,7 +554,15 @@ Region details: a region with no usable run into the wind keeps `hs_in: null`, a
 point so the map still has somewhere to go. When *no* region is usable the row is `unfavorable`, `limiting: "run"`,
 and reports the calmest region's label, its all-points wave height as `hs_in`, and its ungated median run. Region and
 lake-level waves are both computed at the gust. A big water body is a candidate when any of its sample points is
-within `radius_nm`; `distance_nm` / `bearing_deg` are to the best region's point. `observed[].name` is null for NDBC
+within `radius_nm`; `distance_nm` / `bearing_deg` are to the best region's point.
+
+**Wind per region.** Forecasts are taken on a 0.1° grid (a point is snapped to `round(lat / 0.1) × 0.1`,
+`round(lon / 0.1) × 0.1`). A water body without a wave field takes the cell of its centroid. One with a wave field
+takes, **for each region**, the cell of that region's centroid (mean lat / lon of the label's points), so the two ends
+of Lake St. Clair can see different winds; the row's `wind` is then the best region's (or, when no region is usable,
+the calmest region's), and each `regions[]` entry carries its own `wind`. A region whose cell has no forecast for
+the hour is left out of that hour. For a candidate, only regions with at least one point within `radius_nm` are
+scored, so the best water is never one the pilot would not fly to; `home_water` keeps every region. `observed[].name` is null for NDBC
 stations (the feed has no names). `marine_hs_in` is null when the marine model has no value or its grid point snapped
 more than 10 nm from the centroid (it otherwise reports the nearest Great Lake for an inland point).
 

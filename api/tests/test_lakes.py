@@ -316,13 +316,13 @@ def test_a_row_carries_the_region_columns_and_caps_the_list_at_four():
         7, home_lat=KPTK[0], home_lon=KPTK[1], extents=None, wave_field=field,
     )
     ranked = lakes_mod.rank_lakes(
-        [cand], {cand.cell: _uniform_series(10, 12, 270)}, NOON, LIMITS, frozen=False, n_lakes=8
+        [cand], {c: _uniform_series(10, 12, 270) for c in cand.cells}, NOON, LIMITS, frozen=False, n_lakes=8
     )
     row = ranked[0].to_row()
     assert row["region"] == "region 0"
     assert [r["label"] for r in row["regions"]] == ["region 0", "region 1", "region 2", "region 3"]
     assert row["hs_open_in"] >= row["hs_in"]
-    assert set(row["regions"][0]) == {"label", "hs_in", "run_ft", "lat", "lon"}
+    assert set(row["regions"][0]) == {"label", "hs_in", "run_ft", "lat", "lon", "wind"}
 
 
 def test_with_no_usable_run_anywhere_the_row_still_names_the_calmest_water():
@@ -338,7 +338,7 @@ def test_distance_is_measured_to_the_best_region_not_to_the_centroid():
     """Lake St. Clair's centroid is 20+ nm from half its bays; the row has to say where to go."""
     cand = _big_water()
     ranked = lakes_mod.rank_lakes(
-        [cand], {cand.cell: _uniform_series(18, 18, 270)}, NOON, LIMITS, frozen=False, n_lakes=8
+        [cand], {c: _uniform_series(18, 18, 270) for c in cand.cells}, NOON, LIMITS, frozen=False, n_lakes=8
     )
     row = ranked[0].to_row()
     bay = ranked[0].hour.chosen
@@ -397,7 +397,7 @@ def test_ranking_uses_the_region_distance_too():
     )
     series = _uniform_series(6, 8, 270)
     ranked = lakes_mod.rank_lakes(
-        [near_bay, pond], {near_bay.cell: series, pond.cell: series}, NOON, LIMITS,
+        [near_bay, pond], {c: series for c in [*near_bay.cells, *pond.cells]}, NOON, LIMITS,
         frozen=False, n_lakes=8,
     )
     assert [r.level for r in ranked] == ["favorable", "favorable"]
@@ -408,7 +408,7 @@ def test_ranking_uses_the_region_distance_too():
 def test_a_frozen_home_water_is_still_frozen_with_a_wave_field():
     cand = _big_water()
     ranked = lakes_mod.rank_lakes(
-        [cand], {cand.cell: _uniform_series(6, 8, 270)}, NOON, LIMITS, frozen=True, n_lakes=8
+        [cand], {c: _uniform_series(6, 8, 270) for c in cand.cells}, NOON, LIMITS, frozen=True, n_lakes=8
     )
     row = ranked[0].to_row()
     assert row["frozen"] is True and row["score"] == "unfavorable" and row["limiting"] == "ice"
@@ -453,3 +453,59 @@ def test_short_run_into_the_wind_is_marginal_when_the_long_axis_is_within_the_cr
     assert (ok.level, ok.limiting) == ("marginal", "xwind_water")
     too_much = lakes_mod.score_lake_hour(narrow, wind_dir_deg=90, wind_kt=14, gust_kt=14, limits=LIMITS)
     assert (too_much.level, too_much.limiting) == ("unfavorable", "run")
+
+
+def _two_ended_water(**kw):
+    """Two regions with identical water 0.5 deg apart, so each sits in its own forecast cell."""
+    index = [
+        {"id": 9, "name": "Long Water", "kind": "great_lake", "verdict": "clear", "chord_ft": 150000,
+         "chord_bearing_deg": 90, "lat": 42.65, "lon": -83.15}
+    ]
+    field = make_wave_field(
+        {9: [
+            wave_point(-83.40, 42.65, label=0, fetch_m=[8000.0] * 16, run_ft=[8000.0] * 8),
+            wave_point(-83.39, 42.66, label=0, fetch_m=[8000.0] * 16, run_ft=[8000.0] * 8),
+            wave_point(-82.90, 42.65, label=1, fetch_m=[8000.0] * 16, run_ft=[8000.0] * 8),
+        ]},
+        ["west end", "east end"],
+    )
+    base = {"home_lat": KPTK[0], "home_lon": KPTK[1], "extents": None, "wave_field": field}
+    base.update(kw)
+    return index, base
+
+
+def test_each_region_is_scored_in_the_wind_of_its_own_cell():
+    index, kw = _two_ended_water()
+    cand = lakes_mod.find_candidate(index, 9, **kw)
+    west, east = cand.region_cells[0], cand.region_cells[1]
+    assert west != east
+    assert set(lakes_mod.grid_cells([cand])) == {west, east}
+    forecasts = {west: _uniform_series(18, 24, 270), east: _uniform_series(6, 8, 270)}
+    row = lakes_mod.rank_lakes([cand], forecasts, NOON, LIMITS, frozen=False, n_lakes=8)[0].to_row()
+    assert row["region"] == "east end"  # same water, lighter wind
+    assert row["wind"] == {"dir": 270, "kt": 6, "gust": 8}  # the chosen region's wind, not the first cell's
+    winds = {r["label"]: r["wind"]["kt"] for r in row["regions"]}
+    assert winds == {"east end": 6, "west end": 18}
+    assert row["regions"][0]["hs_in"] < row["regions"][1]["hs_in"]
+
+
+def test_a_region_whose_cell_has_no_forecast_sits_the_hour_out():
+    index, kw = _two_ended_water()
+    cand = lakes_mod.find_candidate(index, 9, **kw)
+    forecasts = {cand.region_cells[0]: _uniform_series(10, 12, 270)}
+    row = lakes_mod.rank_lakes([cand], forecasts, NOON, LIMITS, frozen=False, n_lakes=8)[0].to_row()
+    assert [r["label"] for r in row["regions"]] == ["west end"]
+    assert lakes_mod.rank_lakes([cand], {}, NOON, LIMITS, frozen=False, n_lakes=8) == []
+
+
+def test_a_candidate_keeps_only_the_regions_with_water_inside_the_radius():
+    index, kw = _two_ended_water()
+    got = lakes_mod.select_candidates(
+        index, radius_nm=10, min_run_ft=2000, public_access_only=False, **kw
+    )
+    assert [c.name for c in got] == ["Long Water"]
+    assert {kw["wave_field"].label(p.label) for p in got[0].points} == {"west end"}  # east end is ~22 nm out
+    assert list(got[0].region_cells) == [0]
+    # The home water is briefed whole.
+    home = lakes_mod.find_candidate(index, 9, **kw)
+    assert set(home.region_cells) == {0, 1}

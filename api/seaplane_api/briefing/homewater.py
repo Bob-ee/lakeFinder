@@ -39,13 +39,9 @@ def block(ranked: RankedLake, limits, *, observed: list[dict] | None = None, mar
         "kind": cand.kind,
         "score": ranked.level,
         "limiting": ranked.limiting,
-        "wind": {
-            "dir": round(hour.wind_dir_deg),
-            "kt": round(hour.wind_kt),
-            "gust": None if hour.gust_kt is None else round(hour.gust_kt),
-        },
+        "wind": hour.wind.to_row(),
         "regions": [
-            {**region.to_row(), "score": UNFAVORABLE if ranked.frozen else region_score(region, limits)}
+            {**hour.region_row(region), "score": UNFAVORABLE if ranked.frozen else region_score(region, limits)}
             for region in hour.regions
         ],
         "hs_open_in": hour.hs_open_in,

@@ -29,9 +29,14 @@ south, 4.5 nm east-west at 42.7 deg) those collapse to ~78 cells, i.e. two calls
 cell share a forecast. That is well inside the resolution of the underlying model -- Open-Meteo's
 own response for Pontiac comes back snapped to its grid anyway (42.663, -83.402 for a request at
 42.6655, -83.4187) -- and it keeps the run polite. The alternative considered, "fetch only the
-nearest 150", was rejected because it silently drops the far half of the map. One forecast per water
-body, taken at its centroid, is coarse for something the size of Lake St. Clair; the wave field
-already varies the *water* across it, and per-region wind is a later question.
+nearest 150", was rejected because it silently drops the far half of the map.
+
+**Wind per region.** A water body with a wave field takes a forecast per region, from the cell of
+that region's centroid, so Anchor Bay and the south end of Lake St. Clair (25 miles apart) can be
+scored in different winds. Around KONZ that is 63 cells instead of 45, still two calls. Only the
+regions with water inside `radius_nm` are kept on a candidate: before, a region 50 nm up the St. Clair
+River could be the "best water" of a candidate that only touched the circle. The home water keeps
+every region.
 
 Usable run without a wave field: the lake's extent along the wind bearing from `lake_extents.json`.
 That file is written by the pipeline's `build` stage and may not exist yet; the fallback is
@@ -53,6 +58,35 @@ LIGHT_WIND_KT = 5.0  # below this the wind sets no usable direction (design 3.3 
 MAX_ROW_REGIONS = 4  # the contract's cap on `lakes[].regions`
 NO_WAVE_FIELD_KINDS = frozenset({"river", "connecting_water"})
 
+Cell = tuple[int, int]
+
+
+def cell_of(lat: float, lon: float) -> Cell:
+    return (round(lat / GRID_DEG), round(lon / GRID_DEG))
+
+
+def cell_point(cell: Cell) -> tuple[float, float]:
+    return (round(cell[0] * GRID_DEG, 4), round(cell[1] * GRID_DEG, 4))
+
+
+@dataclass(frozen=True)
+class Wind:
+    dir_deg: float
+    kt: float
+    gust_kt: float | None
+
+    @property
+    def wave_kt(self) -> float:
+        """The speed the waves are computed at: the gust when there is one."""
+        return self.gust_kt if self.gust_kt is not None else self.kt
+
+    def to_row(self) -> dict:
+        return {
+            "dir": round(self.dir_deg),
+            "kt": round(self.kt),
+            "gust": None if self.gust_kt is None else round(self.gust_kt),
+        }
+
 
 @dataclass(frozen=True)
 class Candidate:
@@ -72,18 +106,26 @@ class Candidate:
     home: tuple[float, float] | None = None  # so a region's own distance can be measured
     nearest_nm: float | None = None  # home -> nearest sample point; the radius gate uses this
     bbox: tuple[float, float, float, float] | None = None  # west, south, east, north
+    region_cells: dict[int, Cell] = field(default_factory=dict)  # label index -> its centroid's cell
 
     @property
     def has_wave_field(self) -> bool:
         return bool(self.points)
 
     @property
-    def cell(self) -> tuple[int, int]:
-        return (round(self.lat / GRID_DEG), round(self.lon / GRID_DEG))
+    def cell(self) -> Cell:
+        return cell_of(self.lat, self.lon)
 
     @property
     def cell_point(self) -> tuple[float, float]:
-        return (round(self.cell[0] * GRID_DEG, 4), round(self.cell[1] * GRID_DEG, 4))
+        return cell_point(self.cell)
+
+    @property
+    def cells(self) -> list[Cell]:
+        """Every forecast cell this water body is scored from: one per region, or the centroid's."""
+        if self.has_wave_field and self.region_cells:
+            return list(dict.fromkeys(self.region_cells.values()))
+        return [self.cell]
 
     def run_ft(self, wind_dir_deg: float, wind_kt: float) -> float:
         """Water available along the wind; the longest chord when the wind is too light to matter."""
@@ -133,10 +175,19 @@ class LakeHour:
     chosen: wave.Region | None = None  # the region `hs_in` / `run_ft` / the distance describe
     hs_open_in: int | None = None  # roughest region's `hs_all_in`
     when: datetime | None = None  # the block centre or hour this was scored for
+    region_winds: dict[int, Wind] = field(default_factory=dict)  # label index -> that region's wind
 
     @property
     def region_label(self) -> str | None:
         return None if self.chosen is None else self.chosen.label
+
+    @property
+    def wind(self) -> Wind:
+        return Wind(self.wind_dir_deg, self.wind_kt, self.gust_kt)
+
+    def region_row(self, region: wave.Region) -> dict:
+        """The contract's `regions[]` entry, with the wind that region was scored in."""
+        return {**region.to_row(), "wind": self.region_winds.get(region.label_index, self.wind).to_row()}
 
 
 def select_candidates(
@@ -170,7 +221,12 @@ def select_candidates(
         if _bbox_distance_nm(lake, home_lat, home_lon) > radius_nm:
             continue
         cand = _candidate(
-            lake, home_lat=home_lat, home_lon=home_lon, extents=extents, wave_field=wave_field
+            lake,
+            home_lat=home_lat,
+            home_lon=home_lon,
+            extents=extents,
+            wave_field=wave_field,
+            radius_nm=radius_nm,
         )
         if cand is None:
             continue
@@ -205,7 +261,10 @@ def find_candidate(
     extents: dict[str, list[int]] | None,
     wave_field: WaveField | None = None,
 ) -> Candidate | None:
-    """One water body by id, with no radius, verdict, or kind filter: the home water (contract)."""
+    """One water body by id, with no radius, verdict, or kind filter: the home water (contract).
+
+    No radius filter on its regions either: the home water is briefed whole.
+    """
     for lake in index:
         if str(lake.get("id")) == str(lake_id):
             return _candidate(lake, home_lat=home_lat, home_lon=home_lon, extents=extents, wave_field=wave_field)
@@ -219,6 +278,7 @@ def _candidate(
     home_lon: float,
     extents: dict[str, list[int]] | None,
     wave_field: WaveField | None,
+    radius_nm: float | None = None,
 ) -> Candidate | None:
     lat, lon = lake.get("lat"), lake.get("lon")
     if lat is None or lon is None or lake.get("id") is None:
@@ -232,8 +292,26 @@ def _candidate(
     points = wave_field.points(lake["id"]) if wave_field is not None else ()
     labels = wave_field.labels if wave_field is not None else ()
     nearest = None
+    region_cells: dict[int, Cell] = {}
     if points:
-        nearest = min(aero.distance_nm(home_lat, home_lon, p.lat, p.lon) for p in points)
+        by_label: dict[int, list[WavePoint]] = {}
+        for p in points:
+            by_label.setdefault(p.label, []).append(p)
+        near = {
+            label: min(aero.distance_nm(home_lat, home_lon, p.lat, p.lon) for p in group)
+            for label, group in by_label.items()
+        }
+        nearest = min(near.values())
+        if radius_nm is not None:
+            # Whole regions, not points: a bay straddling the circle is kept entire.
+            keep = {label for label, nm in near.items() if nm <= radius_nm}
+            if len(keep) < len(by_label):
+                points = tuple(p for p in points if p.label in keep)
+                by_label = {label: g for label, g in by_label.items() if label in keep}
+        region_cells = {
+            label: cell_of(sum(p.lat for p in g) / len(g), sum(p.lon for p in g) / len(g))
+            for label, g in by_label.items()
+        }
     return Candidate(
         id=int(lake["id"]),
         name=lake.get("name") or f"Unnamed water {lake['id']}",
@@ -251,6 +329,7 @@ def _candidate(
         home=(home_lat, home_lon),
         nearest_nm=nearest,
         bbox=_bbox(lake),
+        region_cells=region_cells,
     )
 
 
@@ -262,11 +341,12 @@ def _bbox(lake: dict) -> tuple[float, float, float, float] | None:
     return (west, south, east, north)
 
 
-def grid_cells(candidates: list[Candidate]) -> dict[tuple[int, int], tuple[float, float]]:
+def grid_cells(candidates: list[Candidate]) -> dict[Cell, tuple[float, float]]:
     """`{cell: forecast point}`, nearest-first so a truncated fetch keeps the close water."""
-    seen: dict[tuple[int, int], tuple[float, float]] = {}
+    seen: dict[Cell, tuple[float, float]] = {}
     for c in candidates:
-        seen.setdefault(c.cell, c.cell_point)
+        for cell in c.cells:
+            seen.setdefault(cell, cell_point(cell))
     return seen
 
 
@@ -281,6 +361,7 @@ def score_lake_hour(
     wind_kt: float,
     gust_kt: float | None,
     limits,
+    region_winds: dict[int, Wind] | None = None,
 ) -> LakeHour:
     """Waves, usable run, and water crosswind for one water body at one hour (design 3.3 steps 2-6).
 
@@ -288,11 +369,15 @@ def score_lake_hour(
     first build: the gust is what picks the water up, and the marginal band exists to catch exactly
     that. The region aggregation is given the same wind, so a region row and a lake-level row mean
     the same thing.
+
+    `region_winds` is the per-region wind (label index -> `Wind`); without it every region gets the
+    one wind passed in. With it, the returned hour's wind is the chosen region's.
     """
     gust_or_wind = gust_kt if gust_kt is not None else wind_kt
     regions: tuple[wave.Region, ...] = ()
     chosen: wave.Region | None = None
     hs_open_in: int | None = None
+    winds = dict(region_winds or {})
 
     if cand.has_wave_field:
         regions = tuple(
@@ -302,6 +387,7 @@ def score_lake_hour(
                 wind_dir_deg=wind_dir_deg,
                 wind_kt=gust_or_wind,
                 min_run_ft=limits.min_run_ft,
+                winds=None if region_winds is None else {k: (w.dir_deg, w.wave_kt) for k, w in winds.items()},
             )
         )
         hs_open_in = wave.open_water_in(regions)
@@ -316,6 +402,9 @@ def score_lake_hour(
             chosen = min(regions, key=lambda r: (r.hs_all_in, r.label))
             hs_in = float(chosen.hs_all_in)
             run = float(chosen.run_all_ft)
+        if chosen.label_index in winds:
+            w = winds[chosen.label_index]
+            wind_dir_deg, wind_kt, gust_kt, gust_or_wind = w.dir_deg, w.kt, w.gust_kt, w.wave_kt
         tp_s = _region_tp_s(cand, chosen, wind_dir_deg, gust_or_wind)
     else:
         run = cand.run_ft(wind_dir_deg, wind_kt)
@@ -364,6 +453,7 @@ def score_lake_hour(
         regions=regions,
         chosen=chosen,
         hs_open_in=hs_open_in,
+        region_winds=winds,
     )
 
 
@@ -409,12 +499,8 @@ class RankedLake:
             "run_ft": round(self.hour.run_ft),
             "region": self.hour.region_label,
             "hs_open_in": self.hour.hs_open_in,
-            "regions": [r.to_row() for r in self.hour.regions[:MAX_ROW_REGIONS]],
-            "wind": {
-                "dir": round(self.hour.wind_dir_deg),
-                "kt": round(self.hour.wind_kt),
-                "gust": None if self.hour.gust_kt is None else round(self.hour.gust_kt),
-            },
+            "regions": [self.hour.region_row(r) for r in self.hour.regions[:MAX_ROW_REGIONS]],
+            "wind": self.hour.wind.to_row(),
             "distance_nm": round(distance, 1),
             "bearing_deg": round(bearing),
             "verdict": self.cand.verdict,
@@ -430,22 +516,30 @@ def score_over(
     *,
     frozen: bool,
 ) -> RankedLake | None:
-    """One water body over `windows`, taking its worst hour. `None` when no forecast covers it."""
-    series = forecasts.get(cand.cell)
-    if series is None:
+    """One water body over `windows`, taking its worst hour. `None` when no forecast covers it.
+
+    With a wave field each region takes the wind of its own cell; a region whose cell has nothing
+    for the hour sits that hour out, and an hour with no region left is skipped.
+    """
+    per_region = cand.has_wave_field and bool(cand.region_cells)
+    if not per_region and forecasts.get(cand.cell) is None:
         return None
     hours: list[LakeHour] = []
     for when in windows:
-        model = series.at(when)  # type: ignore[attr-defined]
-        if not model or model.get("wind_speed_10m") is None:
-            continue
-        hour = score_lake_hour(
-            cand,
-            float(model.get("wind_direction_10m") or 0.0),
-            float(model["wind_speed_10m"]),
-            None if model.get("wind_gusts_10m") is None else float(model["wind_gusts_10m"]),
-            limits,
-        )
+        if per_region:
+            by_cell = {cell: _wind_at(forecasts.get(cell), when) for cell in cand.cells}
+            winds = {
+                label: w for label, cell in cand.region_cells.items() if (w := by_cell.get(cell)) is not None
+            }
+            if not winds:
+                continue
+            first = next(iter(winds.values()))
+            hour = score_lake_hour(cand, first.dir_deg, first.kt, first.gust_kt, limits, region_winds=winds)
+        else:
+            w = _wind_at(forecasts.get(cand.cell), when)
+            if w is None:
+                continue
+            hour = score_lake_hour(cand, w.dir_deg, w.kt, w.gust_kt, limits)
         hour.when = when
         hours.append(hour)
     if not hours:
@@ -455,6 +549,21 @@ def score_over(
     if frozen:
         level, limiting = UNFAVORABLE, "ice"
     return RankedLake(cand=cand, level=level, limiting=limiting, hour=worst, frozen=frozen, hours=hours)
+
+
+def _wind_at(series: object | None, when: datetime) -> Wind | None:
+    """The model wind at `when` from one cell's series, or `None` when it has none."""
+    if series is None:
+        return None
+    model = series.at(when)  # type: ignore[attr-defined]
+    if not model or model.get("wind_speed_10m") is None:
+        return None
+    gust = model.get("wind_gusts_10m")
+    return Wind(
+        float(model.get("wind_direction_10m") or 0.0),
+        float(model["wind_speed_10m"]),
+        None if gust is None else float(gust),
+    )
 
 
 def rank_lakes(

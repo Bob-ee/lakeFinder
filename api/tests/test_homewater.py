@@ -41,7 +41,7 @@ def _home_water(min_run_ft: float = 2000) -> lakes_mod.Candidate:
 
 def _ranked(cand, wind_kt=14, gust_kt=18, wind_dir=270, frozen=False, limits=LIMITS):
     series = _uniform_series(wind_kt, gust_kt, wind_dir)
-    return lakes_mod.score_over(cand, {cand.cell: series}, NOON, limits, frozen=frozen)
+    return lakes_mod.score_over(cand, {c: series for c in cand.cells}, NOON, limits, frozen=frozen)
 
 
 def test_every_region_is_listed_with_its_own_score():

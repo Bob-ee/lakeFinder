@@ -31,7 +31,7 @@ no settings knob for it. `steep_chop()` is here so turning it on is one call.
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -156,6 +156,7 @@ class Region:
     n_points: int
     n_usable: int
     run_all_ft: int  # lower median run over every point, gate ignored (display only)
+    label_index: int = -1  # the label's index in the pack, which keys a per-region wind
 
     def to_row(self) -> dict:
         """The contract's `regions[]` entry: label, the two numbers, and where it is."""
@@ -175,17 +176,28 @@ def regions(
     wind_dir_deg: float,
     wind_kt: float,
     min_run_ft: float,
+    winds: Mapping[int, tuple[float, float]] | None = None,
 ) -> list[Region]:
     """The contract's region aggregation for one wind, calm to rough with the unusable last.
 
     Points sharing a label are one region. Within a region, `usable` is the points whose run along
     the wind reaches `min_run_ft`; `hs_in` is the 75th percentile (nearest rank) of their wave
     heights, `run_ft` the lower median of their runs, and `point` the calmest of them.
+
+    `winds` is the briefing's per-region wind: `{label index: (wind_dir_deg, wind_kt)}`. When it is
+    given, each label uses its own wind and a label missing from it is left out (its forecast cell
+    had nothing for the hour); `wind_dir_deg` / `wind_kt` are then unused.
     """
-    b = wind_bin(wind_dir_deg)
     grouped: dict[int, list[tuple[float, float, int]]] = {}
     for i, p in enumerate(points):
-        hs_m, _ = spm_wave(wind_kt, p.fetch_m[b], p.depth_m)
+        if winds is None:
+            d, kt = wind_dir_deg, wind_kt
+        elif p.label in winds:
+            d, kt = winds[p.label]
+        else:
+            continue
+        b = wind_bin(d)
+        hs_m, _ = spm_wave(kt, p.fetch_m[b], p.depth_m)
         grouped.setdefault(p.label, []).append((hs_m, p.run_ft[b % 8], i))
 
     out: list[Region] = []
@@ -206,6 +218,7 @@ def regions(
                 n_points=len(group),
                 n_usable=len(usable),
                 run_all_ft=round(_median_low([x[1] for x in group])),
+                label_index=label,
             )
         )
     out.sort(key=lambda r: (r.hs_in is None, r.hs_in or 0, r.label))

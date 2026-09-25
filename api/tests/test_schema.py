@@ -36,7 +36,7 @@ LAKE = {
     "id", "name", "kind", "score", "limiting", "hs_in", "run_ft", "region", "hs_open_in",
     "regions", "wind", "distance_nm", "bearing_deg", "verdict", "frozen",
 }
-REGION = {"label", "hs_in", "run_ft", "lat", "lon"}
+REGION = {"label", "hs_in", "run_ft", "lat", "lon", "wind"}
 HOME_WATER = {
     "id", "name", "kind", "score", "limiting", "wind", "regions", "hs_open_in", "observed",
     "marine_hs_in",
@@ -68,7 +68,8 @@ def _feeds(candidates: list, **kw):
     cells = {}
     series = make_feeds("om_gusty.json").airport
     for c in candidates:
-        cells[c.cell] = series
+        for cell in c.cells:
+            cells[cell] = series
     return make_feeds(
         "om_gusty.json",
         taf_name="taf_vfr.json",
