@@ -669,7 +669,10 @@ briefing), cached **15 min** per cell:
 ### Nearest tab (client, `web/src/lists/`)
 
 - Origin: the current fix; without one, the **map center**, labeled "from map center".
-- Every water body in `index.json`, by distance from the origin to its centroid, first **25** shown. Rows use the
+- By default only water long enough to use: `chord_ft ≥ min_run_ft` (the briefing setting, else the settings
+  default), every verdict included. A "Show all water" toggle drops the length filter. Sorted by distance from the
+  origin to the centroid, first **25** shown. (Listing every water body put a page of unnamed ponds under Lake St.
+  Clair.) Rows use the
   search-result row plus distance (nm, one decimal) and bearing (true, three digits), and the verdict word.
 - Forward cone: when `speed_kt > 30` and the course is usable, only water within **±45°** of the course (plus
   anything within 2 nm in any direction) is listed, labeled "ahead". A toggle turns the cone off.
