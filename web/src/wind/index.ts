@@ -30,7 +30,7 @@ export class Wind {
     wrap.append(
       toggleRow({
         label: "Wind stations",
-        hint: "zoom 8+, needs a connection",
+        hint: "zoom 8+, online only",
         checked: this.layer.enabled,
         disabled: false,
         onChange: (on) => this.layer.setEnabled(on),
