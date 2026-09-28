@@ -164,8 +164,21 @@ def test_get_airport_404s_on_an_unknown_identifier(client, monkeypatch):
     assert "ZZZZ" in r.json()["detail"]
 
 
-def test_the_wind_proxy_slot_is_not_mounted_yet(client):
-    assert client.get("/api/wind/stations?bbox=1,2,3,4").status_code == 404
+def test_the_wind_proxy_router_is_mounted(client, monkeypatch):
+    """Full behavior is exercised in `test_wind.py`; this just confirms `app.py` wires it in."""
+    from seaplane_api.fetch import ndbc
+
+    async def no_metars(_c, _bbox):
+        return [], None
+
+    async def no_buoys(_c, _bbox):
+        return [], None
+
+    monkeypatch.setattr(aviationweather, "fetch_metar_bbox", no_metars)
+    monkeypatch.setattr(ndbc, "fetch_latest_obs", no_buoys)
+    r = client.get("/api/wind/stations?bbox=-83.2,42.2,-82.4,42.8")
+    assert r.status_code == 200
+    assert r.json()["stations"] == []
 
 
 def test_load_candidates_flags_a_missing_extents_file(tmp_path, monkeypatch):

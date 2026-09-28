@@ -42,6 +42,28 @@ FORECAST_LINK = (
 
 MARINE_URL = "https://marine-api.open-meteo.com/v1/marine"
 
+CURRENT_VARS = ("wind_speed_10m", "wind_direction_10m", "wind_gusts_10m")
+
+
+async def fetch_current(c: httpx.AsyncClient, lat: float, lon: float) -> tuple[dict | None, str | None]:
+    """Current wind at one point, for the wind proxy's `/api/wind/point` (design 7.9).
+
+    `current=wind_speed_10m,wind_direction_10m,wind_gusts_10m` returns `{"current": {"time": "...",
+    "wind_speed_10m": .., "wind_direction_10m": .., "wind_gusts_10m": ..}}`. No `timezone` param is
+    sent, so `current.time` comes back a naive UTC ISO string (`"2026-09-28T16:00"`, no seconds).
+    """
+    return await get_json(
+        c,
+        URL,
+        {
+            "latitude": f"{lat:.4f}",
+            "longitude": f"{lon:.4f}",
+            "current": ",".join(CURRENT_VARS),
+            "wind_speed_unit": "kn",
+        },
+        label="open_meteo_current",
+    )
+
 
 async def fetch_marine(
     c: httpx.AsyncClient, lat: float, lon: float, *, timezone: str

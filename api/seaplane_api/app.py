@@ -24,6 +24,7 @@ from .fetch.http import client
 from .paths import briefing_path, read_json
 from .scheduler import Scheduler
 from .settings import Settings, save_settings
+from .wind import router as wind_router
 
 log = logging.getLogger(__name__)
 
@@ -45,6 +46,8 @@ def create_app(*, scheduler: Scheduler | None = None) -> FastAPI:
         app.state.scheduler = scheduler
     else:
         app = FastAPI(title="seaplane-api", version="0.1.0", lifespan=lifespan)
+
+    app.include_router(wind_router)
 
     @app.get("/api/health")
     async def health() -> dict[str, Any]:

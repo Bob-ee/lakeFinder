@@ -93,6 +93,22 @@ def make_wave_field(lakes: dict[int | str, list[dict]], labels: list[str]) -> Wa
     return WaveField(*pack_wave_points(lakes, labels))
 
 
+@pytest.fixture(autouse=True)
+def _clear_wind_caches():
+    """`wind.py`'s tile/point caches are process-global dicts; tests must not see each other's."""
+    from seaplane_api import wind
+
+    wind._tile_cache.clear()
+    wind._tile_locks.clear()
+    wind._point_cache.clear()
+    wind._point_locks.clear()
+    yield
+    wind._tile_cache.clear()
+    wind._tile_locks.clear()
+    wind._point_cache.clear()
+    wind._point_locks.clear()
+
+
 @pytest.fixture
 def settings() -> Settings:
     return Settings()
