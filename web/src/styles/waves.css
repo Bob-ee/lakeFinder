@@ -336,6 +336,12 @@
   margin-top: 12px;
 }
 
+/* `display: flex` above beats the UA's `[hidden]`; without this the row showed as an empty
+   button while the settings probe was pending or the service was down. */
+.detail-actions[hidden] {
+  display: none;
+}
+
 .home-water-btn {
   flex: 1;
   justify-content: center;

@@ -688,5 +688,8 @@ briefing), cached **15 min** per cell:
   `/api/wind/point`; peek line `Wind 240/12 G18 (KDET 14 min)` from the nearest station within 15 nm, else the
   model with "(model)". Headwind / crosswind components for landing along the longest chord (`chord_bearing_deg`),
   in the direction with the headwind.
+- Landing rule (same as the briefing): under 5 kt, "light wind" and the chord only; otherwise the run along the wind
+  (`lake_extents.json`, bin `round(dir / 22.5) % 16`) if it is ≥ `min_run_ft` ("Into the wind, 250°: 7,400 ft of
+  water", no crosswind); the chord headwind / crosswind only when that run is short or the lake has no extent entry.
 - Last responses cached in IndexedDB store `wind` (key: tile id or `point:<cell>`); shown with their age; a "stale"
   badge past 60 min; nothing drawn if no fetch has ever succeeded.

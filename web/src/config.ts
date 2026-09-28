@@ -18,6 +18,8 @@ export const DATA_FILES = {
   /** Wave field: a small index, then one HTTP Range request per water body. */
   wavePointsIndex: `${DATA_BASE}/wave_points.json`,
   wavePoints: `${DATA_BASE}/wave_points.bin`,
+  /** Per-lake run of water along 16 bearings; the Wind block's "into the wind" run. */
+  lakeExtents: `${DATA_BASE}/lake_extents.json`,
 } as const;
 
 /** The api service (settings, refresh, health). Caddy and the Vite dev server proxy this. */
@@ -239,6 +241,8 @@ export const WIND = {
   nearestCount: 3,
   /** Half-size, in degrees of latitude, of the box fetched around a selected water body. */
   lakeRadiusDeg: 0.45,
+  /** Below this the wind sets no landing direction (the briefing's LIGHT_WIND_KT). */
+  lightWindKt: 5,
   /** Map tap radius around a station, px: a 48 px target. */
   tapRadiusPx: 24,
   /** localStorage key for the layer toggle (kept apart from `seaplane.layers`). */

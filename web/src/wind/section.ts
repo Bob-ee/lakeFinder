@@ -1,6 +1,8 @@
-import { WIND } from "../config";
+import { minRunFt } from "../briefing/home-water";
+import { WAVES, WIND } from "../config";
 import type { Lake } from "../types";
-import { el } from "../ui/format";
+import { el, formatChordBearings, formatDistanceFt, formatThousands } from "../ui/format";
+import { runAlong } from "./extents";
 import type { NearStation, WindData } from "./data";
 import {
   chordComponents,
@@ -37,6 +39,10 @@ interface Basis {
 export class WindSection {
   readonly element: HTMLElement;
   private unsubscribe: () => void;
+  /** Run of water along the wind for the last looked-up bearing; `ft` null = no extent entry. */
+  private run: { bearing: number; ft: number | null } | null = null;
+  private runPending: number | null = null;
+  private minRun: number | null = null;
 
   constructor(
     private lake: Lake,
@@ -150,18 +156,54 @@ export class WindSection {
     this.peekLine.classList.toggle("is-stale", basis.ageMin > WIND.staleAfterMin);
   }
 
+  /**
+   * Where to land in this wind, the way the briefing scores it (handoff section 7): into
+   * the wind when the water along it is at least `min_run_ft`; the longest-chord
+   * headwind / crosswind only when that run is short (or there is no extent for this lake).
+   * Below 5 kt the wind sets no direction and only the chord is shown.
+   */
   private componentsBlock(basis: Basis): HTMLElement {
     const box = el("div", "wind-components");
-    const c = chordComponents(this.lake.chord_bearing_deg, basis.wind);
+    const w = basis.wind;
     const noun = this.lake.kind === "river" || this.lake.kind === "connecting_water" ? "reach" : "chord";
-    if (!c) {
-      box.append(
-        el("div", "wind-comp-title", `Along the longest ${noun}`),
-        el("div", "wind-comp-line", basis.wind.speed_kt === 0 ? "Calm" : "Variable wind: no components"),
-      );
+    const chord = `Longest ${noun} ${formatDistanceFt(this.lake.chord_ft)}, ${formatChordBearings(this.lake.chord_bearing_deg)}`;
+
+    if (w.speed_kt == null || w.speed_kt < WIND.lightWindKt || w.dir_deg == null) {
+      const what = w.speed_kt === 0 ? "Calm" : w.dir_deg == null ? "Variable wind" : "Light wind";
+      box.append(el("div", "wind-comp-line", what), el("div", "wind-comp-title", chord));
+      box.append(el("div", "wind-comp-src", basis.using));
       return box;
     }
-    box.append(el("div", "wind-comp-title", `Landing ${pad3(c.heading)}° along the longest ${noun}`));
+
+    const into = w.dir_deg;
+    const run = this.run?.bearing === into ? this.run.ft : undefined;
+    if (run === undefined) {
+      // Still looking up the run: say which way the wind is, pick the display once it lands.
+      this.lookupRun(into);
+      box.append(el("div", "wind-comp-title", `Into the wind, ${pad3(into)}°`));
+      box.append(el("div", "wind-comp-src", basis.using));
+      return box;
+    }
+    if (run != null && this.minRun != null && run >= this.minRun) {
+      box.append(el("div", "wind-comp-title", `Into the wind, ${pad3(into)}°`));
+      const line = el("div", "wind-comp-line");
+      const num = el("span", "wind-comp");
+      // Feet, or miles past five (formatDistanceFt): 138,023 ft on Lake St. Clair reads as nothing.
+      const [n, unit] = formatDistanceFt(run).split(" ");
+      num.append(el("span", "wind-comp-num", n ?? ""), ` ${unit ?? "ft"} of water`);
+      line.append(num);
+      box.append(line);
+      box.append(el("div", "wind-comp-src", basis.using));
+      return box;
+    }
+
+    const c = chordComponents(this.lake.chord_bearing_deg, w);
+    if (!c) return box;
+    const title =
+      run != null
+        ? `Run into the wind is short (${formatThousands(Math.round(run))} ft): landing ${pad3(c.heading)}° along the longest ${noun}`
+        : `Landing ${pad3(c.heading)}° along the longest ${noun}`;
+    box.append(el("div", "wind-comp-title", title));
     const line = el("div", "wind-comp-line");
     const hw = el("span", "wind-comp");
     hw.append(el("span", "wind-comp-num", `${Math.abs(c.headwind)}`), ` kt ${c.headwind < 0 ? "tailwind" : "headwind"}`);
@@ -179,6 +221,20 @@ export class WindSection {
     }
     box.append(el("div", "wind-comp-src", basis.using));
     return box;
+  }
+
+  /** Fetches the run along `bearing` and the pilot's minimum run, then repaints once. */
+  private lookupRun(bearing: number): void {
+    if (this.runPending === bearing) return;
+    this.runPending = bearing;
+    void Promise.all([runAlong(this.lake.id, bearing), minRunFt(WAVES.defaultMinRunFt)]).then(
+      ([ft, min]) => {
+        this.runPending = null;
+        this.minRun = min;
+        this.run = { bearing, ft };
+        this.render();
+      },
+    );
   }
 }
 
