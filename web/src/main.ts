@@ -147,6 +147,7 @@ async function boot(): Promise<void> {
       if (sheet.current === "full") sheet.setSnap("half");
       if (!state.selectLake(id, "list")) toast("That lake is not in this data pack");
     },
+    minRunFt: () => minRunFt(WAVES.defaultMinRunFt),
   });
   tabs.panel("nearest").append(nearest.element);
   tabs.addListener((id) => nearest.setVisible(id === "nearest"));

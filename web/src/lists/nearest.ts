@@ -1,4 +1,4 @@
-import { VERDICT_PHRASE } from "../config";
+import { VERDICT_PHRASE, WAVES } from "../config";
 import { type Fix, type LocationService, statusNote, usableCourse } from "../location";
 import {
   angleDiff,
@@ -20,12 +20,15 @@ const CONE_ANY_DIRECTION_NM = 2;
 const MIN_INTERVAL_MS = 5000;
 const MIN_MOVE_NM = 0.2;
 const CONE_KEY = "seaplane.nearestCone";
+const ALL_WATER_KEY = "seaplane.nearestAllWater";
 
 export interface NearestDeps {
   lakes: () => readonly Lake[];
   location: LocationService;
   mapCenter: () => { lat: number; lon: number };
   onSelect: (id: number) => void;
+  /** The briefing setting `min_run_ft`, else the settings default (home-water.ts). */
+  minRunFt: () => Promise<number>;
 }
 
 interface Origin {
@@ -35,8 +38,9 @@ interface Origin {
 }
 
 /**
- * The Nearest tab: every water body by distance from the fix (or the map centre when
- * there is none), first 25, with a forward cone above 30 kt. Rows are the search row with
+ * The Nearest tab: water long enough to use (chord >= min run, every verdict), by distance
+ * from the fix (or the map centre when there is none), first 25, with a forward cone above
+ * 30 kt and a "Show all water" toggle that drops the length filter. Rows are the search row with
  * distance, bearing and the verdict word, so the same muscle memory reads all three lists.
  */
 export class NearestList {
@@ -45,6 +49,8 @@ export class NearestList {
   private list: HTMLElement;
   private visible = false;
   private coneWanted = readLocal(CONE_KEY) !== "0";
+  private allWater = readLocal(ALL_WATER_KEY) === "1";
+  private minRun: number = WAVES.defaultMinRunFt;
   private last: { origin: Origin; at: number; cone: boolean } | null = null;
 
   constructor(private deps: NearestDeps) {
@@ -55,12 +61,29 @@ export class NearestList {
     this.list.setAttribute("aria-label", "Nearest water");
     this.element.append(this.head, this.list);
     deps.location.onChange((fix) => this.onFix(fix));
+    void this.refreshMinRun();
+  }
+
+  private async refreshMinRun(): Promise<void> {
+    try {
+      const ft = await this.deps.minRunFt();
+      if (Number.isFinite(ft) && ft > 0 && ft !== this.minRun) {
+        this.minRun = ft;
+        if (this.visible) this.render();
+      }
+    } catch {
+      // Keep the default.
+    }
   }
 
   /** Called by the tab strip; the list only does work while it is on screen. */
   setVisible(on: boolean): void {
     this.visible = on;
-    if (on) this.render();
+    if (on) {
+      this.render();
+      // The pilot may have changed the limit in settings since the last look.
+      void this.refreshMinRun();
+    }
   }
 
   /** Map `moveend`: matters only while the origin is the map centre. */
@@ -102,6 +125,7 @@ export class NearestList {
 
     const rows: { lake: Lake; nm: number; brg: number }[] = [];
     for (const lake of this.deps.lakes()) {
+      if (!this.allWater && !(lake.chord_ft >= this.minRun)) continue;
       const nm = distanceNm(origin.lat, origin.lon, lake.lat, lake.lon);
       rows.push({ lake, nm, brg: 0 });
     }
@@ -126,7 +150,11 @@ export class NearestList {
     );
     if (shown.length === 0) {
       this.list.append(
-        el("p", "muted nearest-empty", cone ? "No water in the ±45° cone ahead." : "No water in the index."),
+        el(
+          "p",
+          "muted nearest-empty",
+          cone ? "No water in the ±45° cone ahead." : "No water in the index.",
+        ),
       );
     }
     this.last = { origin, at: Date.now(), cone };
@@ -145,12 +173,27 @@ export class NearestList {
       where.textContent = "From map center";
     }
     const parts: HTMLElement[] = [title, where];
-    title.append(el("span", "nearest-spacer"));
+    const length = this.allWater
+      ? "All water, any length"
+      : `Runs of ${this.minRun.toLocaleString("en-US")} ft or more, every verdict`;
+    parts.push(el("p", "muted small nearest-origin", length));
 
     if (!fix) {
       const note = statusNote(this.deps.location.status);
       if (note) parts.push(el("p", "small nearest-note", note));
     }
+
+    const toggles = el("div", "nearest-toggles");
+    const all = el("button", "btn nearest-all-btn");
+    all.type = "button";
+    all.setAttribute("aria-pressed", String(this.allWater));
+    all.textContent = this.allWater ? "Long enough only" : "Show all water";
+    all.addEventListener("click", () => {
+      this.allWater = !this.allWater;
+      writeLocal(ALL_WATER_KEY, this.allWater ? "1" : "0");
+      this.render();
+    });
+    toggles.append(all);
 
     if (this.coneAvailable(fix)) {
       const toggle = el("button", "btn nearest-cone-btn");
@@ -162,8 +205,9 @@ export class NearestList {
         writeLocal(CONE_KEY, this.coneWanted ? "1" : "0");
         this.render();
       });
-      title.append(toggle);
+      toggles.append(toggle);
     }
+    parts.push(toggles);
     this.head.replaceChildren(...parts);
   }
 }

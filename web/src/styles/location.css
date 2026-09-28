@@ -150,11 +150,14 @@
   color: var(--text);
 }
 
-.nearest-spacer {
-  flex: 1;
+.nearest-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
 }
 
-.nearest-cone-btn {
+.nearest-toggles .btn {
   padding: 0 14px;
   font-size: 15px;
 }
