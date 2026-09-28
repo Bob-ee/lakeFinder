@@ -613,3 +613,73 @@ The client reads the briefing as the static file `/data/briefing.json`, never th
   defaulting to that water body's wind in the briefing, else the briefing's current airport wind, else 270/10), the
   region list for that wind, and the points drawn on the map colored by wave height. All computed in the browser by
   `rules/waves/` from one Range request.
+
+## Flight mode (phase 2, added 2026-09-28)
+
+Design: `docs/design.md` 7.5, 7.7, 7.9. Wording rules as everywhere: no "legal", "go", or "safe".
+
+### Wind proxy (`api/seaplane_api/wind.py`, router `/api/wind`)
+
+Online only; the client degrades silently. Nothing here raises to the client: a failed source becomes an entry in
+`errors` and the rest still answers.
+
+`GET /api/wind/stations?bbox=west,south,east,north` (degrees, WGS84). The bbox is split into **1° tiles** (floor of
+lon / lat); each tile is fetched and cached for **5 min** on its own, so panning reuses tiles. More than **16 tiles**
+→ `400 {"detail": "bbox too large"}`. Stations outside the requested bbox are dropped from the reply.
+
+```jsonc
+{"stations": [{"id": "KDET", "source": "metar",          // "metar" | "ndbc" | "synoptic"
+               "name": "Detroit/C Young Arpt, MI, US",   // null when the feed has none (NDBC)
+               "lat": 42.409, "lon": -83.01,
+               "dir_deg": 240,                            // wind FROM, true; null when variable or calm
+               "speed_kt": 12, "gust_kt": 18,             // gust null when none reported; calm = speed 0, dir null
+               "obs_time": "2026-09-28T15:53:00Z"}],
+ "fetched_at": "2026-09-28T16:01:12Z",                   // oldest tile fetch time in this reply
+ "errors": ["ndbc: timeout"]}
+```
+
+Sources: aviationweather METAR by bbox and NDBC `latest_obs.txt` (both fetchers exist in `api/seaplane_api/fetch/`).
+Synoptic is an adapter slot used only when `SYNOPTIC_TOKEN` is set; unset means it is skipped with no error. The same
+station reported twice (same `source` + `id`) keeps the newest `obs_time`. Observations older than **3 h** are dropped.
+
+`GET /api/wind/point?lat=&lon=` → Open-Meteo current wind at the **0.1° cell** of the point (same snap as the
+briefing), cached **15 min** per cell:
+
+```jsonc
+{"lat": 42.4, "lon": -82.7, "dir_deg": 250, "speed_kt": 10, "gust_kt": 15,
+ "time": "2026-09-28T16:00:00Z", "source": "model"}      // 502 {"detail": "..."} when Open-Meteo fails
+```
+
+### Location (client, `web/src/location/`)
+
+- `watchPosition` with `enableHighAccuracy`. A fix is `{lat, lon, accuracy_m, speed_kt | null, course_deg | null,
+  time}`; `course_deg` is used only when `speed_kt ≥ 3` (GPS course is noise when stopped).
+- Follow-me turns on by default when permission is granted; any user pan or rotate pauses it; the recenter button
+  resumes it. Heading-up applies while following and `speed_kt ≥ 10`, otherwise north-up; a toggle can force
+  north-up.
+- Screen wake lock is held while following and released otherwise (and re-requested on `visibilitychange`).
+- Own-position marker: a course arrow when `course_deg` is usable, a dot otherwise, with an accuracy ring.
+- Denied permission or no GPS: no marker, recenter goes to the data's home view as in phase 1, and a one-line note
+  says why. A Wi-Fi iPad without GPS falls in this case.
+
+### Nearest tab (client, `web/src/lists/`)
+
+- Origin: the current fix; without one, the **map center**, labeled "from map center".
+- Every water body in `index.json`, by distance from the origin to its centroid, first **25** shown. Rows use the
+  search-result row plus distance (nm, one decimal) and bearing (true, three digits), and the verdict word.
+- Forward cone: when `speed_kt > 30` and the course is usable, only water within **±45°** of the course (plus
+  anything within 2 nm in any direction) is listed, labeled "ahead". A toggle turns the cone off.
+- Updates at most every **5 s** or every 0.2 nm of movement, whichever comes later. Tap → `selectLake`.
+
+### Wind on the map and in the sheet (client)
+
+- Wind layer toggle in the layers control; fetch `/api/wind/stations` for the visible bbox on map `idle`, throttled
+  to one request per 30 s and only at zoom ≥ 8. Each station is an arrow pointing **downwind** with its speed (and
+  `G<gust>`) as text. Source is shown by **arrow shape** (METAR solid arrow, buoy arrow with a ring, mesonet open
+  arrow), never by color alone. Opacity steps down with age; hidden past **90 min**. Tap a station for its details.
+- Selected water body: a "Wind" block with the nearest 3 stations (distance, age) and the model wind at the lake from
+  `/api/wind/point`; peek line `Wind 240/12 G18 (KDET 14 min)` from the nearest station within 15 nm, else the
+  model with "(model)". Headwind / crosswind components for landing along the longest chord (`chord_bearing_deg`),
+  in the direction with the headwind.
+- Last responses cached in IndexedDB store `wind` (key: tile id or `point:<cell>`); shown with their age; a "stale"
+  badge past 60 min; nothing drawn if no fetch has ever succeeded.
