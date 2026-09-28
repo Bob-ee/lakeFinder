@@ -640,7 +640,11 @@ lon / lat); each tile is fetched and cached for **5 min** on its own, so panning
 
 Sources: aviationweather METAR by bbox and NDBC `latest_obs.txt` (both fetchers exist in `api/seaplane_api/fetch/`).
 Synoptic is an adapter slot used only when `SYNOPTIC_TOKEN` is set; unset means it is skipped with no error. The same
-station reported twice (same `source` + `id`) keeps the newest `obs_time`. Observations older than **3 h** are dropped.
+station reported twice (same `source` + `id`) keeps the newest `obs_time`. Observations older than **3 h** at reply
+time (not fetch time) are dropped, and so is a station with neither direction nor speed (sensor out). A failed
+`/point` lookup is not cached, so the next request retries. NDBC has no server-side bbox, so each new tile reads the
+whole file; a shared NDBC cache is a later optimization. The Synoptic adapter is written from its docs and has never
+seen a live payload.
 
 `GET /api/wind/point?lat=&lon=` → Open-Meteo current wind at the **0.1° cell** of the point (same snap as the
 briefing), cached **15 min** per cell:
