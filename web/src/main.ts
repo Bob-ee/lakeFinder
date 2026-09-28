@@ -6,11 +6,15 @@ import "./styles/search.css";
 import "./styles/sheet.css";
 import "./styles/briefing.css";
 import "./styles/waves.css";
+import "./styles/location.css";
 
 import { BriefingController, readBriefingParam } from "./briefing";
 import { minRunFt, waveLimits } from "./briefing/home-water";
 import { WAVES } from "./config";
 import { Tabs, detailPlaceholder } from "./lists";
+import { NearestList, mountNearestButton } from "./lists/nearest";
+import { LocationService } from "./location";
+import { FollowController } from "./location/follow";
 import { MapController } from "./map";
 import { SearchBox } from "./search/ui";
 import { Sheet } from "./sheet";
@@ -74,7 +78,18 @@ async function boot(): Promise<void> {
     state.load(),
   ]);
 
-  mountMapControls(app, map, prefs);
+  // Location (phase 2): the recenter button resumes follow-me once there is a fix.
+  const location = new LocationService();
+  let follow: FollowController | null = null;
+  const controls = mountMapControls(app, map, prefs, () => follow?.recenter());
+  follow = new FollowController({
+    map,
+    location,
+    padding,
+    controls,
+    // A `?lake=` link owns the camera at startup; the pilot can still tap recenter.
+    autoFollow: () => state.current == null,
+  });
 
   // The wave field: one index fetch, then one Range request per water body. Everything
   // about it degrades to "this water body has no wave field", which is also the honest
@@ -121,6 +136,27 @@ async function boot(): Promise<void> {
     onOpenAbout: () => openAbout(state, theme, () => briefing.openSettings()),
   });
 
+  const nearest = new NearestList({
+    lakes: () => state.search.all(),
+    location,
+    mapCenter: () => {
+      const c = map.map.getCenter();
+      return { lat: c.lat, lon: c.lng };
+    },
+    onSelect: (id) => {
+      if (sheet.current === "full") sheet.setSnap("half");
+      if (!state.selectLake(id, "list")) toast("That lake is not in this data pack");
+    },
+  });
+  tabs.panel("nearest").append(nearest.element);
+  tabs.addListener((id) => nearest.setVisible(id === "nearest"));
+  map.map.on("moveend", () => nearest.onMapMoved());
+  mountNearestButton(controls, () => {
+    tabs.select("nearest");
+    nearest.setVisible(true);
+    if (sheet.current === "hidden" || sheet.current === "peek") sheet.setSnap("half");
+  });
+
   theme.onChange((resolved) => {
     map.setTheme(resolved);
     applyWaveBandVars(resolved);
@@ -143,6 +179,8 @@ async function boot(): Promise<void> {
       sheet.setSnap("hidden");
       return;
     }
+    // Selecting a lake needs the camera; recenter resumes following.
+    follow?.pause();
     renderSelection(selection);
     map.select(selection.lake);
     tabs.select("detail");
@@ -220,7 +258,12 @@ async function boot(): Promise<void> {
   }
 
   // Deliberately global: handy from the console and from the phase-3 service worker.
-  Object.assign(window, { seaplane: { state, map, sheet, search, theme, briefing } });
+  Object.assign(window, {
+    seaplane: { state, map, sheet, search, theme, briefing, location, follow, nearest, tabs },
+  });
+
+  // Last, so the permission prompt comes after the map and sheet are up.
+  location.start();
 }
 
 void boot().catch((err: unknown) => {

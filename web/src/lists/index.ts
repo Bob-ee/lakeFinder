@@ -15,13 +15,14 @@ const TABS: TabDef[] = [
 ];
 
 /**
- * Tab strip for the sheet. Detail and Briefing are live; Nearest and Saved are real slots
- * with placeholder panels so phases 2 and 4 drop straight in.
+ * Tab strip for the sheet. Detail, Briefing and Nearest are live (Nearest is mounted by
+ * main.ts from lists/nearest.ts); Saved is a placeholder until phase 4.
  */
 export class Tabs {
   private active: TabId = "detail";
   private buttons = new Map<TabId, HTMLButtonElement>();
   private panels = new Map<TabId, HTMLElement>();
+  private listeners = new Set<(id: TabId) => void>();
 
   constructor(
     private strip: HTMLElement,
@@ -45,7 +46,6 @@ export class Tabs {
       this.panels.set(tab.id, panel);
     }
     this.panels.get("detail")?.append(detailPlaceholder());
-    this.panels.get("nearest")?.append(placeholder("Nearest lakes", "phase 2", nearestBlurb()));
     this.panels.get("saved")?.append(placeholder("Saved lakes", "phase 4", savedBlurb()));
     this.apply();
   }
@@ -59,6 +59,12 @@ export class Tabs {
     this.active = id;
     this.apply();
     this.onChange?.(id);
+    for (const fn of this.listeners) fn(id);
+  }
+
+  /** Extra tab-change listeners beyond the constructor's one. */
+  addListener(fn: (id: TabId) => void): void {
+    this.listeners.add(fn);
   }
 
   /** The Detail panel is owned by the sheet renderer; everything else is static. */
@@ -100,13 +106,6 @@ function placeholder(title: string, phase: string, body: string): HTMLElement {
   head.append(el("h3", "detail-h", title), el("span", "tag", `coming in ${phase}`));
   wrap.append(head, el("p", "muted", body));
   return wrap;
-}
-
-function nearestBlurb(): string {
-  return (
-    "Lakes sorted by distance from your position, with an optional forward-cone filter " +
-    "while you are moving. Needs the location and flight-mode work in phase 2."
-  );
 }
 
 function savedBlurb(): string {

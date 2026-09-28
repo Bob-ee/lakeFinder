@@ -4,7 +4,6 @@ import { OVERLAY_GROUPS, type OverlayGroup } from "../map/style";
 import { el } from "./format";
 import { icon } from "./icons";
 import { readLocal, writeLocal } from "./theme";
-import { toast } from "./toast";
 
 export interface LayerPrefs {
   usableWater: boolean;
@@ -54,18 +53,17 @@ export function mountMapControls(
   parent: HTMLElement,
   map: MapController,
   prefs: LayerPrefs,
+  onRecenter?: () => void,
 ): HTMLElement {
   const stack = el("div", "map-controls");
 
-  const recenter = el("button", "icon-btn map-btn");
+  // location/follow.ts finds this by class to show the follow state and add the compass.
+  const recenter = el("button", "icon-btn map-btn map-btn-recenter");
   recenter.type = "button";
-  recenter.title = "Recenter (follow-me arrives in phase 2)";
-  recenter.setAttribute("aria-label", "Recenter map");
+  recenter.title = "Follow my position";
+  recenter.setAttribute("aria-label", "Follow my position");
   recenter.innerHTML = icon("recenter");
-  recenter.addEventListener("click", () => {
-    map.recenter();
-    toast("Follow-me arrives in phase 2");
-  });
+  recenter.addEventListener("click", () => (onRecenter ? onRecenter() : map.recenter()));
 
   const layersBtn = el("button", "icon-btn map-btn");
   layersBtn.type = "button";

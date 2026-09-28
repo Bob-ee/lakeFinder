@@ -1,0 +1,194 @@
+/* Location, follow-me and the Nearest tab (phase 2). */
+
+:root {
+  /* Own position: one deep blue with a white keyline and a dark halo. It is told apart from
+     the verdict outlines by shape and by lightness, not by hue. */
+  --own-fill: #0f3fa8;
+  --own-ring: rgba(15, 63, 168, 0.12);
+  --own-ring-edge: rgba(15, 63, 168, 0.75);
+}
+
+:root[data-theme="dark"] {
+  --own-fill: #2f6fe0;
+  --own-ring: rgba(120, 170, 255, 0.14);
+  --own-ring-edge: rgba(170, 200, 255, 0.8);
+}
+
+/* -- own-position marker ------------------------------------------------ */
+
+.own-pos {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.own-pos-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--own-ring);
+  border: 2px dashed var(--own-ring-edge);
+}
+
+.own-pos-glyph {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.own-pos[data-shape="arrow"] .own-pos-glyph svg {
+  width: 42px;
+  height: 42px;
+  overflow: visible;
+  filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.9)) drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5));
+}
+
+.own-pos[data-shape="arrow"] .own-pos-glyph path {
+  fill: var(--own-fill);
+  stroke: #ffffff;
+  stroke-width: 3;
+  stroke-linejoin: round;
+  paint-order: stroke;
+}
+
+.own-pos[data-shape="dot"] .own-pos-glyph {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--own-fill);
+  border: 3px solid #ffffff;
+  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.7), 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* A fix older than 30 s: hollow, so it reads as "last known" without relying on colour. */
+.own-pos.is-stale[data-shape="arrow"] .own-pos-glyph path {
+  fill: #ffffff;
+  stroke: var(--own-fill);
+}
+
+.own-pos.is-stale[data-shape="dot"] .own-pos-glyph {
+  background: #ffffff;
+  border-color: var(--own-fill);
+}
+
+/* -- compass / north-up toggle ------------------------------------------ */
+
+.compass-btn {
+  position: relative;
+}
+
+.compass-needle {
+  display: grid;
+  place-items: center;
+  transition: transform 0.25s linear;
+}
+
+.compass-needle svg {
+  width: 26px;
+  height: 26px;
+  margin-top: -6px;
+}
+
+.compass-n {
+  fill: currentColor;
+}
+
+.compass-s {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+.compass-mode {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 3px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .compass-needle {
+    transition: none;
+  }
+}
+
+/* -- Nearest tab -------------------------------------------------------- */
+
+.nearest-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 8px;
+}
+
+.nearest-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.nearest-title .detail-h {
+  margin-bottom: 0;
+}
+
+.nearest-origin {
+  margin: 0;
+}
+
+.nearest-note {
+  margin: 2px 0 0;
+  color: var(--text);
+}
+
+.nearest-spacer {
+  flex: 1;
+}
+
+.nearest-cone-btn {
+  padding: 0 14px;
+  font-size: 15px;
+}
+
+/* With no lake selected and the briefing closed nothing owns the peek row; do not leave
+   an empty band above the tabs. */
+.sheet-peek:empty {
+  display: none;
+}
+
+.nearest-list {
+  margin: 0 -16px;
+}
+
+.nearest-trailing {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.25;
+}
+
+.nearest-nm {
+  color: var(--text);
+  font-weight: 650;
+  font-size: 15px;
+}
+
+.nearest-verdict {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+
+.nearest-empty {
+  padding: 12px 16px;
+}
