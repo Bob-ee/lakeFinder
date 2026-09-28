@@ -70,6 +70,8 @@ export class MapController {
   /** Latest wave field for the selected water body, or null when there is none. */
   private waveGeo: WaveGeo | null = null;
   private waveFrame: number | null = null;
+  /** Layers that claim a tap before the lake under it (the wind stations). */
+  private tapHandlers: Array<(e: maplibregl.MapMouseEvent) => boolean> = [];
 
   private constructor(
     container: HTMLElement,
@@ -236,7 +238,13 @@ export class MapController {
 
   // -- selection -----------------------------------------------------------
 
+  /** Registers a handler that sees a map tap first; returning true consumes it. */
+  addTapHandler(fn: (e: maplibregl.MapMouseEvent) => boolean): void {
+    this.tapHandlers.push(fn);
+  }
+
   private handleClick(e: maplibregl.MapMouseEvent): void {
+    for (const fn of this.tapHandlers) if (fn(e)) return;
     if (!this.map.getLayer(LAYER.lakesFill)) {
       this.cb.onBackgroundTap();
       return;

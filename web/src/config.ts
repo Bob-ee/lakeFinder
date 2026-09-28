@@ -216,3 +216,31 @@ export const WAVE_CAVEAT_GUST = "Speed is the forecast gust, as in the briefing.
 export const WAVE_CAVEAT_NO_DEPTH =
   "No depth data here, so shallow water reads rougher than it is.";
 export const WAVE_CAVEAT_DEPTH = "Depth is included where the survey covers it.";
+
+/** Flight mode wind (data-contract "Wind on the map and in the sheet"). */
+export const WIND = {
+  /** No station fetches below this zoom; the layer is hidden there too. */
+  minZoom: 8,
+  /** At most one `/api/wind/stations` request per this many ms. */
+  throttleMs: 30_000,
+  /** The api refuses a bbox that spans more 1-degree tiles than this. */
+  maxTiles: 16,
+  /** A tile fetched this recently is not asked for again (the api's own cache time). */
+  tileFreshMs: 5 * 60_000,
+  /** `/api/wind/point` answers are reused this long (the api's own cache time). */
+  pointFreshMs: 15 * 60_000,
+  /** Observations older than this are not drawn or listed. */
+  hideAfterMin: 90,
+  /** Past this a response gets the "stale" badge. */
+  staleAfterMin: 60,
+  /** The peek line uses the nearest station within this, else the model. */
+  peekStationNm: 15,
+  /** Stations listed in the sheet. */
+  nearestCount: 3,
+  /** Half-size, in degrees of latitude, of the box fetched around a selected water body. */
+  lakeRadiusDeg: 0.45,
+  /** Map tap radius around a station, px: a 48 px target. */
+  tapRadiusPx: 24,
+  /** localStorage key for the layer toggle (kept apart from `seaplane.layers`). */
+  storageKey: "seaplane.windLayer",
+} as const;

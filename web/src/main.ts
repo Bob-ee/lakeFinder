@@ -7,6 +7,7 @@ import "./styles/sheet.css";
 import "./styles/briefing.css";
 import "./styles/waves.css";
 import "./styles/location.css";
+import "./styles/wind.css";
 
 import { BriefingController, readBriefingParam } from "./briefing";
 import { minRunFt, waveLimits } from "./briefing/home-water";
@@ -31,6 +32,7 @@ import { el } from "./ui/format";
 import { loadLayerPrefs, mountMapControls } from "./ui/controls";
 import { Theme } from "./ui/theme";
 import { toast } from "./ui/toast";
+import { Wind } from "./wind";
 
 async function boot(): Promise<void> {
   const theme = new Theme();
@@ -78,10 +80,13 @@ async function boot(): Promise<void> {
     state.load(),
   ]);
 
+  // Flight-mode wind: stations on the map (a layers-panel toggle) and a block in the sheet.
+  const wind = new Wind(map, () => theme.resolved);
+
   // Location (phase 2): the recenter button resumes follow-me once there is a fix.
   const location = new LocationService();
   let follow: FollowController | null = null;
-  const controls = mountMapControls(app, map, prefs, () => follow?.recenter());
+  const controls = mountMapControls(app, map, prefs, () => follow?.recenter(), [wind.layerRow()]);
   follow = new FollowController({
     map,
     location,
@@ -90,6 +95,7 @@ async function boot(): Promise<void> {
     // A `?lake=` link owns the camera at startup; the pilot can still tap recenter.
     autoFollow: () => state.current == null,
   });
+  controls.append(wind.layer.statusElement);
 
   // The wave field: one index fetch, then one Range request per water body. Everything
   // about it degrades to "this water body has no wave field", which is also the honest
@@ -169,6 +175,7 @@ async function boot(): Promise<void> {
     if (!selection) {
       map.clearSelection();
       legend.hide();
+      wind.select(null, null, null);
       waterToken++;
       // Clearing a lake that was picked from the briefing falls back to the briefing
       // rather than closing the sheet out from under it.
@@ -198,6 +205,7 @@ async function boot(): Promise<void> {
     };
     renderPeek(input, sheet.slots.peek);
     const detail = renderDetail(input);
+    wind.select(selection.lake, detail.element, sheet.slots.peek, detail.water);
     detailPanel.replaceChildren(detail.element);
     detailPanel.scrollTop = 0;
     void mountWaterSection(selection, detail.water);
@@ -260,7 +268,7 @@ async function boot(): Promise<void> {
 
   // Deliberately global: handy from the console and from the phase-3 service worker.
   Object.assign(window, {
-    seaplane: { state, map, sheet, search, theme, briefing, location, follow, nearest, tabs },
+    seaplane: { state, map, sheet, search, theme, briefing, location, follow, nearest, tabs, wind },
   });
 
   // Last, so the permission prompt comes after the map and sheet are up.

@@ -177,6 +177,98 @@ function dataRangeServer(): Plugin {
 }
 
 /**
+ * Dev-only stand-in for `/api/wind/*` (contract "Wind proxy"), from `dev-fixtures/wind/`.
+ *
+ * Each request goes to the real api first; the fixture answers only when the api is not
+ * reachable or does not have the wind routes yet (404). `SEAPLANE_WIND_FIXTURES=1` skips
+ * the api and always answers from the fixture, which is what screenshots want. Fixture
+ * times are shifted so `fetched_at` is now and every observation keeps its age. The bbox
+ * is filtered and the 16-tile limit enforced the way the api does. `vite build` and
+ * `vite preview` never see this: production goes through Caddy to the real api.
+ */
+function windFixtures(): Plugin {
+  const dir = path.join(devFixtures, "wind");
+  const forced = process.env["SEAPLANE_WIND_FIXTURES"] === "1";
+
+  const send = (res: import("node:http").ServerResponse, status: number, body: unknown) => {
+    res.statusCode = status;
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("X-Seaplane-Fixture", "wind");
+    res.end(JSON.stringify(body));
+  };
+
+  const fixture = (url: URL): [number, unknown] => {
+    if (url.pathname === "/api/wind/stations") {
+      const parts = (url.searchParams.get("bbox") ?? "").split(",").map(Number);
+      if (parts.length !== 4 || parts.some((v) => !Number.isFinite(v))) {
+        return [422, { detail: "bbox must be west,south,east,north" }];
+      }
+      const [w, s, e, n] = parts as [number, number, number, number];
+      const tiles = (Math.floor(e) - Math.floor(w) + 1) * (Math.floor(n) - Math.floor(s) + 1);
+      if (tiles > 16) return [400, { detail: "bbox too large" }];
+      const raw = JSON.parse(readFileSync(path.join(dir, "stations.json"), "utf8")) as {
+        stations: Array<{ lat: number; lon: number; obs_time: string }>;
+        fetched_at: string;
+      };
+      const shift = Math.round((Date.now() - Date.parse(raw.fetched_at)) / 1000) * 1000;
+      const at = (iso: string) => new Date(Date.parse(iso) + shift).toISOString().replace(".000Z", "Z");
+      const stations = raw.stations
+        .filter((st) => st.lon >= w && st.lon <= e && st.lat >= s && st.lat <= n)
+        .map((st) => ({ ...st, obs_time: at(st.obs_time) }));
+      return [200, { stations, fetched_at: at(raw.fetched_at), errors: [] }];
+    }
+    if (url.pathname === "/api/wind/point") {
+      const lat = Number(url.searchParams.get("lat"));
+      const lon = Number(url.searchParams.get("lon"));
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return [422, { detail: "lat and lon required" }];
+      const raw = JSON.parse(readFileSync(path.join(dir, "point.json"), "utf8")) as Record<string, unknown>;
+      const quarter = 15 * 60_000;
+      const time = new Date(Math.floor(Date.now() / quarter) * quarter).toISOString().replace(".000Z", "Z");
+      return [200, { ...raw, lat: Math.round(lat * 10) / 10, lon: Math.round(lon * 10) / 10, time }];
+    }
+    return [404, { detail: "Not Found" }];
+  };
+
+  const middleware: Connect.NextHandleFunction = (req, res, next) => {
+    const rawUrl = req.url ?? "/";
+    if (!rawUrl.startsWith("/api/wind/")) return next();
+    const url = new URL(rawUrl, "http://dev.local");
+    void (async () => {
+      if (!forced) {
+        try {
+          const upstream = await fetch(API_ORIGIN + rawUrl, {
+            headers: { Accept: "application/json" },
+            signal: AbortSignal.timeout(8000),
+          });
+          if (upstream.status !== 404) {
+            res.statusCode = upstream.status;
+            res.setHeader("Content-Type", upstream.headers.get("content-type") ?? "application/json");
+            res.end(Buffer.from(await upstream.arrayBuffer()));
+            return;
+          }
+        } catch {
+          // Not reachable: fall through to the fixture.
+        }
+      }
+      const [status, body] = fixture(url);
+      send(res, status, body);
+    })();
+  };
+
+  return {
+    name: "seaplane:wind-fixtures",
+    apply: "serve",
+    configureServer(server) {
+      server.middlewares.use(middleware);
+      server.config.logger.info(
+        `  [wind] /api/wind/* ${forced ? "from dev-fixtures/wind (forced)" : `via ${API_ORIGIN}, fixtures when it has none`}`,
+      );
+    },
+  };
+}
+
+/**
  * `virtual:rules-engine` re-exports ../rules/engine/index.js when that file exists and a
  * null-shaped stub when it does not, so the client builds before the rules agent lands its
  * engine and picks it up automatically once it does.
@@ -288,7 +380,7 @@ export default defineConfig({
       },
     },
   },
-  plugins: [dataRangeServer(), rulesEngineShim(), maplibreAssets()],
+  plugins: [dataRangeServer(), windFixtures(), rulesEngineShim(), maplibreAssets()],
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },

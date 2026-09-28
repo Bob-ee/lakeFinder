@@ -1,0 +1,253 @@
+/* Flight-mode wind: layer key, age chip, station popup, sheet block, peek line.
+   Source is told apart by glyph shape only; everything here is ink on surface. */
+
+.wind-glyph {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* -- layers panel ------------------------------------------------------- */
+
+.wind-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 0 8px 6px 42px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.wind-key-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.wind-key-glyph {
+  width: 16px;
+  height: 16px;
+  color: var(--text);
+}
+
+/* -- age chip under the map controls ------------------------------------ */
+
+.wind-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.wind-status[hidden] {
+  display: none;
+}
+
+.stale-badge {
+  display: inline-block;
+  padding: 0 6px;
+  border: 1.5px solid var(--verdict-conditional);
+  border-radius: 6px;
+  color: var(--verdict-conditional);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.5;
+}
+
+/* -- station popup ------------------------------------------------------- */
+
+.wind-popup .maplibregl-popup-content {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-float);
+}
+
+.wind-popup.maplibregl-popup-anchor-bottom .maplibregl-popup-tip { border-top-color: var(--surface); }
+.wind-popup.maplibregl-popup-anchor-top .maplibregl-popup-tip { border-bottom-color: var(--surface); }
+.wind-popup.maplibregl-popup-anchor-left .maplibregl-popup-tip { border-right-color: var(--surface); }
+.wind-popup.maplibregl-popup-anchor-right .maplibregl-popup-tip { border-left-color: var(--surface); }
+
+.wind-popup-name {
+  font-weight: 650;
+  font-size: 14px;
+}
+
+.wind-popup-meta,
+.wind-popup-age {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.wind-popup-wind {
+  margin: 2px 0;
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* -- peek line ------------------------------------------------------------ */
+
+.peek-wind {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.peek-wind[hidden] {
+  display: none;
+}
+
+.peek-wind.is-stale {
+  color: var(--verdict-conditional);
+}
+
+/* -- sheet block ---------------------------------------------------------- */
+
+.wind-section[hidden] {
+  display: none;
+}
+
+.wind-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.wind-head .detail-h {
+  margin-bottom: 0;
+}
+
+.wind-updated {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.wind-components {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  margin-bottom: 10px;
+}
+
+.wind-comp-title {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.wind-comp-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 18px;
+  font-size: 15px;
+  margin-top: 2px;
+}
+
+.wind-comp-num {
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.wind-comp-gust,
+.wind-comp-src {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.wind-stations {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.wind-station {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.wind-station-glyph {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  color: var(--text);
+}
+
+.wind-station-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.wind-station-top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.wind-station-id {
+  font-weight: 700;
+}
+
+.wind-station-src {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.wind-value {
+  margin-left: auto;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.wind-station-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.wind-model {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-height: 40px;
+  padding-top: 10px;
+}
+
+.wind-model-label {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.wind-model .wind-age {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.wind-section > p {
+  margin: 8px 0 0;
+}

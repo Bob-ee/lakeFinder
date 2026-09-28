@@ -54,6 +54,8 @@ export function mountMapControls(
   map: MapController,
   prefs: LayerPrefs,
   onRecenter?: () => void,
+  /** Rows owned elsewhere (the wind layer), appended after the built-in toggles. */
+  extraRows: HTMLElement[] = [],
 ): HTMLElement {
   const stack = el("div", "map-controls");
 
@@ -109,6 +111,8 @@ export function mountMapControls(
     );
   }
 
+  panel.append(...extraRows);
+
   layersBtn.addEventListener("click", () => {
     const show = Boolean(panel.hidden);
     panel.hidden = !show;
@@ -128,7 +132,7 @@ export function mountMapControls(
   return stack;
 }
 
-function toggleRow(opts: {
+export function toggleRow(opts: {
   label: string;
   hint?: string | undefined;
   checked: boolean;

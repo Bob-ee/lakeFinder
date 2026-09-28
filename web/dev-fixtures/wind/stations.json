@@ -1,0 +1,21 @@
+{
+  "stations": [
+    {"id": "KDET", "source": "metar", "name": "Detroit/C Young Arpt, MI, US", "lat": 42.409, "lon": -83.010, "dir_deg": 240, "speed_kt": 12, "gust_kt": 18, "obs_time": "2026-09-28T15:46:00Z"},
+    {"id": "KMTC", "source": "metar", "name": "Selfridge ANGB, MI, US", "lat": 42.608, "lon": -82.832, "dir_deg": 250, "speed_kt": 14, "gust_kt": 21, "obs_time": "2026-09-28T15:55:00Z"},
+    {"id": "KPHN", "source": "metar", "name": "Port Huron/St Clair Co Intl, MI, US", "lat": 42.911, "lon": -82.529, "dir_deg": 260, "speed_kt": 11, "gust_kt": null, "obs_time": "2026-09-28T15:35:00Z"},
+    {"id": "KVLL", "source": "metar", "name": "Troy/Oakland/Troy Arpt, MI, US", "lat": 42.543, "lon": -83.178, "dir_deg": 230, "speed_kt": 9, "gust_kt": null, "obs_time": "2026-09-28T15:53:00Z"},
+    {"id": "KPTK", "source": "metar", "name": "Pontiac/Oakland Co Intl, MI, US", "lat": 42.665, "lon": -83.420, "dir_deg": 240, "speed_kt": 10, "gust_kt": 17, "obs_time": "2026-09-28T15:53:00Z"},
+    {"id": "KDTW", "source": "metar", "name": "Detroit Metro Wayne Co Arpt, MI, US", "lat": 42.212, "lon": -83.353, "dir_deg": 230, "speed_kt": 13, "gust_kt": 20, "obs_time": "2026-09-28T15:53:00Z"},
+    {"id": "CYQG", "source": "metar", "name": "Windsor Arpt, ON, CA", "lat": 42.276, "lon": -82.956, "dir_deg": 240, "speed_kt": 12, "gust_kt": null, "obs_time": "2026-09-28T15:00:00Z"},
+    {"id": "KD95", "source": "metar", "name": "Lapeer/DuPont-Lapeer Arpt, MI, US", "lat": 43.067, "lon": -83.272, "dir_deg": null, "speed_kt": 0, "gust_kt": null, "obs_time": "2026-09-28T15:15:00Z"},
+    {"id": "LSCM4", "source": "ndbc", "name": null, "lat": 42.465, "lon": -82.755, "dir_deg": 250, "speed_kt": 15, "gust_kt": 19, "obs_time": "2026-09-28T15:50:00Z"},
+    {"id": "45147", "source": "ndbc", "name": null, "lat": 42.430, "lon": -82.680, "dir_deg": 245, "speed_kt": 16, "gust_kt": 20, "obs_time": "2026-09-28T14:50:00Z"},
+    {"id": "AFIX1", "source": "synoptic", "name": "Harrison Twp shore (fixture)", "lat": 42.620, "lon": -82.790, "dir_deg": 255, "speed_kt": 8, "gust_kt": 14, "obs_time": "2026-09-28T15:52:00Z"},
+    {"id": "AFIX2", "source": "synoptic", "name": "Algonac (fixture)", "lat": 42.620, "lon": -82.530, "dir_deg": 260, "speed_kt": 10, "gust_kt": null, "obs_time": "2026-09-28T15:25:00Z"},
+    {"id": "AFIX3", "source": "synoptic", "name": "St. Clair Shores (fixture)", "lat": 42.497, "lon": -82.889, "dir_deg": null, "speed_kt": 4, "gust_kt": null, "obs_time": "2026-09-28T15:40:00Z"},
+    {"id": "AFIX4", "source": "synoptic", "name": "Belle River (fixture)", "lat": 42.296, "lon": -82.710, "dir_deg": 235, "speed_kt": 11, "gust_kt": null, "obs_time": "2026-09-28T13:40:00Z"},
+    {"id": "AFIX5", "source": "synoptic", "name": "Lake Orion (fixture)", "lat": 42.784, "lon": -83.239, "dir_deg": 225, "speed_kt": 7, "gust_kt": null, "obs_time": "2026-09-28T15:30:00Z"}
+  ],
+  "fetched_at": "2026-09-28T16:00:00Z",
+  "errors": []
+}
