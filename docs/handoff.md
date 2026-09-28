@@ -1,6 +1,6 @@
 # Handoff: seaplane lake map
 
-Rewritten 2026-09-20 for the next agent, updated the same evening after the first deploy. Read this, then the docs
+Rewritten 2026-09-20 for the next agent; updated 2026-09-25 (region wind, depth, colour-blind wave display) and 2026-09-28 (flight mode). Read this, then the docs
 in section 2 as you need them. Everything described here is committed on `main` (local; **not pushed** since
 `d793fca`, push when Bobby says).
 
@@ -40,9 +40,9 @@ config (no new Michigan constants). A state without regulation data must read "n
 
 | part | state | verify |
 |---|---|---|
-| `pipeline/` Python 3.12, uv | `fetch → parse-dnr → match → geometry → overlay → classify → wavefield → build`, plus `review`, `suggest`. Statewide warm run ≈ 8 min (`geometry` 2 min, `wavefield` 1.5 min, `build --skip-basemap` 35 s). | `cd pipeline && uv run pytest -q` (399) · `uv run ruff check seaplane_pipeline tests` |
-| `rules/` JS, zero deps | `engine/` (24 rules, verdict cap via `big_water_partial`) and `waves/` (wave math shared with the client). Shared fixtures in `rules/fixtures/` are the agreement between JS and Python. | `cd rules && npm test` (144) |
-| `api/` FastAPI, uv | Briefing generator, in-process scheduler (06/09/12/15/18/20/22 local), settings, airport lookup, wave-field reader, regions, `home_water` with observations and marine second opinion. `/api/wind/*` is an empty slot. | `cd api && uv run pytest -q` (339) · `uv run ruff check .` |
+| `pipeline/` Python 3.12, uv | `fetch → parse-dnr → match → geometry → overlay → classify → wavefield → build`, plus `review`, `suggest`. Statewide warm run ≈ 8 min (`geometry` 2 min, `wavefield` 1.5 min, `build --skip-basemap` 35 s). | `cd pipeline && uv run pytest -q` (405) · `uv run ruff check seaplane_pipeline tests` |
+| `rules/` JS, zero deps | `engine/` (24 rules, verdict cap via `big_water_partial`) and `waves/` (wave math shared with the client). Shared fixtures in `rules/fixtures/` are the agreement between JS and Python. | `cd rules && npm test` (146) |
+| `api/` FastAPI, uv | Briefing generator, in-process scheduler (06/09/12/15/18/20/22 local), settings, airport lookup, wave-field reader, regions, `home_water` with observations and marine second opinion. `/api/wind/*` is an empty slot. | `cd api && uv run pytest -q` (365) · `uv run ruff check .` |
 | `web/` Vite, TS, MapLibre | Map, search, 3-snap sheet / iPad panel, client-side rules engine, Briefing tab + chip, settings dialog, Water section (wind dial, region list), wave overlay + legend, home-water action. No test runner. | `cd web && npm run typecheck && npm run build` |
 | hosting | **Deployed on `labmac`** (Bobby's home server, tailnet): https://labmac.tail22b52.ts.net:10000. `deploy/push.sh labmac` updates it. `docker-compose.yml` is the unused alternative. | `curl https://labmac.tail22b52.ts.net:10000/api/health` |
 | data | `data/out/` is a full pack (gitignored): 12,571 water bodies (10,783 lake, 1,780 river, 5 great_lake incl. Lake St. Clair, 3 connecting_water); 942 of 1,118 active DNR rules matched; verdicts 544 restricted / 299 conditional / 11,240 clear / 488 unknown; 81,436 wave points over 1,286 water bodies, 41,015 with depth (after the 2026-09-25 rebuild). | `uv run seaplane all` rebuilds |
@@ -141,8 +141,14 @@ lake for the 17% area gap seen on Cass Lake), pull Michigan constants into a reg
 `STATE='MI'`, then a second state to discover the regulation-adapter interface. Hosting / accounts before inviting
 anyone; Open-Meteo's free tier is non-commercial.
 
-**E. Original phases still open:** flight mode (location, follow-me, nearest list, `/api/wind/*` station layer;
-slots exist in `web/src/location/`, `web/src/lists/`, `api/seaplane_api/wind.py`), offline (plan in
+**E. Original phases.** **Flight mode (phase 2): done 2026-09-28** (contract "Flight mode"; commits ad81267..e097977):
+`/api/wind/stations` + `/api/wind/point` (METAR + NDBC; Synoptic adapter written from docs, never seen live, needs
+`SYNOPTIC_TOKEN`), location / follow-me / heading-up (on at 10 kt, off below 7) / wake lock / own marker
+(`web/src/location/`), Nearest tab with forward cone and a min-run filter (`web/src/lists/`), wind layer with
+source-by-shape arrows and the sheet's Wind block (`web/src/wind/`; lands into the wind when the run allows, chord
+components only when it does not). Dev: `?fakefix=lat,lon,speed,course[,hold]` (dev build only),
+`SEAPLANE_WIND_FIXTURES=1`. Screenshots used fixtures: verify against the live wind API on the real phone/iPad.
+Still open: offline (plan in
 `web/src/sw/README.md`; test on the real iPad early), saved lakes + sync, MAC ingestion when the record arrives.
 
 **Standing data-quality risk:** an unmatched restriction appears on no lake, so that lake reads clear. 150 lake-named
