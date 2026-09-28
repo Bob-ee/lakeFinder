@@ -44,6 +44,8 @@ export class FollowController {
   private lock: WakeLockSentinel | null = null;
   private marker: OwnMarker;
   private recenterBtn: HTMLButtonElement | null;
+  /** Set by a recenter tap with no fix, so a denial that answers it can explain itself. */
+  private askedAt: number | null = null;
   private compassBtn: HTMLButtonElement;
   private compassNeedle: HTMLElement;
   private listeners = new Set<(following: boolean) => void>();
@@ -79,7 +81,16 @@ export class FollowController {
       if (document.visibilityState === "visible" && this.following) void this.acquireLock();
     });
 
-    deps.location.onChange((fix) => this.onFix(fix));
+    deps.location.onChange((fix, status) => {
+      if (this.askedAt != null && status === "denied") {
+        // The answer to a recenter tap: say where the switch is, long enough to read.
+        this.askedAt = null;
+        toast(statusNote(status) ?? "", 9000);
+      } else if (fix) {
+        this.askedAt = null;
+      }
+      this.onFix(fix);
+    });
     this.syncButtons();
   }
 
@@ -96,8 +107,12 @@ export class FollowController {
     const fix = this.deps.location.fix;
     if (!fix) {
       this.deps.map.recenter();
-      const note = statusNote(this.deps.location.status);
-      if (note) toast(note);
+      const status = this.deps.location.status;
+      // This tap is the user gesture the browser wants before it will prompt.
+      this.askedAt = Date.now();
+      this.deps.location.request();
+      if (status === "denied") toast(statusNote(status) ?? "", 9000);
+      else toast("Finding your position…");
       return;
     }
     this.setFollowing(true);
