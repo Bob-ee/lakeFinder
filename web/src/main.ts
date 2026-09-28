@@ -107,20 +107,20 @@ async function boot(): Promise<void> {
   // bottom sheet on a phone and a docked panel on an iPad. The chip on the map keeps it
   // one tap away from the default view.
   const briefing = new BriefingController({
-    show: () => {
+    show: (grow) => {
       tabs.select("briefing");
-      if (sheet.current === "hidden" || sheet.current === "peek") sheet.setSnap("full");
+      // The pilot tapped the chip (or opened ?briefing=1): the card needs room, so raise
+      // the sheet to full. `grow` never lowers a sheet and brings a collapsed panel back.
+      if (grow) sheet.grow("full");
     },
     hide: () => sheet.setSnap("hidden"),
     hasSelection: () => state.current != null,
     lookupLake: (id) => state.search.get(id) ?? null,
+    // Picking a row leaves the sheet where the pilot put it (no auto-shrink from full).
     selectLake: (id) => {
-      // Come back to half so the lake is visible on the map behind the sheet.
-      if (sheet.current === "full") sheet.setSnap("half");
       if (!state.selectLake(id, "list")) toast("That lake is not in this data pack");
     },
     selectRegion: (id, lat, lon) => {
-      if (sheet.current === "full") sheet.setSnap("half");
       if (!state.selectLake(id, "list")) {
         toast("That water body is not in this data pack");
         return;
@@ -150,7 +150,6 @@ async function boot(): Promise<void> {
       return { lat: c.lat, lon: c.lng };
     },
     onSelect: (id) => {
-      if (sheet.current === "full") sheet.setSnap("half");
       if (!state.selectLake(id, "list")) toast("That lake is not in this data pack");
     },
     minRunFt: () => minRunFt(WAVES.defaultMinRunFt),
@@ -161,14 +160,21 @@ async function boot(): Promise<void> {
   mountNearestButton(controls, () => {
     tabs.select("nearest");
     nearest.setVisible(true);
-    if (sheet.current === "hidden" || sheet.current === "peek") sheet.setSnap("half");
+    // An explicit ask for the list: raise to at least half so rows are visible.
+    sheet.grow("half");
   });
 
   theme.onChange((resolved) => {
     map.setTheme(resolved);
     applyWaveBandVars(resolved);
   });
-  sheet.onSnapChange(() => map.resize());
+  // The wave key shows as its chip while a phone sheet covers half the map or more.
+  const compactLegend = () =>
+    legend.setCompact(!sheet.isPanel && (sheet.current === "half" || sheet.current === "full"));
+  sheet.onSnapChange(() => {
+    map.resize();
+    compactLegend();
+  });
   window.addEventListener("resize", () => map.resize());
 
   state.onSelection((selection) => {
@@ -181,9 +187,10 @@ async function boot(): Promise<void> {
       // rather than closing the sheet out from under it.
       if (briefing.isOpen) {
         detailPanel.replaceChildren(detailPlaceholder());
-        briefing.reveal();
+        briefing.reveal(false);
         return;
       }
+      // Nothing left to show: the pilot tapped empty map to clear the selection.
       sheet.setSnap("hidden");
       return;
     }
@@ -192,8 +199,10 @@ async function boot(): Promise<void> {
     renderSelection(selection);
     map.select(selection.lake);
     tabs.select("detail");
-    // Re-open at half on a new selection; leave a sheet already at full alone.
-    if (sheet.current !== "full") sheet.setSnap("half");
+    // No auto-popup: a visible sheet stays where the pilot left it; a hidden one shows
+    // peek (or the stored snap on the first show after a reload). A collapsed iPad panel
+    // stays collapsed; its tab picks up the new name from the peek row.
+    sheet.reveal();
   });
 
   function renderSelection(selection: Selection): void {

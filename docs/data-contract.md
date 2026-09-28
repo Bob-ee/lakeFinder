@@ -353,6 +353,9 @@ entries:
 
 - `?lake=<id>` opens that lake via the single `selectLake(id)` path.
 - IndexedDB db `seaplane`, stores `saved` (key `id`), `recent` (key `id`), `wind` (key bbox tile), `briefing` (key `"latest"`).
+- localStorage (every access in try/catch; losing it only loses the preference): `seaplane.theme`,
+  `seaplane.disclaimerAck`, `seaplane.layers`, `seaplane.sheet` (JSON `{snap, collapsed}`: the sheet height and iPad
+  panel collapse the pilot last chose), `seaplane.waveKey` (`"open"` or `"min"`, the map wave key).
 - OPFS directory `pack/` holds the downloaded data pack files by name (phase 3).
 
 ## Wave field (`wave_points.bin` + `wave_points.json`, stage `wavefield`, listed in `pack.json`)

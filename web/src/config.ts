@@ -156,6 +156,10 @@ export const STORAGE_KEYS = {
   theme: "seaplane.theme",
   disclaimerAck: "seaplane.disclaimerAck",
   layers: "seaplane.layers",
+  /** Sheet snap and iPad panel collapse the pilot last chose: `{"snap":"half","collapsed":false}`. */
+  sheet: "seaplane.sheet",
+  /** Map wave key: "open" or "min" (the default). */
+  waveKey: "seaplane.waveKey",
 } as const;
 
 /** v2 added the `briefing` store; state/db.ts creates every store behind a contains check. */

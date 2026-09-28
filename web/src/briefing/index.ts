@@ -21,8 +21,11 @@ export { BriefingStore } from "./store";
 export type { BriefingState } from "./store";
 
 export interface BriefingHost {
-  /** Reveal the briefing panel: select its tab and open the sheet if it is closed. */
-  show(): void;
+  /**
+   * Reveal the briefing panel: select its tab. `grow` is true when the pilot asked for it
+   * (chip, URL) and the sheet may be raised; false when it is only falling back to it.
+   */
+  show(grow: boolean): void;
   /** Close the sheet again when the briefing was the only thing holding it open. */
   hide(): void;
   /** True when a lake is selected, i.e. the peek row belongs to the detail view. */
@@ -85,10 +88,13 @@ export class BriefingController {
     return this.open;
   }
 
-  /** Opens the card and, when no lake is selected, takes over the peek row. */
-  reveal(): void {
+  /**
+   * Opens the card and, when no lake is selected, takes over the peek row. `grow` false
+   * switches to it without moving the sheet.
+   */
+  reveal(grow = true): void {
     this.open = true;
-    this.host.show();
+    this.host.show(grow);
     this.renderPeek();
     if (this.health === null) void this.probe();
   }
