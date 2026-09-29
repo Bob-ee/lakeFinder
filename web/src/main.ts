@@ -8,10 +8,12 @@ import "./styles/briefing.css";
 import "./styles/waves.css";
 import "./styles/location.css";
 import "./styles/wind.css";
+import "./styles/timebar.css";
 
 import { BriefingController, readBriefingParam } from "./briefing";
 import { minRunFt, waveLimits } from "./briefing/home-water";
 import { WAVES } from "./config";
+import { ForecastWaves } from "./forecast";
 import { Tabs, detailPlaceholder } from "./lists";
 import { NearestList, mountNearestButton } from "./lists/nearest";
 import { LocationService } from "./location";
@@ -134,6 +136,9 @@ async function boot(): Promise<void> {
   briefing.mountChip(app);
   briefing.start();
 
+  // Waves over time: the map's time bar and the Water section's forecast mode.
+  const forecastWaves = new ForecastWaves(app, { sheet, timeline: () => briefing.store.briefing?.timeline });
+
   const search = new SearchBox(app, {
     index: state.search,
     onSelect: (id) => {
@@ -174,13 +179,18 @@ async function boot(): Promise<void> {
   sheet.onSnapChange(() => {
     map.resize();
     compactLegend();
+    forecastWaves.place();
   });
-  window.addEventListener("resize", () => map.resize());
+  window.addEventListener("resize", () => {
+    map.resize();
+    forecastWaves.place();
+  });
 
   state.onSelection((selection) => {
     if (!selection) {
       map.clearSelection();
       legend.hide();
+      forecastWaves.detach();
       wind.select(null, null, null);
       waterToken++;
       // Clearing a lake that was picked from the briefing falls back to the briefing
@@ -229,6 +239,7 @@ async function boot(): Promise<void> {
     const token = ++waterToken;
     map.setWaveField(null);
     legend.hide();
+    forecastWaves.detach();
 
     const field = await waves.field(selection.lake.id);
     if (token !== waterToken || !field) return;
@@ -257,6 +268,7 @@ async function boot(): Promise<void> {
     });
     slot.replaceChildren(section.element);
     paint(section.current);
+    void forecastWaves.attach(section, field, () => token === waterToken);
   }
 
   if (state.search.size === 0) {

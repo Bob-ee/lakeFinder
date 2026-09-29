@@ -1,6 +1,5 @@
 import type { Feature, FeatureCollection } from "geojson";
-import { metresToInches, waveHeight, windBin } from "@rules/waves/index.js";
-import { FETCH_UNIT_M, RUN_UNIT_FT } from "@rules/waves/index.js";
+import { metresToInches, pointWave } from "@rules/waves/index.js";
 import { waveBand } from "./ramp";
 import type { WaveState } from "./section";
 
@@ -24,9 +23,7 @@ const MAX_CACHED = 8;
 const cache = new Map<number, Feature[]>();
 
 export function waveGeo(state: WaveState): WaveGeo {
-  const { lake, field, wind, minRunFt, limits } = state;
-  const bin = windBin(wind.dir);
-  const runBin = bin % 8;
+  const { lake, field, windOf, minRunFt, limits } = state;
 
   let features = cache.get(lake.id);
   if (!features || features.length !== field.points.length) {
@@ -39,15 +36,23 @@ export function waveGeo(state: WaveState): WaveGeo {
     cache.set(lake.id, features);
   }
 
+  // Each point on its own wind: one wind from the dial, or its region's forecast cell.
   for (let i = 0; i < field.points.length; i++) {
     const p = field.points[i]!;
-    const depth = p.depth_dm === 0xffff ? null : p.depth_dm / 10;
-    const { hsM } = waveHeight(wind.kt, p.fetch[bin]! * FETCH_UNIT_M, depth);
     const props = features[i]!.properties!;
+    const wind = windOf(p.label, i);
+    if (!wind) {
+      // No forecast for this point's cell this hour: a hollow ring with no number.
+      props["hs_in"] = 0;
+      props["usable"] = false;
+      props["band"] = "norun";
+      props["text"] = "";
+      continue;
+    }
+    const { hsM, usable } = pointWave(p, wind.dir, wind.kt, minRunFt);
     const hsIn = metresToInches(hsM);
     // A sheltered spot you cannot get out of is not a landing spot; it is drawn as a hollow
     // ring rather than dropped, because a pilot should still see that it was measured.
-    const usable = p.run[runBin]! * RUN_UNIT_FT >= minRunFt;
     props["hs_in"] = hsIn;
     props["usable"] = usable;
     props["band"] = waveBand(hsIn, usable, limits);
