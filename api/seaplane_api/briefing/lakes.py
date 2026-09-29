@@ -527,7 +527,7 @@ def score_over(
     hours: list[LakeHour] = []
     for when in windows:
         if per_region:
-            by_cell = {cell: _wind_at(forecasts.get(cell), when) for cell in cand.cells}
+            by_cell = {cell: wind_at(forecasts.get(cell), when) for cell in cand.cells}
             winds = {
                 label: w for label, cell in cand.region_cells.items() if (w := by_cell.get(cell)) is not None
             }
@@ -536,7 +536,7 @@ def score_over(
             first = next(iter(winds.values()))
             hour = score_lake_hour(cand, first.dir_deg, first.kt, first.gust_kt, limits, region_winds=winds)
         else:
-            w = _wind_at(forecasts.get(cand.cell), when)
+            w = wind_at(forecasts.get(cand.cell), when)
             if w is None:
                 continue
             hour = score_lake_hour(cand, w.dir_deg, w.kt, w.gust_kt, limits)
@@ -551,7 +551,7 @@ def score_over(
     return RankedLake(cand=cand, level=level, limiting=limiting, hour=worst, frozen=frozen, hours=hours)
 
 
-def _wind_at(series: object | None, when: datetime) -> Wind | None:
+def wind_at(series: object | None, when: datetime) -> Wind | None:
     """The model wind at `when` from one cell's series, or `None` when it has none."""
     if series is None:
         return None

@@ -17,7 +17,7 @@ from .conftest import DETROIT, load, make_feeds, make_wave_field, wave_point
 
 TOP = {
     "schema", "generated_at", "run_kind", "timezone", "home_airport", "summary", "days",
-    "outlook", "alerts", "lakes", "home_water", "sources", "links", "errors",
+    "outlook", "timeline", "alerts", "lakes", "home_water", "sources", "links", "errors",
 }
 DAY = {"date", "score", "best_window", "blocks"}
 BLOCK = {
@@ -157,6 +157,41 @@ def _briefing_with_wave_field() -> dict:
 def test_top_level_keys():
     assert set(_briefing()) == TOP
     assert set(_briefing_with_wave_field()) == TOP
+
+
+TIMELINE_HOUR = {
+    "t", "past", "daylight", "score", "limiting", "wind", "model", "ceiling_ft", "ceiling_known",
+    "vis_sm", "fog_risk", "precip_prob", "temp_f",
+}
+TIMELINE_WINDOW = {"start", "end", "score", "limiting_after"}
+TIMELINE_HOME = {
+    "id", "name", "labels", "hs_in", "wind", "best", "open_in", "score", "limiting", "observed", "marine_in",
+}
+
+
+def test_the_timeline_matches_the_contract_and_its_arrays_line_up():
+    b = _briefing_with_wave_field()
+    tl = b["timeline"]
+    assert set(tl) == {"hours", "windows", "home_water"}
+    assert len(tl["hours"]) == 79 and all(set(h) == TIMELINE_HOUR for h in tl["hours"])
+    assert sum(h["past"] for h in tl["hours"]) == 6
+    assert all(set(w) == TIMELINE_WINDOW for w in tl["windows"])
+    assert all(h["score"] in LEVELS for h in tl["hours"] if h["score"] is not None)
+    hw = tl["home_water"]
+    assert set(hw) == TIMELINE_HOME
+    assert hw["labels"] == ["west end", "middle", "Duck Bay"]
+    for key in ("hs_in", "wind", "best", "open_in", "score", "limiting", "marine_in"):
+        assert len(hw[key]) == 79, key
+    assert all(len(row) == 3 for row in hw["hs_in"] + hw["wind"])
+    assert all(set(w) == {"dir", "kt", "gust"} for row in hw["wind"] for w in row if w is not None)
+    assert all(s in LEVELS for s in hw["score"] if s is not None)
+    assert all(set(o) == {"t", "station", "wave_in", "wind"} for o in hw["observed"])
+    # outlook, days and summary are untouched by it.
+    assert set(b["outlook"]) == OUTLOOK and b["days"] and isinstance(b["summary"], str)
+
+
+def test_the_timeline_home_water_is_null_without_a_home_water():
+    assert _briefing()["timeline"]["home_water"] is None
 
 
 def test_home_water_is_null_when_no_home_water_is_set():

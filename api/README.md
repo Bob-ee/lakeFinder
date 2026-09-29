@@ -30,6 +30,7 @@ grid, which is two calls of 50.
 | `PUT /api/settings` | full object, 422 on bad input, written atomically, triggers a background `manual` run |
 | `GET /api/airports/{ident}` | resolves an identifier to the `home_airport` shape; 404 when unknown |
 | `POST /api/briefing/refresh` | runs now, returns the new `briefing.json` body |
+| `GET /api/forecast/wind?lake=<id>` | forecast wind per cell and per region on the timeline axis (`seaplane_api/forecast.py`); 404 unknown lake, 502 when Open-Meteo fails with nothing cached; `SEAPLANE_WIND_FIXTURES=1` serves synthetic wind |
 
 `/api/wind/*` (design 7.9) is a documented empty slot in `seaplane_api/wind.py`; it is not mounted,
 so those paths 404.

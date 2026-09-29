@@ -28,6 +28,7 @@ from . import lakes as lakes_mod
 from . import outlook as outlook_mod
 from . import render
 from . import taf as taf_mod
+from . import timeline as timeline_mod
 from .scoring import FAVORABLE, rank, score_conditions
 from .series import HourlySeries, conditions_from_model, daylight_fraction, metar_is_fresh
 from .sun import SunTimes, local_sun_times
@@ -52,6 +53,7 @@ class Feeds:
     buoys: list[dict] | None = None  # NDBC rows near the home water
     home_water_metars: list[dict] | None = None  # METARs from the bbox around the home water
     marine: dict | None = None  # Open-Meteo marine at the home water's centroid
+    buoy_history: dict | None = None  # {"station": id, "rows": NDBC realtime2 rows, newest first}
     fetched_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     errors: list[str] = field(default_factory=list)
 
@@ -80,13 +82,17 @@ async def collect_feeds(
         feeds.taf = aviationweather.pick_station(tafs, home.id)
 
     tz = ZoneInfo(settings.timezone)
+    fc = settings.forecast
+    # The airport request keeps `past_days` for the ice gate's daily maxima, and asks for as many
+    # forecast days as the timeline needs; `forecast_hours` / `past_hours` cannot be combined with it.
     airport_payloads, om_errors = await openmeteo.fetch_points(
         client,
         [(home.lat, home.lon)],
         timezone=settings.timezone,
-        forecast_days=2,
-        past_days=ICE_LOOKBACK_DAYS,
+        forecast_days=max(2, fc.forecast_days),
+        past_days=max(ICE_LOOKBACK_DAYS, fc.past_days),
         daily=("temperature_2m_max",),
+        models=fc.wind_models,
     )
     feeds.errors.extend(om_errors)
     if airport_payloads and airport_payloads[0]:
@@ -97,8 +103,17 @@ async def collect_feeds(
     # when it is not a candidate. Its wind comes from its own centroid, never from the airport.
     cell_of = lakes_mod.grid_cells(candidates if home_water is None else [*candidates, home_water])
     if cell_of:
+        # The cells only feed the lake and home-water wave math, which reads wind and nothing else, so
+        # the request asks for wind alone: the longer axis and the second model then cost no more calls
+        # and little more payload than before.
         payloads, errs = await openmeteo.fetch_points(
-            client, list(cell_of.values()), timezone=settings.timezone, forecast_days=2
+            client,
+            list(cell_of.values()),
+            timezone=settings.timezone,
+            forecast_days=max(2, fc.forecast_days),
+            past_days=fc.past_days,
+            models=fc.wind_models,
+            hourly=openmeteo.WIND_VARS,
         )
         feeds.errors.extend(errs)
         for cell, payload in zip(cell_of.keys(), payloads, strict=False):
@@ -149,6 +164,16 @@ async def _collect_home_water(
         feeds.errors.append(err)
     else:
         feeds.marine = marine
+
+    # The timeline's observed history: the nearest buoy that reports waves, its last 45 days of hourly
+    # rows. One more NOAA call, not an Open-Meteo one. Skipped when the latest-obs file had no such buoy.
+    station = homewater_mod.history_station(home_water, feeds.buoys)
+    if station is not None:
+        rows, err = await ndbc.fetch_history(client, station)
+        if err:
+            feeds.errors.append(err)
+        else:
+            feeds.buoy_history = {"station": station, "rows": rows}
 
 
 def build_briefing(
@@ -254,6 +279,10 @@ def build_briefing(
             home_water=home_water,
         )
 
+    timeline = timeline_mod.build_timeline(
+        settings, feeds, now_utc=now_utc, tz=tz, frozen=frozen, home_water=home_water
+    )
+
     # No `valid_from` / `valid_to`: the superseded design-doc sketch had them, the authoritative
     # contract does not, and the client can read the span off `days[].blocks[]`.
     return {
@@ -265,6 +294,7 @@ def build_briefing(
         "summary": summary,
         "days": days,
         "outlook": outlook,
+        "timeline": timeline,
         "alerts": feeds.alerts or [],
         "lakes": lake_rows,
         "home_water": home_water_row,

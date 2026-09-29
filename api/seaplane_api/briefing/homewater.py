@@ -167,6 +167,23 @@ def observed_rows(
     return rows
 
 
+def history_station(cand: Candidate, buoys: list[dict] | None, *, radius_nm: float = OBS_RADIUS_NM) -> str | None:
+    """The nearest buoy that reports wave height, for the timeline's observed history.
+
+    Same reach as `observed_rows` (a buoy has to be on or beside the water), but it must actually carry
+    a `WVHT`: a shore station with wind only would leave the wave row empty. Distance is measured to the
+    water, not the centroid, exactly as there. `None` when none qualifies.
+    """
+    best: tuple[float, str] | None = None
+    for b in buoys or []:
+        if b.get("wave_height_m") is None or not b.get("id"):
+            continue
+        d = nearest_nm(cand, float(b["lat"]), float(b["lon"]))
+        if d <= radius_nm and (best is None or d < best[0]):
+            best = (d, str(b["id"]))
+    return None if best is None else best[1]
+
+
 def marine_hs_in(payload: dict | None, when_local: datetime, cand: Candidate) -> int | None:
     """Open-Meteo marine wave height at the water body's centroid for `when_local`, in inches.
 

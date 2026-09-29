@@ -97,6 +97,51 @@ class HomeWater(_Base):
     name: str = ""
 
 
+DEFAULT_WIND_MODELS = ("ncep_hrrr_conus", "best_match")
+_MODEL_ID = re.compile(r"^[a-z][a-z0-9_]{1,63}$")
+MAX_HORIZON_H = 240  # Open-Meteo's NBM reaches ~10 days; the request is sized from this
+MAX_PAST_H = 48
+
+
+class Forecast(_Base):
+    """The forecast timeline's wind model and span (contract, "Forecast timeline").
+
+    `wind_models` are Open-Meteo model ids tried **per hour** in order: speed, gust and direction come
+    together from the first model with all three, so a model that ends early (HRRR near 48 h) hands the
+    later hours to the next. `best_match` is the fallback and must be last; outside CONUS the regional
+    models return nothing and it carries every hour.
+    """
+
+    wind_models: list[str] = Field(default_factory=lambda: list(DEFAULT_WIND_MODELS))
+    horizon_h: int = Field(default=72, ge=1, le=MAX_HORIZON_H)
+    past_h: int = Field(default=6, ge=0, le=MAX_PAST_H)
+
+    @field_validator("wind_models")
+    @classmethod
+    def _check_models(cls, v: list[str]) -> list[str]:
+        if not v:
+            raise ValueError("wind_models needs at least best_match")
+        for m in v:
+            if not _MODEL_ID.match(m):
+                raise ValueError(f"{m!r} is not an Open-Meteo model id")
+        if len(set(v)) != len(v):
+            raise ValueError("wind_models has a duplicate")
+        if v[-1] != "best_match":
+            raise ValueError("best_match must be the last wind model (it is the fallback)")
+        return v
+
+    @property
+    def forecast_days(self) -> int:
+        """Whole days to request so the current hour plus `horizon_h` is covered from any hour of the day
+        (at 23:00 the current day supplies one hour)."""
+        return -(-self.horizon_h // 24) + 1
+
+    @property
+    def past_days(self) -> int:
+        """Whole past days so `past_h` hours are covered from any hour of the day (0 when none wanted)."""
+        return -(-self.past_h // 24)
+
+
 class Notify(_Base):
     ntfy_url: str | None = None
 
@@ -142,6 +187,7 @@ class Settings(_Base):
     outlook: Outlook = Field(default_factory=Outlook)
     notify: Notify = Field(default_factory=Notify)
     limits: Limits = Field(default_factory=Limits)
+    forecast: Forecast = Field(default_factory=Forecast)
 
     @field_validator("timezone")
     @classmethod
