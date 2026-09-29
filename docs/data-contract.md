@@ -774,9 +774,12 @@ same time axis, for the map's time bar. Cells are **0.1°**; when that gives mor
  "models": ["ncep_nbm_conus", "…"],                  // per hour, as in timeline.hours[].model (first cell's)
  "cells": [{"lat": 42.4, "lon": -82.7,
             "dir": [40, 45], "kt": [4, 5], "gust": [6, 7]}],   // per hour; null where no model had the hour
+ "regions": [{"label": "Anchor Bay", "lat": 42.6, "lon": -82.8,   // the region centroid's 0.1° cell, ALWAYS 0.1°
+              "dir": [40, 45], "kt": [4, 5], "gust": [6, 7]}],   // = exactly the wind the briefing uses for it
  "fetched_at": "2026-09-29T02:00:30Z", "errors": []}
 ```
 
+`regions` has one entry per wave-field label (empty without a wave field); its cells count toward the batch but not toward the 120-cell limit.
 404 for an unknown lake; 502 `{"detail": "…"}` when Open-Meteo fails and nothing is cached. `SEAPLANE_WIND_FIXTURES=1`
 serves a deterministic synthetic answer (wind veering 360° over the axis, 4 → 22 kt and back) for development.
 
@@ -790,10 +793,10 @@ serves a deterministic synthetic answer (wind veering 360° over the axis, 4 →
   region, observed buoy dots in past hours), and a fog/ceiling/precip row. Tapping a column sets the clock and offers
   "Waves on the map" (selects the home water). Scores are shown with a word or pattern and lightness, never hue
   alone. The summary paragraph is no longer shown on the card.
-- **Map time bar**: shown while the selected water body has a wave field. A scrubber over the axis (day labels,
+- **Map time bar**: `timeline.windows` are drawn only on the home water (they are its windows); shown while the selected water body has a wave field. A scrubber over the axis (day labels,
   night shaded, windows marked), play/pause, and "Now". Moving it sets the clock; the points recompute for that hour
-  with each point taking **its region's cell wind** (region centroid cell, as in the briefing; an unlabelled point
-  takes its own cell), at the gust. The legend and the Water section say which hour and "forecast". Touching the
+  with each point taking **its region's wind** from the response's `regions[]` (the 0.1° centroid cell, identical
+  to the briefing even when `cell_deg` is coarser; `cells` serve only a point whose label has no `regions` entry), at the gust. The legend and the Water section say which hour and "forecast". Touching the
   wind dial switches to **manual wind** ("What if: 250/12"), with a button back to the forecast hour.
   Shared math: `rules/waves` `regionsForWinds(points, labels, windOf(label, index), minRunFt)` (a null wind
   leaves the point out, as in Python), `pointWave`, `labelCentroids`, `cellOf(lat, lon, cell_deg)` (round half
