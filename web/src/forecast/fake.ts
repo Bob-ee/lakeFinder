@@ -7,16 +7,20 @@
  * varies across the cells (a few knots and up to ~30° over Lake St. Clair) so regions visibly
  * disagree. `?fakehour=N` (also dev only) sets the clock N hours from now once it has loaded.
  */
-import { cellOf } from "@rules/waves/index.js";
+import { cellOf, labelCentroids } from "@rules/waves/index.js";
 import type { WavePoint } from "@rules/waves/index.js";
-import type { ForecastWind as ForecastWindResponse } from "../briefing/types";
+import type { ForecastWithRegions } from "./lake";
 import { localIso } from "./time";
 
 const PAST = 6;
 const AHEAD = 72;
 const MAX_CELLS = 120;
 
-export function fakeForecastWind(lakeId: number, points: readonly WavePoint[]): ForecastWindResponse {
+export function fakeForecastWind(
+  lakeId: number,
+  points: readonly WavePoint[],
+  labels: readonly string[],
+): ForecastWithRegions {
   // Cells exactly as the contract picks them: 0.1°, doubled until 120 or fewer.
   let cellDeg = 0.1;
   let keys = new Map<string, [number, number]>();
@@ -40,9 +44,7 @@ export function fakeForecastWind(lakeId: number, points: readonly WavePoint[]): 
   const n = times.length - 1;
   const round = (x: number) => Math.round(x * 1e4) / 1e4;
 
-  const cells = [...keys.values()].map(([i, j]) => {
-    const lat = round(i * cellDeg);
-    const lon = round(j * cellDeg);
+  const series = (lat: number, lon: number) => {
     const dir: number[] = [];
     const kt: number[] = [];
     const gust: number[] = [];
@@ -57,7 +59,15 @@ export function fakeForecastWind(lakeId: number, points: readonly WavePoint[]): 
       gust.push(Math.round(k * 1.35 + 2));
     }
     return { lat, lon, dir, kt, gust };
-  });
+  };
+  const cells = [...keys.values()].map(([i, j]) => series(round(i * cellDeg), round(j * cellDeg)));
+  // Per region: the centroid's cell, always 0.1°, as the api does.
+  const regions = [...labelCentroids(points as WavePoint[])]
+    .filter(([label]) => labels[label] != null)
+    .map(([label, c]) => {
+      const [i, j] = cellOf(c.lat, c.lon, 0.1);
+      return { label: labels[label]!, ...series(round(i * 0.1), round(j * 0.1)) };
+    });
 
   return {
     lake_id: lakeId,
@@ -66,6 +76,7 @@ export function fakeForecastWind(lakeId: number, points: readonly WavePoint[]): 
     past: PAST,
     models: times.map(() => "fake"),
     cells,
+    regions,
     fetched_at: new Date().toISOString(),
     errors: [],
   };

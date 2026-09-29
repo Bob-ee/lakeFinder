@@ -75,7 +75,12 @@
 
 .timebar.is-compact {
   grid-template-areas: "play track now";
-  padding: 4px 6px;
+  padding: 2px 6px;
+  column-gap: 6px;
+}
+
+.timebar.is-compact .timebar-track {
+  height: 50px;
 }
 
 .timebar.is-compact .timebar-read {

@@ -13,6 +13,26 @@ import { hourIndex, type HourIso } from "../state/clock";
  * point with no region of its own takes its own cell. Waves are computed at the gust.
  */
 
+/** One series as the api sends it (a cell or a region). */
+interface Series {
+  dir: (number | null)[];
+  kt: (number | null)[];
+  gust: (number | null)[];
+}
+
+/**
+ * `regions` (contract amendment 20a72b5): each label's wind from its centroid's 0.1° cell,
+ * exactly what the briefing uses. Declared here until `briefing/types.ts` carries it; an
+ * older api leaves it out.
+ */
+export interface ForecastRegionSeries extends Series {
+  label: string;
+  lat: number;
+  lon: number;
+}
+
+export type ForecastWithRegions = ForecastWindResponse & { regions?: ForecastRegionSeries[] };
+
 /** One hour's wind at one cell, as the api sends it. */
 export interface HourWind {
   dir: number;
@@ -45,7 +65,7 @@ export class LakeForecast {
   private readonly byHour: (Map<number, RegionWind | null> | undefined)[];
   private readonly byHourPoint: (Map<number, RegionWind | null> | undefined)[];
 
-  constructor(data: ForecastWindResponse, points: readonly WavePoint[], labels: readonly string[]) {
+  constructor(data: ForecastWithRegions, points: readonly WavePoint[], labels: readonly string[]) {
     this.lakeId = data.lake_id;
     this.times = data.times;
     this.past = data.past;
@@ -85,10 +105,23 @@ export class LakeForecast {
       points.length > 0 ? { lat: sumLat / points.length, lon: sumLon / points.length } : { lat: 0, lon: 0 };
     this.centroidCell = this.cells.length > 0 ? find(this.centroid.lat, this.centroid.lon) : -1;
 
-    if (this.cells.length === 0) return;
-    for (const [label, c] of labelCentroids(points as WavePoint[])) {
-      if (labels[label] != null) this.labelCell.set(label, find(c.lat, c.lon));
+    // The api's own per-region series first (the briefing's exact wind); a label it does not
+    // list (older api) falls back to its centroid's cell, else the nearest cell.
+    const regionSlot = new Map<string, number>();
+    for (const r of data.regions ?? []) {
+      if (!r || typeof r.label !== "string" || !Array.isArray(r.kt) || r.kt.length !== data.times.length) continue;
+      regionSlot.set(r.label, this.cells.length);
+      this.cells.push({ dir: r.dir, kt: r.kt, gust: r.gust ?? r.kt.map(() => null) });
     }
+    const listedCells = data.cells.length;
+    for (const [label, c] of labelCentroids(points as WavePoint[])) {
+      const name = labels[label];
+      if (name == null) continue;
+      const own = regionSlot.get(name);
+      if (own != null) this.labelCell.set(label, own);
+      else if (listedCells > 0) this.labelCell.set(label, find(c.lat, c.lon));
+    }
+    if (listedCells === 0) return;
     points.forEach((p, i) => {
       if (labels[p.label] == null) this.pointCell.set(i, find(p.lat, p.lon));
     });

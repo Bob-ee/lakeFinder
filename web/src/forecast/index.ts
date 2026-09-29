@@ -21,7 +21,12 @@ export class ForecastWaves {
 
   constructor(
     parent: HTMLElement,
-    private readonly opts: { sheet: Sheet; timeline: () => Timeline | null | undefined },
+    private readonly opts: {
+      sheet: Sheet;
+      timeline: () => Timeline | null | undefined;
+      /** The bar's reserved height changed: the map re-frames with the new padding. */
+      onLayout?: (deltaPx: number) => void;
+    },
   ) {
     this.bar = new TimeBar(parent, opts.timeline);
     this.place();
@@ -34,7 +39,7 @@ export class ForecastWaves {
   async attach(section: WaterSection, field: WaveField, alive: () => boolean): Promise<void> {
     this.detach();
     this.section = section;
-    const data = await this.client.get(field.lakeId, field.points);
+    const data = await this.client.get(field.lakeId, field.points, field.labels);
     if (!alive() || this.section !== section || !data) return;
     const forecast = new LakeForecast(data, field.points, field.labels);
     if (forecast.isStale() || forecast.length === 0) return;
@@ -42,6 +47,8 @@ export class ForecastWaves {
     section.setForecast(forecast);
     section.onFocusChange = () => this.bar.refresh();
     this.bar.show(forecast, (h) => section.readoutAt(h));
+    const reserved = this.reservedPx;
+    if (reserved > 0) this.opts.onLayout?.(reserved);
 
     const offset = devHourOffset();
     if (offset != null && !this.devHourUsed) {
@@ -56,6 +63,11 @@ export class ForecastWaves {
     this.section?.destroy();
     this.section = null;
     this.bar.hide();
+  }
+
+  /** Map pixels the bar takes from the bottom of the map (0 when hidden), for framing padding. */
+  get reservedPx(): number {
+    return this.bar.visible ? this.bar.element.offsetHeight + 8 : 0;
   }
 
   /** Call when the sheet moves: the bar rides above a phone sheet and hides under a full one. */

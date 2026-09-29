@@ -139,7 +139,8 @@ export class TimeBar {
     this.element.classList.toggle("is-panel", opts.panel);
     // Over a half sheet the readout is in the Water section right below: one row is enough.
     this.element.classList.toggle("is-compact", opts.compact);
-    this.element.style.bottom = opts.panel ? "" : `${Math.round(opts.sheetPx + 8)}px`;
+    // Compact over a half sheet: tucked right onto the sheet's edge.
+    this.element.style.bottom = opts.panel ? "" : `${Math.round(opts.sheetPx + (opts.compact ? 4 : 8))}px`;
     this.suppressed = opts.covered;
     if (opts.covered) this.pause();
     this.applyVisible();
@@ -324,7 +325,9 @@ export class TimeBar {
     // Windows from the briefing, as bars under the band: solid for favorable, dashed for
     // marginal, so the difference is shape and not colour.
     const first = Date.parse(f.times[0]!);
-    for (const w of tl?.windows ?? []) {
+    // They are the home water's (and airport's) windows: drawn only on that water body.
+    const windows = tl?.home_water?.id === f.lakeId ? tl.windows : [];
+    for (const w of windows ?? []) {
       const a = (Date.parse(w.start) - first) / 3_600_000;
       const b = (Date.parse(w.end) - first) / 3_600_000;
       if (!Number.isFinite(a) || !Number.isFinite(b) || b <= 0 || a >= n) continue;

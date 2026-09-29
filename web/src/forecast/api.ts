@@ -24,21 +24,25 @@ export class ForecastWindClient {
   private inflight = new Map<number, Promise<ForecastWindResponse | null>>();
 
   /** `points` feeds the dev fake only (`?fakeforecast=1`). */
-  get(lakeId: number, points: readonly WavePoint[]): Promise<ForecastWindResponse | null> {
+  get(lakeId: number, points: readonly WavePoint[], labels: readonly string[]): Promise<ForecastWindResponse | null> {
     const hit = this.mem.get(lakeId);
     if (hit && Date.now() - hit.at < FRESH_MS) return Promise.resolve(hit.data);
     let pending = this.inflight.get(lakeId);
     if (!pending) {
-      pending = this.load(lakeId, points).finally(() => this.inflight.delete(lakeId));
+      pending = this.load(lakeId, points, labels).finally(() => this.inflight.delete(lakeId));
       this.inflight.set(lakeId, pending);
     }
     return pending;
   }
 
-  private async load(lakeId: number, points: readonly WavePoint[]): Promise<ForecastWindResponse | null> {
+  private async load(
+    lakeId: number,
+    points: readonly WavePoint[],
+    labels: readonly string[],
+  ): Promise<ForecastWindResponse | null> {
     if (import.meta.env.DEV && fakeRequested()) {
       const { fakeForecastWind } = await import("./fake");
-      const data = fakeForecastWind(lakeId, points);
+      const data = fakeForecastWind(lakeId, points, labels);
       this.mem.set(lakeId, { at: Date.now(), data });
       return data;
     }
