@@ -148,6 +148,7 @@ anyone; Open-Meteo's free tier is non-commercial.
 source-by-shape arrows and the sheet's Wind block (`web/src/wind/`; lands into the wind when the run allows, chord
 components only when it does not). Dev: `?fakefix=lat,lon,speed,course[,hold]` (dev build only),
 `SEAPLANE_WIND_FIXTURES=1`. Screenshots used fixtures: verify against the live wind API on the real phone/iPad.
+**Forecast timeline: done 2026-09-28** (contract "Forecast timeline and waves over time"): `briefing.json` `timeline` (79 h axis, airport score per hour, windows, home-water waves per region per hour, buoy history), `/api/forecast/wind?lake=` (per-cell + per-region hourly wind), multi-model wind setting `forecast.wind_models` (default HRRR then best_match; comparison in `docs/briefing-design.md` 3.6: every model's gust reads ~4 kt high), Briefing tab leads with the timeline chart (`web/src/briefing/timeline.ts`), map time bar (`web/src/forecast/`), shared forecast clock (`web/src/state/clock.ts`). Dev: `?fakeforecast=1`, `?fakehour=N`. Open: computed open-water waves read well above buoy 45147 in light air (gust bias), a gust calibration is the obvious next step.
 Still open: offline (plan in
 `web/src/sw/README.md`; test on the real iPad early), saved lakes + sync, MAC ingestion when the record arrives.
 

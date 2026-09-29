@@ -258,7 +258,8 @@ export function renderTimeline(tl: Timeline, deps: TimelineDeps): HTMLElement {
     const h = hours[run]!;
     let end = run + 1;
     while (end < n && hours[end]!.score === h.score && hours[end]!.limiting === h.limiting) end++;
-    if (h.score !== "favorable") {
+    // Night is already shaded; a "daylight" bar across it only repeats that.
+    if (h.score !== "favorable" && h.limiting !== "daylight") {
       const x = run * COL + 1;
       const wpx = (end - run) * COL - 2;
       gData.append(
