@@ -1,8 +1,12 @@
 """Turning an Open-Meteo point response into a lookup, and a lookup into `Conditions`.
 
 Open-Meteo is asked for `timezone=<settings.timezone>`, so `hourly.time` comes back as naive local
-ISO strings ("2026-09-19T14:00"). They are localised here once, which makes DST handling the
-zoneinfo library's problem rather than ours.
+ISO strings ("2026-09-19T14:00"). They are localised here once (`_localise`, which also handles a DST
+change inside the range) and looked up by instant afterwards.
+
+When the request asked for several wind models, `fetch/openmeteo.merge_models` has already folded the
+response into the bare names, so `values` carries `wind_speed_10m` etc. from the first model that had
+all three wind variables for the hour, and `wind_model`: which one, per hour.
 
 Unit notes from the live API (checked 2026-09-19): `visibility` is metres, `surface_pressure` and
 `pressure_msl` are hPa, `precipitation` is mm, `cape` is J/kg, winds are knots and temperatures
@@ -12,7 +16,8 @@ which is `pressure_msl`, not `surface_pressure`.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, tzinfo
+from datetime import datetime, timedelta, timezone, tzinfo
+from itertools import pairwise
 
 from . import aero
 from .scoring import Conditions
@@ -27,35 +32,63 @@ class HourlySeries:
 
     times: list[datetime]
     values: dict[str, list]
-    index: dict[datetime, int]
+    index: dict[int, int]  # epoch seconds of the hour's start -> position; see `_localise`
     elevation_m: float = 0.0
 
     @classmethod
     def from_open_meteo(cls, payload: dict, tz: tzinfo) -> HourlySeries:
         hourly = payload.get("hourly") or {}
         raw_times = hourly.get("time") or []
-        times = [datetime.fromisoformat(t).replace(tzinfo=tz) for t in raw_times]
+        times = _localise(raw_times, tz, payload.get("utc_offset_seconds"))
         values = {k: v for k, v in hourly.items() if k != "time"}
         return cls(
             times=times,
             values=values,
-            index={t: i for i, t in enumerate(times)},
+            index={int(t.timestamp()): i for i, t in enumerate(times)},
             elevation_m=float(payload.get("elevation") or 0.0),
         )
 
+    def _key(self, when: datetime) -> int:
+        local = when.astimezone(self.times[0].tzinfo).replace(minute=0, second=0, microsecond=0)
+        return int(local.timestamp())
+
     def at(self, when: datetime) -> dict[str, float | None]:
         """The hour containing `when` (the series is hourly, so truncate)."""
-        key = when.astimezone(self.times[0].tzinfo).replace(minute=0, second=0, microsecond=0) if self.times else when
-        i = self.index.get(key)
+        if not self.times:
+            return {}
+        i = self.index.get(self._key(when))
         if i is None:
             return {}
         return {k: (v[i] if i < len(v) else None) for k, v in self.values.items()}
 
     def covers(self, when: datetime) -> bool:
-        if not self.times:
-            return False
-        key = when.astimezone(self.times[0].tzinfo).replace(minute=0, second=0, microsecond=0)
-        return key in self.index
+        return bool(self.times) and self._key(when) in self.index
+
+
+def _localise(raw_times: list[str], tz: tzinfo, utc_offset_seconds: int | None) -> list[datetime]:
+    """Open-Meteo's naive local labels as aware datetimes, correct across a DST change.
+
+    Checked against the archive API on 2025-11-02 and 2026-03-08 (Detroit): a three-day range across
+    the change has 72 rows, so the labels are a fixed 24-hours-a-day grid at one UTC offset
+    (`utc_offset_seconds`) rather than 23 or 25 real local hours. Reading those labels as wall-clock in
+    `tz` would put every hour after the change an hour off. So a strictly hourly grid is read at the
+    response's own offset and converted; labels that are not a plain hourly grid (a skipped or repeated
+    hour) fall back to the wall-clock reading, marking the second of a repeated hour `fold=1`. With no
+    DST change in range the two readings are identical, which is every run but two a year.
+    """
+    naive = [datetime.fromisoformat(t) for t in raw_times]
+    if utc_offset_seconds is not None and naive and all(
+        (b - a).total_seconds() == 3600 for a, b in pairwise(naive)
+    ):
+        fixed = timezone(timedelta(seconds=int(utc_offset_seconds)))
+        return [t.replace(tzinfo=fixed).astimezone(tz) for t in naive]
+    out: list[datetime] = []
+    prev: datetime | None = None
+    for t in naive:
+        fold = 1 if prev is not None and t <= prev else 0
+        out.append(t.replace(tzinfo=tz, fold=fold))
+        prev = t
+    return out
 
 
 def daylight_fraction(start: datetime, end: datetime, dawn: datetime | None, dusk: datetime | None) -> float:

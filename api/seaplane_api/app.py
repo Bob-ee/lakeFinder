@@ -21,6 +21,7 @@ from fastapi.responses import JSONResponse
 from . import service
 from .fetch import aviationweather
 from .fetch.http import client
+from .forecast import router as forecast_router
 from .paths import briefing_path, read_json
 from .scheduler import Scheduler
 from .settings import Settings, save_settings
@@ -48,6 +49,7 @@ def create_app(*, scheduler: Scheduler | None = None) -> FastAPI:
         app = FastAPI(title="seaplane-api", version="0.1.0", lifespan=lifespan)
 
     app.include_router(wind_router)
+    app.include_router(forecast_router)
 
     @app.get("/api/health")
     async def health() -> dict[str, Any]:

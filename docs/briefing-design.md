@@ -184,6 +184,46 @@ Outlook line, e.g.:
 All numbers in `briefing.json` are already rounded for display on the server (kt, °F, inches, and minutes as
 integers; ceiling and density altitude to the nearest 100 ft); the client prints them as they are.
 
+### 3.6 Wind model for the forecast timeline (measured 2026-09-28)
+
+The timeline takes wind from `settings.forecast.wind_models`, tried per hour in order (speed, gust and direction
+together from the first model with all three), `best_match` last. The default order was picked from a hindcast:
+Open-Meteo's own values for the last 48 h at each station, against observations at KONZ, KMTC, KDET, KPTK (METAR,
+aviationweather.gov, matched to the nearest top of the hour) and NDBC 45147 (realtime2, hourly rows; m/s to kt).
+216 hour pairs: 48 + 48 + 47 + 48 METAR hours and 25 buoy hours. Bias is model minus observed (kt); MAE is the mean
+absolute error.
+
+| model | speed bias | speed MAE | gust bias | gust MAE | notes |
+|---|---|---|---|---|---|
+| `best_match` | -0.24 | 1.70 | +4.06 | 4.59 | identical to the next two over this window |
+| `ncep_hrrr_conus` | -0.24 | 1.70 | +4.06 | 4.59 | ends near 48 h ahead |
+| `gfs_seamless` | -0.24 | 1.70 | +4.06 | 4.59 | in CONUS this is HRRR blended into GFS |
+| `ncep_nam_conus` | +0.78 | 1.87 | +4.01 | 4.57 | |
+| `ncep_nbm_conus` | +0.96 | 1.83 | +5.05 | 5.22 | reaches ~10 d |
+| `icon_seamless` | -0.53 | 2.09 | +5.04 | 5.38 | worst at the buoy (bias -2.9, MAE 4.4) |
+| `gfs_global` | +1.14 | 2.02 | +5.92 | 6.35 | |
+
+Per station, `best_match` speed MAE: KONZ 1.17, KMTC 2.68, KPTK 1.49, KDET 1.58, 45147 1.42; NBM: 1.31, 2.91, 1.45,
+1.75, 1.67 (NBM is better only at KPTK, and only by 0.04). A 7 day run (278 pairs) gives the same ranking.
+
+How to read it:
+
+- **Gust** is scored against the observed gust where the station reported one and against the observed speed when
+  it did not (a calm METAR has no gust, and a model gust of 9 over a 5 kt wind is an error). Only 6 of the 216
+  hours reported a gust, so the gust bias is the number to read: every model's gust runs **4 to 6 kt high**, which is the known "3 kt G12" effect. Waves are computed at the gust, so the timeline's wave rows carry
+  that bias; it is a reason to prefer the model with the smallest gust bias, not a reason to change the rule.
+- **HRRR, `best_match` and `gfs_seamless` are the same numbers** here because Open-Meteo builds all three from HRRR
+  for CONUS in the near term. The hindcast therefore cannot tell them apart, and it says nothing about skill at 48
+  to 72 h, where `best_match` falls back to global models and NBM (calibrated, ~3 km) may well be better. The window
+  was also calm (5 to 10 kt); a windy week would separate the models more.
+- On this evidence NBM is **not** better: +0.9 kt speed bias and +1 kt more gust bias than `best_match`.
+
+Default: `["ncep_hrrr_conus", "best_match"]`. HRRR is explicit for the first ~48 h (the same numbers `best_match`
+gives today, but the timeline's `model` field then says which model an hour came from and the near term does not
+change if Open-Meteo re-blends `best_match`), and `best_match` carries the rest. `["ncep_nbm_conus", "best_match"]`
+(the contract's example) stays a one-line settings change; re-run the comparison across a windy stretch before
+making it the default. Script: none is checked in; the method is the paragraph above.
+
 
 ## 4. Architecture
 

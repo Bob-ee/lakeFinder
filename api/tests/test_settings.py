@@ -136,7 +136,7 @@ def test_load_creates_the_file_with_defaults_on_first_start(tmp_path, monkeypatc
     assert on_disk["timezone"] == "America/Detroit"
     assert set(on_disk) == {
         "home_airport", "timezone", "radius_nm", "n_lakes", "public_access_only", "home_water",
-        "schedule", "outlook", "notify", "limits",
+        "schedule", "outlook", "notify", "limits", "forecast",
     }
     assert on_disk["home_water"] is None
 

@@ -82,7 +82,7 @@ def test_get_settings_returns_the_contract_object(client):
     body = client.get("/api/settings").json()
     assert set(body) == {
         "home_airport", "timezone", "radius_nm", "n_lakes", "public_access_only", "home_water",
-        "schedule", "outlook", "notify", "limits",
+        "schedule", "outlook", "notify", "limits", "forecast",
     }
     assert body["home_airport"]["id"] == "KPTK"
 

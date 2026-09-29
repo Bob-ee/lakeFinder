@@ -81,3 +81,45 @@ def _num(value: str) -> float | None:
         return float(value)
     except ValueError:
         return None
+
+
+HISTORY_URL = "https://www.ndbc.noaa.gov/data/realtime2/{station}.txt"
+_HISTORY_COLUMNS = ("yy", "mm", "dd", "hh", "mi", "wdir", "wspd", "gst", "wvht")
+
+
+async def fetch_history(c: httpx.AsyncClient, station: str) -> tuple[list[dict] | None, str | None]:
+    """One station's last 45 days of observations, newest first (`realtime2/<station>.txt`).
+
+    The same table as `latest_obs.txt` minus the station, latitude and longitude columns, and with
+    the newest row first; `MM` is missing. Units are as there: `WSPD`/`GST` m/s, `WVHT` m, times UTC.
+    Rows come back in knots and metres like `parse_latest_obs`.
+    """
+    text, err = await get_text(c, HISTORY_URL.format(station=station), label=f"ndbc_history[{station}]")
+    if err or text is None:
+        return None, err or "ndbc_history: empty response"
+    return parse_history(text), None
+
+
+def parse_history(text: str) -> list[dict]:
+    out: list[dict] = []
+    for line in text.splitlines():
+        if not line.strip() or line.startswith("#"):
+            continue
+        parts = line.split()
+        if len(parts) < len(_HISTORY_COLUMNS):
+            continue
+        row = dict(zip(_HISTORY_COLUMNS, parts, strict=False))
+        at = _observed_at(row)
+        if at is None:
+            continue
+        wspd, gst = _num(row["wspd"]), _num(row["gst"])
+        out.append(
+            {
+                "at": at,
+                "dir_deg": _num(row["wdir"]),
+                "speed_kt": None if wspd is None else round(wspd * MS_TO_KT, 1),
+                "gust_kt": None if gst is None else round(gst * MS_TO_KT, 1),
+                "wave_height_m": _num(row["wvht"]),
+            }
+        )
+    return out
