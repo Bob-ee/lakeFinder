@@ -696,3 +696,102 @@ briefing), cached **15 min** per cell:
   water", no crosswind); the chord headwind / crosswind only when that run is short or the lake has no extent entry.
 - Last responses cached in IndexedDB store `wind` (key: tile id or `point:<cell>`); shown with their age; a "stale"
   badge past 60 min; nothing drawn if no fetch has ever succeeded.
+
+## Forecast timeline and waves over time (added 2026-09-28)
+
+Goal: the forecast reads as one hourly picture (the Briefing tab leads with a chart), and the wave field on the map can
+be scrubbed through time, every region using its own forecast wind for that hour. Same wording rules: scores are
+`favorable | marginal | unfavorable` with the limiting factor, never "go", "safe", or "legal".
+
+### Time axis (shared by everything below)
+
+Hourly, local, ISO 8601 with offset (`"2026-09-29T06:00:00-04:00"`), from **6 h before the current hour** through
+**72 h after it** (79 hours). Hours before the current hour are `past: true`: the model's value for that hour (Open-Meteo
+`past_hours`) shown beside what was observed. The api writes whole hours only; the client never interpolates.
+
+### Wind model (`settings.forecast`)
+
+```jsonc
+"forecast": {"wind_models": ["ncep_nbm_conus", "best_match"],   // Open-Meteo model ids, tried in order PER HOUR
+             "horizon_h": 72, "past_h": 6}
+```
+
+One Open-Meteo request per batch of points asks for every listed model (`models=a,b`; the response suffixes each
+variable with the model id). For each hour, wind speed, gust and direction are taken **together** from the first
+model with all three non-null; the other variables (visibility, cloud, precipitation, …) keep coming from
+`best_match`. The model used is recorded per hour. The default order is chosen from a measured comparison against
+METAR and buoy observations (api/README or `docs/briefing-design.md` records the numbers); `best_match` must stay
+last as the fallback. HRRR (`ncep_hrrr_conus`) ends near 48 h and NBM near 10 d, both CONUS-only; outside CONUS
+the list falls through to `best_match`. Unknown keys are rejected; a missing `forecast` object gets these defaults.
+
+### `briefing.json` → `timeline` (new, additive; `null` when the forecast input failed)
+
+```jsonc
+"timeline": {
+  "hours": [{"t": "2026-09-29T06:00:00-04:00", "past": false,
+             "daylight": true,                   // between civil dawn and civil dusk at the home airport
+             "score": "marginal", "limiting": "fog",   // AIRPORT weather only, same scoring as outlook.hours
+             "wind": {"dir": 40, "kt": 4, "gust": 6},  // airport cell
+             "model": "ncep_nbm_conus",          // which wind_models entry supplied the wind
+             "ceiling_ft": null, "ceiling_known": false, "vis_sm": 1, "fog_risk": true,
+             "precip_prob": 0, "temp_f": 55}],
+  "windows": [{"start": "2026-09-29T10:00:00-04:00", "end": "2026-09-29T14:00:00-04:00",   // end exclusive
+               "score": "favorable", "limiting_after": "gusts"}],   // what ends it (null at dusk / horizon)
+  "home_water": {                                // null when settings.home_water is null
+    "id": 657423876, "name": "Lake St. Clair",
+    "labels": ["Anchor Bay", "Big Muscamoot Bay", "open middle"],   // every region, fixed order
+    "hs_in":  [[3, 2, 9]],                       // [hour][label]; null = no usable run into that hour's wind
+    "wind":   [[{"dir": 40, "kt": 4, "gust": 6}]], // [hour][label]: that region's cell, as in "Wind per region"
+    "best":   [{"label": "Big Muscamoot Bay", "hs_in": 2}],   // per hour, null when no region usable
+    "open_in": [9],                              // per hour, roughest region (hs_open_in)
+    "score":  ["favorable"], "limiting": [null], // per hour, WATER only (best region), same rules as lake rows
+    "observed": [{"t": "2026-09-29T01:00:00-04:00", "station": "45147", "wave_in": 4,
+                  "wind": {"dir": 60, "kt": 6, "gust": null}}],   // past hours only, nearest buoy with wave data
+    "marine_in": [2]                             // per hour, Open-Meteo marine at the centroid, null when snapped >10 nm
+  }
+}
+```
+
+- `hours` and every `home_water` per-hour array have the same length and index.
+- A **window** is a run of at least `outlook.min_window_hours` daylight, non-past hours whose score is `favorable`
+  (or, when there is none that day, `marginal`). The score is the worse of the airport score and, when home water is
+  set, the home water's score for that hour. Windows never cross civil dusk.
+- Waves are computed at the gust (same as the rest of the briefing). `observed` holds the buoy's hourly
+  history (NDBC `realtime2/<station>.txt`, `WVHT` m → inches, `WSPD`/`GST` m/s → kt) for the past hours of the axis.
+- `outlook` and `days` stay as they are (ntfy and older clients use them); `summary` is kept for ntfy.
+
+### `GET /api/forecast/wind?lake=<id>` (router `/api/forecast`)
+
+The forecast wind for every cell a water body's wave points (or, without a wave field, its centroid) fall in, on the
+same time axis, for the map's time bar. Cells are **0.1°**; when that gives more than **120** cells the size doubles
+(0.2°, 0.4°, …) until it does not, so Lake Michigan stays a handful of requests. A point belongs to cell
+`(round(lat / cell_deg) × cell_deg, round(lon / cell_deg) × cell_deg)`. Cached **30 min** per (cell, cell_deg).
+
+```jsonc
+{"lake_id": 657423876, "cell_deg": 0.1,
+ "times": ["2026-09-29T00:00:00-04:00", "…"],       // the time axis above
+ "past": 6,                                          // how many leading entries are past hours
+ "models": ["ncep_nbm_conus", "…"],                  // per hour, as in timeline.hours[].model (first cell's)
+ "cells": [{"lat": 42.4, "lon": -82.7,
+            "dir": [40, 45], "kt": [4, 5], "gust": [6, 7]}],   // per hour; null where no model had the hour
+ "fetched_at": "2026-09-29T02:00:30Z", "errors": []}
+```
+
+404 for an unknown lake; 502 `{"detail": "…"}` when Open-Meteo fails and nothing is cached. `SEAPLANE_WIND_FIXTURES=1`
+serves a deterministic synthetic answer (wind veering 360° over the axis, 4 → 22 kt and back) for development.
+
+### Client
+
+- **Forecast clock** (`web/src/state/clock.ts`): the one "which hour am I looking at" state. `null` = live (the
+  current hour). The Briefing chart, the map time bar and the Water section all read and set it.
+- **Briefing tab** leads with a one-line answer (`Favorable Tue 10:00–14:00 · gusts after`) from `timeline.windows`,
+  then the **timeline chart**: hourly columns over the axis, night shaded, windows as bars under the axis, rows for
+  wind (speed line + gust line, labelled numbers), direction arrows, home water wave height (open water and calmest
+  region, observed buoy dots in past hours), and a fog/ceiling/precip row. Tapping a column sets the clock and offers
+  "Waves on the map" (selects the home water). Scores are shown with a word or pattern and lightness, never hue
+  alone. The summary paragraph is no longer shown on the card.
+- **Map time bar**: shown while the selected water body has a wave field. A scrubber over the axis (day labels,
+  night shaded, windows marked), play/pause, and "Now". Moving it sets the clock; the points recompute for that hour
+  with each point taking **its region's cell wind** (region centroid cell, as in the briefing; an unlabelled point
+  takes its own cell), at the gust. The legend and the Water section say which hour and "forecast". Touching the
+  wind dial switches to **manual wind** ("What if: 250/12"), with a button back to the forecast hour.

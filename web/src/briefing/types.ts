@@ -243,6 +243,8 @@ export interface Briefing {
   sources: BriefingSources;
   links: BriefingLinks;
   errors: string[];
+  /** Absent on a briefing written before the timeline existed. */
+  timeline?: Timeline | null;
 }
 
 // -- settings.json (through /api/settings) ---------------------------------
@@ -322,4 +324,75 @@ export interface Health {
   ok: boolean;
   briefing_generated_at: string | null;
   next_run_local: string | null;
+}
+
+/* ---- Forecast timeline (contract: "Forecast timeline and waves over time") ---- */
+
+export interface TimelineHour {
+  /** Local ISO 8601 with offset. */
+  t: string;
+  past: boolean;
+  daylight: boolean;
+  /** Airport weather only. */
+  score: Score;
+  limiting: LimitingFactor | null;
+  wind: Wind;
+  /** The Open-Meteo model that supplied this hour's wind. */
+  model: string;
+  ceiling_ft: number | null;
+  ceiling_known: boolean;
+  vis_sm: number | null;
+  fog_risk: boolean;
+  precip_prob: number | null;
+  temp_f: number | null;
+}
+
+export interface TimelineWindow {
+  start: string;
+  /** Exclusive. */
+  end: string;
+  score: Score;
+  limiting_after: LimitingFactor | null;
+}
+
+export interface TimelineObservation {
+  t: string;
+  station: string;
+  wave_in: number | null;
+  wind: Wind | null;
+}
+
+/** Every per-hour array has the same length and index as `timeline.hours`. */
+export interface TimelineHomeWater {
+  id: number;
+  name: string;
+  labels: string[];
+  /** [hour][label]; null = no usable run into that hour's wind. */
+  hs_in: (number | null)[][];
+  wind: (Wind | null)[][];
+  best: ({ label: string; hs_in: number } | null)[];
+  open_in: (number | null)[];
+  /** Water only, best region. */
+  score: Score[];
+  limiting: (LimitingFactor | null)[];
+  observed: TimelineObservation[];
+  marine_in: (number | null)[];
+}
+
+export interface Timeline {
+  hours: TimelineHour[];
+  windows: TimelineWindow[];
+  home_water: TimelineHomeWater | null;
+}
+
+/** `GET /api/forecast/wind?lake=<id>`. */
+export interface ForecastWind {
+  lake_id: number;
+  cell_deg: number;
+  times: string[];
+  past: number;
+  models: string[];
+  cells: { lat: number; lon: number; dir: (number | null)[]; kt: (number | null)[]; gust: (number | null)[] }[];
+  fetched_at: string;
+  errors: string[];
 }
