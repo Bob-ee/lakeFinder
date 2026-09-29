@@ -23,7 +23,7 @@ import {
   zoneNow,
 } from "./labels";
 import type { BriefingState } from "./store";
-import { renderTimeline, timelineLead, type TimelineLead } from "./timeline";
+import { renderTimeline } from "./timeline";
 import type { WaveLimits } from "../waves/ramp";
 import type {
   Briefing,
@@ -118,8 +118,7 @@ function timelineCard(
   fromCache: boolean,
   opts: BriefingCardOptions,
 ): HTMLElement {
-  const lead = timelineLead(tl);
-  wrap.append(leadHeader(b, lead, fromCache, opts));
+  wrap.append(compactHeader(b, fromCache, opts));
   wrap.append(
     renderTimeline(tl, {
       airportId: b.home_airport.id,
@@ -138,19 +137,18 @@ function timelineCard(
   return wrap;
 }
 
-function leadHeader(b: Briefing, lead: TimelineLead, fromCache: boolean, opts: BriefingCardOptions): HTMLElement {
+/**
+ * With a timeline the sheet's own header (peek row) already carries the one-line answer, so
+ * the card keeps a single compact row: age · airport on the left, refresh and settings on
+ * the right.
+ */
+function compactHeader(b: Briefing, fromCache: boolean, opts: BriefingCardOptions): HTMLElement {
   const head = header(b, false, fromCache, opts);
-  const title = head.querySelector<HTMLElement>(".brief-title");
-  if (title) {
-    title.replaceChildren();
-    if (lead.score) title.dataset["score"] = lead.score;
-    else delete title.dataset["score"];
-    const [word, ...rest] = lead.headline.split(" ");
-    title.append(el("span", "brief-score", word ?? ""));
-    const when = el("span", "brief-window", rest.join(" "));
-    if (lead.after) when.append(el("span", "brief-after", ` · ${lead.after}`));
-    title.append(when);
-  }
+  head.classList.add("brief-head--compact");
+  const top = head.querySelector<HTMLElement>(".brief-head-top");
+  const meta = head.querySelector<HTMLElement>(".brief-meta");
+  head.querySelector(".brief-title")?.remove();
+  if (top && meta) top.prepend(meta);
   return head;
 }
 

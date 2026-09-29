@@ -70,6 +70,22 @@ function weekday(t: string): string {
   return shortWeekday(t.slice(0, 10));
 }
 
+/** Plain words for what ends a window. null means it runs to dusk or the horizon. */
+const AFTER_PHRASE: Partial<Record<LimitingFactor, string>> = {
+  waves: "rougher water after",
+  run: "rougher water after",
+  xwind_water: "rougher water after",
+  gusts: "gusty after",
+  wind: "windy after",
+  fog: "fog after",
+  daylight: "until dark",
+};
+
+function afterPhrase(limiting: LimitingFactor | null): string {
+  if (!limiting) return "until dark";
+  return AFTER_PHRASE[limiting] ?? `${limitingLabel(limiting)} after`;
+}
+
 /**
  * The answer the chip, the peek row and the card all show, from `timeline.windows`: the next
  * window that has not ended, else the best level any future daylight hour reaches.
@@ -80,14 +96,7 @@ export function timelineLead(tl: Timeline, now: Date = new Date()): TimelineLead
   if (w) {
     const started = Date.parse(w.start) <= t;
     const when = started ? `now–${hhmm(w.end)}` : `${weekday(w.start)} ${hhmm(w.start)}–${hhmm(w.end)}`;
-    let after: string | null = null;
-    if (w.limiting_after) {
-      after = `${limitingLabel(w.limiting_after)} after`;
-    } else {
-      const endIdx = tl.hours.findIndex((h) => Date.parse(h.t) === Date.parse(w.end));
-      if (endIdx >= 0 && !tl.hours[endIdx]!.daylight) after = "dark after";
-    }
-    return { score: w.score, headline: `${SCORE_WORD[w.score]} ${when}`, after };
+    return { score: w.score, headline: `${SCORE_WORD[w.score]} ${when}`, after: afterPhrase(w.limiting_after) };
   }
 
   let best: { score: Score; limiting: LimitingFactor | null } | null = null;

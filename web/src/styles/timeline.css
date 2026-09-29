@@ -362,9 +362,13 @@
   width: 100%;
 }
 
-/* Lead line: "Favorable Tue 10:00–14:00 · gusts after" */
-.brief-after {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-muted);
+/* With a timeline the peek row carries the answer; the card header is one row:
+   age · airport, then refresh and settings. */
+.brief-head--compact .brief-head-top {
+  align-items: center;
+}
+
+.brief-head--compact .brief-meta {
+  margin-top: 0;
+  min-width: 0;
 }
