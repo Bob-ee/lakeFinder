@@ -76,6 +76,41 @@ export declare function regionsForWind(
   minRunFt: number,
 ): WaveRegion[];
 
+export interface RegionWind {
+  /** Degrees true the wind blows FROM. */
+  dir: number;
+  /** Knots; pass the gust to score at the gust. */
+  kt: number;
+}
+
+/**
+ * `regionsForWind` with a wind per point, looked up by label (and record index for a
+ * point that has no region of its own). A null wind leaves the point out.
+ */
+export declare function regionsForWinds(
+  points: WavePoint[],
+  labels: string[],
+  windOf: (label: number, index: number) => RegionWind | null | undefined,
+  minRunFt: number,
+): WaveRegion[];
+
+export declare function pointWave(
+  point: WavePoint,
+  windDir: number,
+  windKt: number,
+  minRunFt: number,
+): { hsM: number; runFt: number; usable: boolean };
+
+export declare function roundHalfEven(x: number): number;
+
+/** Integer cell indices `[round(lat / cellDeg), round(lon / cellDeg)]`, rounding half to even. */
+export declare function cellOf(lat: number, lon: number, cellDeg: number): [number, number];
+
+/** Mean lat/lon of each label's points, keyed by label index. */
+export declare function labelCentroids(
+  points: WavePoint[],
+): Map<number, { lat: number; lon: number; n: number }>;
+
 export declare function openWaterInches(regions: WaveRegion[]): number | null;
 
 export declare function bestRegion(regions: WaveRegion[]): WaveRegion | null;
