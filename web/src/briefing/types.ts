@@ -393,6 +393,8 @@ export interface ForecastWind {
   past: number;
   models: string[];
   cells: { lat: number; lon: number; dir: (number | null)[]; kt: (number | null)[]; gust: (number | null)[] }[];
+  /** Per wave-field label, the 0.1 degree centroid cell the briefing uses. Absent from an older api. */
+  regions?: { label: string; lat: number; lon: number; dir: (number | null)[]; kt: (number | null)[]; gust: (number | null)[] }[];
   fetched_at: string;
   errors: string[];
 }
