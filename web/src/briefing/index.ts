@@ -1,10 +1,13 @@
-import { BRIEFING } from "../config";
+import { BRIEFING, WAVES } from "../config";
+import type { WaveLimits } from "../waves/ramp";
 import type { Lake } from "../types";
 import { ageMinutes, el, formatRelative, formatRelativeShort } from "../ui/format";
 import { icon } from "../ui/icons";
 import { toast } from "../ui/toast";
 import { getHealth, refreshBriefing } from "./api";
 import { renderBriefingCard } from "./card";
+import { waveLimits } from "./home-water";
+import { timelineLead } from "./timeline";
 import {
   SCORE_WORD,
   formatWindow,
@@ -35,6 +38,11 @@ export interface BriefingHost {
   selectLake(id: number): void;
   /** Select a water body and frame one region of its wave field. */
   selectRegion(id: number, lat: number, lon: number): void;
+  /**
+   * Select a water body and get the sheet out of the way (peek on a phone) so its wave
+   * field for the forecast clock's hour shows on the map.
+   */
+  showWaves(id: number): void;
 }
 
 /**
@@ -53,6 +61,7 @@ export class BriefingController {
   private health: Health | null | undefined = undefined;
   private refreshing = false;
   private open = false;
+  private limits: WaveLimits = WAVES.defaultLimits;
 
   constructor(private host: BriefingHost) {}
 
@@ -60,6 +69,15 @@ export class BriefingController {
     this.store.onChange(() => this.render());
     this.store.start();
     void this.probe();
+    void this.loadLimits();
+  }
+
+  /** The pilot's wave limits for the chart's guide lines; defaults until settings arrive. */
+  private async loadLimits(): Promise<void> {
+    const limits = await waveLimits(WAVES.defaultLimits);
+    if (limits.okIn === this.limits.okIn && limits.maxIn === this.limits.maxIn) return;
+    this.limits = limits;
+    this.render();
   }
 
   /** Right-hand chip under the search bar. One tap opens the card. */
@@ -130,6 +148,8 @@ export class BriefingController {
           state,
           health: this.health,
           refreshing: this.refreshing,
+          limits: this.limits,
+          onShowWaves: (id) => this.host.showWaves(id),
           lookupLake: (id) => this.host.lookupLake(id),
           onSelectLake: (id) => this.host.selectLake(id),
           onSelectRegion: (id, lat, lon) => this.host.selectRegion(id, lat, lon),
@@ -146,6 +166,7 @@ export class BriefingController {
       onBriefing: (briefing) => {
         this.store.adopt(briefing);
         void this.probe();
+        void this.loadLimits();
       },
     });
   }
@@ -255,6 +276,23 @@ function leadLine(state: BriefingState): LeadLine {
   }
 
   const b = state.briefing;
+  const mins = ageMinutes(b.generated_at);
+  const stale = mins != null && mins >= BRIEFING.staleMinutes;
+
+  // With a timeline, the chip, the peek row and the card all say the same one line.
+  if (b.timeline && b.timeline.hours.length > 0) {
+    const lead = timelineLead(b.timeline);
+    return {
+      score: lead.score,
+      text: lead.headline,
+      shortAge: formatRelativeShort(b.generated_at),
+      title: lead.headline,
+      sub: `${lead.after ? `${lead.after} · ` : ""}${b.home_airport.id}`,
+      age: formatRelative(b.generated_at),
+      stale,
+    };
+  }
+
   const today = zoneNow(b.timezone).date;
   const leadsWithOutlook = b.outlook != null && outlookLeads(b.outlook, b.timezone);
   const lead = leadsWithOutlook && b.outlook ? b.outlook : b.days[0];
@@ -271,7 +309,6 @@ function leadLine(state: BriefingState): LeadLine {
     when = longWhen;
   }
 
-  const mins = ageMinutes(b.generated_at);
   const headline = `${SCORE_WORD[score]} ${formatWindow(window)}`;
   return {
     score,
@@ -280,7 +317,7 @@ function leadLine(state: BriefingState): LeadLine {
     title: headline,
     sub: `${longWhen} · ${b.home_airport.id}`,
     age: formatRelative(b.generated_at),
-    stale: mins != null && mins >= BRIEFING.staleMinutes,
+    stale,
   };
 }
 

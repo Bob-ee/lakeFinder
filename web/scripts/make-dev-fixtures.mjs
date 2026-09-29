@@ -573,8 +573,8 @@ const LAKES = [
     // from turning into a big wave, and the sheet has to show that branch.
     maxDepthM: 3.6,
     bays: [
-      { name: "North Bay", lon: -83.10, lat: 42.515, radiusM: 3400 },
-      { name: "Sandy Bay", lon: -83.205, lat: 42.437, radiusM: 2800 },
+      { name: "Anchor Bay", lon: -83.10, lat: 42.515, radiusM: 3400 },
+      { name: "Muscamoot Bay", lon: -83.205, lat: 42.437, radiusM: 2800 },
     ],
   },
   {
@@ -1282,10 +1282,242 @@ function updateBriefingFixture(index, waveFields, wave) {
     }
   }
 
+  // The timeline hangs off the real clock (its axis is "6 h before now to 72 h after"), so
+  // the run it belongs to is dated now too, with the day and outlook dates following it.
+  const genMs = Date.now();
+  briefing.generated_at = new Date(genMs - 10 * 60_000).toISOString().replace(/\.\d+Z$/, "Z");
+  const today = localIso(genMs, briefing.timezone).slice(0, 10);
+  const plusDays = (iso, n) => new Date(Date.parse(iso) + n * 86_400_000).toISOString().slice(0, 10);
+  (briefing.days ?? []).forEach((d, i) => (d.date = plusDays(today, i)));
+  if (briefing.outlook) briefing.outlook.target_date = plusDays(today, 1);
+  briefing.timeline = home
+    ? syntheticTimeline(briefing, home, pointsFor(home.id) ?? [], wave.index.labels)
+    : null;
+
   writeFileSync(file, JSON.stringify(briefing, null, 1) + "\n");
   console.log(
-    `briefing.json refreshed with wave-field fields${home ? ` and home water "${home.name}"` : ""}`,
+    `briefing.json refreshed with wave-field fields${home ? ` and home water "${home.name}"` : ""}` +
+      `${briefing.timeline ? `, timeline of ${briefing.timeline.hours.length} h` : ""}`,
   );
+}
+
+// ---------------------------------------------------------------------------
+// the forecast timeline (contract: "Forecast timeline and waves over time")
+// ---------------------------------------------------------------------------
+
+/**
+ * Local ISO 8601 with offset for an instant in `tz`: "2026-09-29T06:00:00-04:00".
+ * Intl's `longOffset` gives "GMT-04:00", which is all the offset arithmetic needed.
+ */
+function localIso(ms, tz) {
+  const parts = {};
+  for (const p of new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+    timeZoneName: "longOffset",
+  }).formatToParts(new Date(ms))) {
+    parts[p.type] = p.value;
+  }
+  const off = parts.timeZoneName === "GMT" ? "+00:00" : parts.timeZoneName.slice(3);
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}${off}`;
+}
+
+/**
+ * Wind keyframes `[day, hour, dir, kt, gust]`, day 0 being the date of the generation hour,
+ * interpolated hour by hour. The story it tells: a breezy today, a foggy calm tomorrow
+ * morning that turns into a favorable late morning and a gusty westerly afternoon, a
+ * light northerly morning the day after, then a windy last day.
+ */
+const WIND_KEYS = [
+  [-1, 12, 250, 12, 18],
+  [0, 0, 240, 7, 10],
+  [0, 9, 250, 10, 15],
+  [0, 15, 260, 13, 21],
+  [0, 21, 230, 6, 9],
+  [1, 3, 200, 3, 4],
+  [1, 8, 190, 4, 6],
+  [1, 11, 210, 7, 10],
+  [1, 13, 240, 9, 13],
+  [1, 15, 270, 14, 23],
+  [1, 18, 280, 13, 21],
+  [1, 22, 300, 7, 10],
+  [2, 6, 340, 5, 7],
+  [2, 11, 10, 7, 10],
+  [2, 15, 30, 12, 18],
+  [2, 21, 40, 8, 12],
+  [3, 6, 60, 13, 19],
+  [3, 14, 70, 18, 27],
+  [4, 6, 70, 14, 22],
+];
+
+function windAt(dayHour) {
+  const keys = WIND_KEYS.map(([d, h, dir, kt, gust]) => ({ x: d * 24 + h, dir, kt, gust }));
+  if (dayHour <= keys[0].x) return keys[0];
+  for (let k = 1; k < keys.length; k++) {
+    const a = keys[k - 1];
+    const b = keys[k];
+    if (dayHour > b.x) continue;
+    const f = (dayHour - a.x) / (b.x - a.x);
+    const turn = ((b.dir - a.dir + 540) % 360) - 180;
+    return {
+      dir: Math.round((a.dir + turn * f + 360) % 360),
+      kt: Math.round(a.kt + (b.kt - a.kt) * f),
+      gust: Math.round(a.gust + (b.gust - a.gust) * f),
+    };
+  }
+  return keys[keys.length - 1];
+}
+
+/** Airport score for one synthetic hour, in the spirit of the briefing's table. */
+function airportScore(wind, fog, vis) {
+  const spread = wind.gust - wind.kt;
+  if (fog && vis < 2) return ["unfavorable", "fog"];
+  if (wind.kt > 18 || spread >= 10) return ["unfavorable", spread >= 10 ? "gusts" : "wind"];
+  if (fog) return ["marginal", "fog"];
+  if (wind.kt > 12 || spread >= 7) return ["marginal", spread >= 7 ? "gusts" : "wind"];
+  return ["favorable", null];
+}
+
+function syntheticTimeline(briefing, home, points, allLabels) {
+  const tz = briefing.timezone;
+  const HOUR = 3_600_000;
+  const nowHour = Math.floor(Date.now() / HOUR) * HOUR;
+  const start = nowHour - 6 * HOUR;
+  const todayDate = localIso(nowHour, tz).slice(0, 10);
+  const dayOf = (iso) => Math.round((Date.parse(iso.slice(0, 10)) - Date.parse(todayDate)) / 86_400_000);
+
+  // Each region gets its own wind, as its forecast cell would: a knot or two either way.
+  const regionLabels = [...new Set(regionsForWind(points, allLabels, 270, 10, 2000).map((r) => r.label))].sort();
+  const okIn = 8;
+  const maxIn = 12;
+  const minWindow = 2;
+
+  const hours = [];
+  const hw = {
+    id: home.id,
+    name: home.name,
+    labels: regionLabels,
+    hs_in: [],
+    wind: [],
+    best: [],
+    open_in: [],
+    score: [],
+    limiting: [],
+    observed: [],
+    marine_in: [],
+  };
+
+  for (let i = 0; i < 79; i++) {
+    const ms = start + i * HOUR;
+    const t = localIso(ms, tz);
+    const hh = Number(t.slice(11, 13));
+    const day = dayOf(t);
+    const wind = windAt(day * 24 + hh);
+    const daylight = hh >= 7 && hh < 20;
+    const fog = day === 1 && hh >= 4 && hh <= 9;
+    const vis = fog ? (hh <= 7 ? 0.5 : 2) : 10;
+    const [score, limiting] = airportScore(wind, fog, vis);
+    hours.push({
+      t,
+      past: i < 6,
+      daylight,
+      score,
+      limiting,
+      wind,
+      model: day <= 2 ? "ncep_nbm_conus" : "best_match",
+      ceiling_ft: fog ? (hh <= 7 ? 200 : 700) : day === 3 ? 3500 : null,
+      ceiling_known: i < 8,
+      vis_sm: vis,
+      fog_risk: fog,
+      precip_prob: day === 3 ? 60 : fog ? 10 : 5,
+      temp_f: Math.round(52 + 12 * Math.sin(((hh - 9) / 24) * 2 * Math.PI)),
+    });
+
+    // Waves at the gust, each region from its own wind.
+    const perLabel = regionLabels.map((label, k) => {
+      const rw = { dir: (wind.dir + (k % 3) * 5) % 360, kt: wind.kt + (k % 2), gust: wind.gust + (k % 3) };
+      const region = regionsForWind(points, allLabels, rw.dir, rw.gust, 2000).find((r) => r.label === label);
+      return { rw, region };
+    });
+    const hsRow = perLabel.map(({ region }) => (region ? region.hs_in : null));
+    hw.hs_in.push(hsRow);
+    hw.wind.push(perLabel.map(({ rw }) => rw));
+    let best = null;
+    hsRow.forEach((v, k) => {
+      if (v != null && (best == null || v < best.hs_in)) best = { label: regionLabels[k], hs_in: v };
+    });
+    hw.best.push(best);
+    const open = Math.max(...perLabel.map(({ region }) => region?.hs_all_in ?? 0));
+    hw.open_in.push(open);
+    const ws = best == null ? "unfavorable" : best.hs_in <= okIn ? "favorable" : best.hs_in <= maxIn ? "marginal" : "unfavorable";
+    hw.score.push(ws);
+    hw.limiting.push(ws === "favorable" ? null : best == null ? "run" : "waves");
+    hw.marine_in.push(Math.round(open * 0.8));
+    // A few buoy reports in the past hours, one missing, reading a little under the model.
+    if (i < 6 && i !== 2) {
+      hw.observed.push({
+        t,
+        station: "45147",
+        wave_in: Math.max(1, Math.round(open * 0.7)),
+        wind: { dir: (wind.dir + 10) % 360, kt: Math.max(0, wind.kt - 1), gust: i % 2 ? null : wind.gust },
+      });
+    }
+  }
+
+  // Windows: runs of daylight, non-past hours whose combined score is favorable (or, on a
+  // day with none, marginal), at least `minWindow` long, never across dusk.
+  const RANK = { favorable: 0, marginal: 1, unfavorable: 2 };
+  const combinedAt = (i) => {
+    const a = hours[i];
+    const w = hw.score[i];
+    return RANK[w] > RANK[a.score] ? { score: w, limiting: hw.limiting[i] } : { score: a.score, limiting: a.limiting };
+  };
+  const windows = [];
+  const days = [...new Set(hours.map((h) => h.t.slice(0, 10)))];
+  for (const date of days) {
+    const idx = hours.map((h, i) => i).filter((i) => hours[i].t.startsWith(date) && hours[i].daylight && !hours[i].past);
+    const found = (target) => {
+      const out = [];
+      let run = [];
+      const close = () => {
+        if (run.length >= minWindow) out.push([run[0], run[run.length - 1] + 1]);
+        run = [];
+      };
+      for (const i of idx) {
+        if (combinedAt(i).score !== target) {
+          close();
+          continue;
+        }
+        if (run.length > 0 && i !== run[run.length - 1] + 1) close();
+        run.push(i);
+      }
+      close();
+      return out;
+    };
+    let runs = found("favorable");
+    let score = "favorable";
+    if (runs.length === 0) {
+      runs = found("marginal");
+      score = "marginal";
+    }
+    for (const [a, b] of runs) {
+      const after = b < hours.length && hours[b].daylight ? combinedAt(b).limiting : null;
+      windows.push({
+        start: hours[a].t,
+        end: b < hours.length ? hours[b].t : localIso(start + b * HOUR, tz),
+        score,
+        limiting_after: after,
+      });
+    }
+  }
+
+  return { hours, windows, home_water: hw };
 }
 
 function circle(lon, lat, radiusM, points = 48) {

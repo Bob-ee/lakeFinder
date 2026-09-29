@@ -23,6 +23,8 @@ import {
   zoneNow,
 } from "./labels";
 import type { BriefingState } from "./store";
+import { renderTimeline, timelineLead, type TimelineLead } from "./timeline";
+import type { WaveLimits } from "../waves/ramp";
 import type {
   Briefing,
   BriefingBlock,
@@ -35,6 +37,7 @@ import type {
   OutlookHour,
   OutlookRun,
   Score,
+  Timeline,
   Window,
 } from "./types";
 
@@ -47,6 +50,8 @@ export interface BriefingCardDeps {
   onSelectRegion: (id: number, lat: number, lon: number) => void;
   onOpenSettings: () => void;
   onRefresh: () => void;
+  /** Select the home water and lower the sheet so its waves show on the map. */
+  onShowWaves: (id: number) => void;
 }
 
 export interface BriefingCardOptions extends BriefingCardDeps {
@@ -54,6 +59,8 @@ export interface BriefingCardOptions extends BriefingCardDeps {
   /** null when `/api/health` failed; undefined while the probe is still running. */
   health: Health | null | undefined;
   refreshing: boolean;
+  /** `limits.wave_ok_in` / `wave_max_in`, for the chart's guide lines. */
+  limits: WaveLimits;
 }
 
 /** The whole card, rebuilt from scratch on every state change. It is a small tree. */
@@ -72,6 +79,9 @@ export function renderBriefingCard(opts: BriefingCardOptions): HTMLElement {
 
   const b = state.briefing;
   const today = zoneNow(b.timezone).date;
+  if (b.timeline && b.timeline.hours.length > 0) {
+    return timelineCard(wrap, b, b.timeline, today, state.fromCache, opts);
+  }
   const leadsWithOutlook = b.outlook != null && outlookLeads(b.outlook, b.timezone);
 
   wrap.append(header(b, leadsWithOutlook, state.fromCache, opts));
@@ -88,9 +98,92 @@ export function renderBriefingCard(opts: BriefingCardOptions): HTMLElement {
   wrap.append(sections);
 
   if (b.alerts.length > 0) wrap.append(alertsSection(b));
-  wrap.append(lakesSection("Calmest water nearby", b.lakes, b, opts));
+  wrap.append(lakesSection("Calmest water nearby", b.lakes, b, opts, false, runHourLabel(b)));
   wrap.append(footer(b));
   return wrap;
+}
+
+// -- timeline layout -------------------------------------------------------
+
+/**
+ * The card when the briefing carries a timeline: the one-line answer, the chart, then only
+ * what the chart does not already show. The day blocks, the hour strip, the summary and
+ * the home water block are all in the chart (the home water per hour in its detail).
+ */
+function timelineCard(
+  wrap: HTMLElement,
+  b: Briefing,
+  tl: Timeline,
+  today: string,
+  fromCache: boolean,
+  opts: BriefingCardOptions,
+): HTMLElement {
+  const lead = timelineLead(tl);
+  wrap.append(leadHeader(b, lead, fromCache, opts));
+  wrap.append(
+    renderTimeline(tl, {
+      airportId: b.home_airport.id,
+      homeRegions: b.home_water?.regions ?? [],
+      limits: opts.limits,
+      onSelectRegion: opts.onSelectRegion,
+      onShowWaves: opts.onShowWaves,
+    }),
+  );
+  // A home water the timeline has no rows for still gets its block, labelled with its hour.
+  if (b.home_water && !tl.home_water) wrap.append(homeWaterSection(b.home_water, b, opts, false));
+  if (b.alerts.length > 0) wrap.append(alertsSection(b));
+  if (b.outlook) wrap.append(outlookCompact(b, b.outlook, today, opts));
+  wrap.append(lakesSection("Calmest water nearby", b.lakes, b, opts, false, runHourLabel(b)));
+  wrap.append(footer(b));
+  return wrap;
+}
+
+function leadHeader(b: Briefing, lead: TimelineLead, fromCache: boolean, opts: BriefingCardOptions): HTMLElement {
+  const head = header(b, false, fromCache, opts);
+  const title = head.querySelector<HTMLElement>(".brief-title");
+  if (title) {
+    title.replaceChildren();
+    if (lead.score) title.dataset["score"] = lead.score;
+    else delete title.dataset["score"];
+    const [word, ...rest] = lead.headline.split(" ");
+    title.append(el("span", "brief-score", word ?? ""));
+    const when = el("span", "brief-window", rest.join(" "));
+    if (lead.after) when.append(el("span", "brief-after", ` · ${lead.after}`));
+    title.append(when);
+  }
+  return head;
+}
+
+/** What is left of the outlook once the chart shows its hours: runs, trend, confidence. */
+function outlookCompact(b: Briefing, o: Outlook, today: string, opts: BriefingCardOptions): HTMLElement {
+  const sec = el("section", "brief-section brief-section--outlook");
+  sec.append(
+    sectionHead(
+      morningHeading(o.target_date, today),
+      `${shortWeekday(o.target_date)} ${shortDate(o.target_date)} · ${o.window.start}–${o.window.end}`,
+    ),
+  );
+  const line = el("div", "brief-lead");
+  line.append(scorePill(o.score, o.limiting ? `${SCORE_WORD[o.score]} · ${limitingLabel(o.limiting)}` : undefined));
+  line.append(el("span", "brief-lead-window", `Best window ${formatWindow(o.best_window)}`));
+  sec.append(line);
+  if (o.watch) sec.append(el("p", "brief-watch", `Watch: ${o.watch}`));
+  if (o.runs.length > 0) sec.append(runHistory(o));
+  const conf = el("p", "brief-confidence");
+  conf.append(el("span", "brief-conf-word", `${CONFIDENCE_WORD[o.confidence]} confidence`));
+  if (o.confidence_reasons.length > 0) {
+    conf.append(el("span", "muted", ` — ${o.confidence_reasons.join("; ")}`));
+  }
+  sec.append(conf);
+  sec.append(
+    lakesSection("Calmest water in the window", o.lakes, b, opts, true, `${o.window.start}–${o.window.end}`),
+  );
+  return sec;
+}
+
+/** "wind at 09:00": the hour the ranked rows' numbers were computed for. */
+function runHourLabel(b: Briefing): string {
+  return `wind at ${utcToZoneTime(b.generated_at, b.timezone).slice(0, 2)}:00`;
 }
 
 // -- header ----------------------------------------------------------------
@@ -214,7 +307,9 @@ function outlookSection(
   );
 
   if (o.home_water) sec.append(homeWaterSection(o.home_water, b, opts, true));
-  sec.append(lakesSection("Calmest water in the window", o.lakes, b, opts, true));
+  sec.append(
+    lakesSection("Calmest water in the window", o.lakes, b, opts, true, `${o.window.start}–${o.window.end}`),
+  );
   return sec;
 }
 
@@ -352,9 +447,10 @@ function lakesSection(
   b: Briefing,
   opts: BriefingCardDeps,
   nested = false,
+  sub: string | null = null,
 ): HTMLElement {
   const sec = el("section", nested ? "brief-sub" : "brief-section");
-  sec.append(sectionHead(title, null));
+  sec.append(sectionHead(title, sub));
   if (rows.length === 0) {
     sec.append(el("p", "muted", "No lake in range had usable water."));
     return sec;
@@ -486,7 +582,10 @@ function homeWaterSection(
   const head = el("div", "brief-section-head");
   const title = el("h3", "detail-h brief-home-name", row.name);
   head.append(title);
-  head.append(el("span", "brief-section-sub", `home water · ${formatWind(row.wind)}`));
+  // Two home-water blocks can show two different winds; each says which hour it is for.
+  const when =
+    nested && b.outlook ? `${b.outlook.window.start}–${b.outlook.window.end}` : runHourLabel(b).slice(8);
+  head.append(el("span", "brief-section-sub", `home water · wind ${when} ${formatWind(row.wind)}`));
   sec.append(head);
 
   const lead = el("div", "brief-lead");

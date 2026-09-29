@@ -128,6 +128,16 @@ async function boot(): Promise<void> {
       // After the selection's own fitBounds has run, so the region wins the camera.
       map.map.once("moveend", () => map.flyToRegion(lon, lat));
     },
+    // The chart's "Waves on the map": the forecast clock already holds the hour; select the
+    // water and lower a phone sheet to peek so the map is what shows. The iPad panel sits
+    // beside the map and stays put.
+    showWaves: (id) => {
+      if (!state.selectLake(id, "list")) {
+        toast("That water body is not in this data pack");
+        return;
+      }
+      if (!sheet.isPanel) sheet.setSnap("peek");
+    },
   });
   briefing.mountPanel(tabs.panel("briefing"));
   briefing.mountPeek(sheet.slots.peek);

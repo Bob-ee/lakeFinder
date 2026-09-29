@@ -15,13 +15,13 @@
     },
     {
       "name": "rules.json",
-      "bytes": 6266,
-      "sha256": "9b328c62543fe331f1d870c45aa2c86d91df3c69087ccd86f017b6516c2c0249"
+      "bytes": 6916,
+      "sha256": "4dd427cf8c40f0f9102e0219b10cf392bd9e0ee2fba9bb97396d0c2e01759962"
     },
     {
       "name": "wave_points.json",
-      "bytes": 688,
-      "sha256": "45ebb1f8981e7e9ab381bb90dac216e3df3f31f7cd00b3ec44c507c634ffbd3c"
+      "bytes": 693,
+      "sha256": "b7da026397e4fd867fa8fda446ce0805e0af548b323904462fbb7f84ff1dad9c"
     },
     {
       "name": "wave_points.bin",
@@ -30,23 +30,18 @@
     },
     {
       "name": "lakes.pmtiles",
-      "bytes": 46967,
-      "sha256": "6477662e79a41fead968232a1201c1c627f4a60b08126a7769db8ca0d31328e1"
+      "bytes": 46995,
+      "sha256": "e7b74c8377717a996f41115cfe0418b7e32637c8eaf72ba8c8c2ee75a7f36562"
     },
     {
       "name": "usable_water.pmtiles",
-      "bytes": 21305,
-      "sha256": "ec2e16dc695efa89a460218c44aaf269d3588808fec839719125e3e965fc39c1"
+      "bytes": 21332,
+      "sha256": "fbee047cc6b00d07fbf2f7c39563d05a33aad3638aab8f05f2adf028583d0faf"
     },
     {
       "name": "overlays.pmtiles",
-      "bytes": 25220,
-      "sha256": "2a015d726709324b8b347dd645cb719325ae099b621619c790273dd90dd75b13"
-    },
-    {
-      "name": "basemap.pmtiles",
-      "bytes": 25331357,
-      "sha256": "6313d69bb4c1f75d9855d54e4c12091fe6bdaeb4738f7ba1b00c2d275e108968"
+      "bytes": 25253,
+      "sha256": "6d54e26e47661e0718da900bba5851d5039af2613448e9ddf6a7f8ed09065060"
     }
   ],
   "counts": {
