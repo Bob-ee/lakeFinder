@@ -217,6 +217,9 @@ export const WAVES = {
  */
 export const WAVE_CAVEAT =
   "Computed from this wind and the fetch to the nearest land, not a forecast.";
+/** Forecast timeline mode: every region on its own forecast cell, at the gust. */
+export const WAVE_CAVEAT_FORECAST =
+  "Computed from each region's forecast wind at the gust and the fetch to the nearest land.";
 /** Shown while the speed control is still on the briefing's gust, which is what it scores. */
 export const WAVE_CAVEAT_GUST = "Speed is the forecast gust, as in the briefing.";
 export const WAVE_CAVEAT_NO_DEPTH =

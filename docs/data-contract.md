@@ -798,3 +798,8 @@ serves a deterministic synthetic answer (wind veering 360° over the axis, 4 →
   with each point taking **its region's wind** from the response's `regions[]` (the 0.1° centroid cell, identical
   to the briefing even when `cell_deg` is coarser; `cells` serve only a point whose label has no `regions` entry), at the gust. The legend and the Water section say which hour and "forecast". Touching the
   wind dial switches to **manual wind** ("What if: 250/12"), with a button back to the forecast hour.
+  Shared math: `rules/waves` `regionsForWinds(points, labels, windOf(label, index), minRunFt)` (a null wind
+  leaves the point out, as in Python), `pointWave`, `labelCentroids`, `cellOf(lat, lon, cell_deg)` (round half
+  to even, as Python's `round`). A region centroid whose cell is not in `cells` uses the nearest listed cell.
+  Dev only: `?fakeforecast=1` synthesizes this response in the browser, `?fakehour=N` puts the clock N hours
+  from now.

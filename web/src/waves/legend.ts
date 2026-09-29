@@ -3,6 +3,7 @@ import { el } from "../ui/format";
 import { icon } from "../ui/icons";
 import { readLocal, writeLocal } from "../ui/theme";
 import { WAVE_BANDS, bandText } from "./ramp";
+import { hourLabel, windText } from "../forecast/time";
 import { compassName } from "./wind";
 import { waveSwatch, type WaveState } from "./section";
 
@@ -25,6 +26,7 @@ export class WaveLegend {
   private bands: HTMLElement;
   private arrow: HTMLElement;
   private windText: HTMLElement;
+  private whenText: HTMLElement;
   private chip: HTMLButtonElement;
   private head: HTMLButtonElement;
   private open: boolean;
@@ -71,6 +73,9 @@ export class WaveLegend {
     this.windText = el("span", "wave-key-windtext");
     windRow.append(this.arrow, this.windText);
     card.append(windRow);
+    // Which hour the dots are for ("Tue 14:00 forecast"), or "What if".
+    this.whenText = el("div", "wave-key-when");
+    card.append(this.whenText);
 
     this.element.append(this.chip, card);
     parent.append(this.element);
@@ -108,11 +113,23 @@ export class WaveLegend {
       row.append(waveSwatch(band), el("span", "wave-key-band-text", text));
       this.bands.append(row);
     }
-    const { dir, kt } = state.wind;
+    const { mode, headline } = state;
+    const dir = headline?.dir ?? state.wind.dir;
     // The arrow points the way the wind blows, so it reads as an arrow over the water
     // rather than as a compass needle: wind FROM 270 blows toward 090, i.e. to the right.
     this.arrow.style.transform = `rotate(${dir}deg)`;
-    this.windText.textContent = `${String(dir).padStart(3, "0")}° ${compassName(dir)} · ${kt} kt`;
+    if (mode.kind === "forecast") {
+      const where = state.headlineWhere ?? "centre";
+      this.windText.textContent = headline ? `${where} ${windText(headline)}` : "no forecast wind";
+      this.whenText.textContent = `${hourLabel(mode.hour)} ${mode.past ? "past, model" : "forecast"} · by region`;
+    } else if (mode.kind === "manual") {
+      this.windText.textContent = `${windText(state.wind)} kt`;
+      this.whenText.textContent = "What if: one wind";
+    } else {
+      this.windText.textContent = `${String(dir).padStart(3, "0")}° ${compassName(dir)} · ${state.wind.kt} kt`;
+      this.whenText.textContent = "";
+    }
+    this.whenText.hidden = this.whenText.textContent === "";
     this.element.hidden = false;
   }
 

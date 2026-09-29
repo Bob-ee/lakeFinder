@@ -191,6 +191,10 @@
   color: var(--text-muted);
 }
 
+.btn-quiet.wind-reset[hidden] {
+  display: none;
+}
+
 .btn-quiet.wind-reset {
   justify-content: center;
   width: 100%;
@@ -514,6 +518,68 @@
   font-weight: 650;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.wave-key-when {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* -- Water section: which hour, or "What if" ----------------------------- */
+
+.water-mode {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.water-mode[hidden] {
+  display: none;
+}
+
+/* "What if" is a departure from the forecast: a heavy dashed edge says so without hue. */
+.water-mode.is-manual {
+  border: 2px dashed var(--text-muted);
+}
+
+.water-mode-words {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.water-mode-text {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.water-mode-wind {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.water-mode-back {
+  flex: 0 0 auto;
+  min-height: 44px;
+}
+
+.water-mode-back[hidden] {
+  display: none;
+}
+
+/* The region the dial and the time bar are reading. */
+.wave-region.is-focus {
+  box-shadow: inset 4px 0 0 var(--text);
 }
 
 /* -- briefing: region on a ranked row ----------------------------------- */

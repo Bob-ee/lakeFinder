@@ -264,16 +264,70 @@ function ascending(a, b) {
  * @returns {WaveRegion[]} calm to rough, regions with no usable run last
  */
 export function regionsForWind(points, labels, windDir, windKt, minRunFt) {
-  const bin = windBin(windDir);
-  const runBin = bin % 8;
+  const wind = { dir: windDir, kt: windKt };
+  return aggregateRegions(points, labels, () => wind, minRunFt);
+}
 
+/**
+ * Wind as the region rule takes it: the direction it blows FROM (degrees true)
+ * and the speed in knots. Waves are computed at whatever speed is given, so a
+ * caller that scores at the gust passes the gust here.
+ *
+ * @typedef {Object} RegionWind
+ * @property {number} dir
+ * @property {number} kt
+ */
+
+/**
+ * Regions when each label has its own wind (the briefing's and the map time
+ * bar's per-region forecast): the same rule as {@link regionsForWind}, each
+ * point using `windOf(point.label, index)`.
+ *
+ * A point whose `windOf` is null or undefined is left out entirely, exactly as
+ * the Python side leaves out a label its forecast cell had nothing for; a label
+ * that loses every point has no region. With `windOf` returning one constant
+ * wind this is `regionsForWind`, value for value.
+ *
+ * @param {WavePoint[]} points one water body's points, in record order
+ * @param {string[]} labels the index file's `labels`
+ * @param {(label: number, index: number) => RegionWind | null | undefined} windOf
+ * @param {number} minRunFt
+ * @returns {WaveRegion[]} calm to rough, regions with no usable run last
+ */
+export function regionsForWinds(points, labels, windOf, minRunFt) {
+  return aggregateRegions(points, labels, windOf, minRunFt);
+}
+
+/**
+ * Wave height at one point in one wind, and whether its run into that wind
+ * reaches `minRunFt`. The per-dot number the map draws; the region rule above
+ * aggregates exactly this.
+ *
+ * @param {WavePoint} p
+ * @param {number} windDir
+ * @param {number} windKt
+ * @param {number} minRunFt
+ * @returns {{hsM: number, runFt: number, usable: boolean}}
+ */
+export function pointWave(p, windDir, windKt, minRunFt) {
+  const bin = windBin(windDir);
+  const depth = p.depth_dm === DEPTH_UNKNOWN ? null : p.depth_dm / 10;
+  const { hsM } = waveHeight(windKt, p.fetch[bin] * FETCH_UNIT_M, depth);
+  const runFt = p.run[bin % 8] * RUN_UNIT_FT;
+  return { hsM, runFt, usable: runFt >= minRunFt };
+}
+
+function aggregateRegions(points, labels, windOf, minRunFt) {
   /** @type {Map<number, {hs: number[], run: number[], idx: number[]}>} */
   const groups = new Map();
   for (let i = 0; i < points.length; i++) {
     const p = points[i];
+    const wind = windOf(p.label, i);
+    if (wind == null) continue;
+    const bin = windBin(wind.dir);
     const depth = p.depth_dm === DEPTH_UNKNOWN ? null : p.depth_dm / 10;
-    const { hsM } = waveHeight(windKt, p.fetch[bin] * FETCH_UNIT_M, depth);
-    const runFt = p.run[runBin] * RUN_UNIT_FT;
+    const { hsM } = waveHeight(wind.kt, p.fetch[bin] * FETCH_UNIT_M, depth);
+    const runFt = p.run[bin % 8] * RUN_UNIT_FT;
     let group = groups.get(p.label);
     if (!group) {
       group = { hs: [], run: [], idx: [] };
@@ -346,4 +400,59 @@ export function openWaterInches(regions) {
 export function bestRegion(regions) {
   for (const r of regions) if (r.hs_in != null) return r;
   return null;
+}
+
+// -- forecast cells -----------------------------------------------------------
+
+/**
+ * Round half to even, as Python's `round()` does, so a coordinate exactly on a
+ * cell edge lands in the same cell on both sides.
+ *
+ * @param {number} x
+ * @returns {number}
+ */
+export function roundHalfEven(x) {
+  const r = Math.round(x);
+  return Math.abs(x % 1) === 0.5 && r % 2 !== 0 ? r - 1 : r;
+}
+
+/**
+ * The forecast cell a position falls in (contract "GET /api/forecast/wind"):
+ * `(round(lat / cellDeg), round(lon / cellDeg))` as integer indices. The cell's
+ * forecast point is those indices times `cellDeg`.
+ *
+ * @param {number} lat
+ * @param {number} lon
+ * @param {number} cellDeg 0.1 by default, doubled for very large water
+ * @returns {[number, number]}
+ */
+export function cellOf(lat, lon, cellDeg) {
+  return [roundHalfEven(lat / cellDeg), roundHalfEven(lon / cellDeg)];
+}
+
+/**
+ * Each label's centroid, the plain mean of its points' lat and lon, which is
+ * what picks the region's forecast cell in the briefing.
+ *
+ * @param {WavePoint[]} points
+ * @returns {Map<number, {lat: number, lon: number, n: number}>} keyed by label index
+ */
+export function labelCentroids(points) {
+  /** @type {Map<number, {lat: number, lon: number, n: number}>} */
+  const sums = new Map();
+  for (const p of points) {
+    const s = sums.get(p.label);
+    if (s) {
+      s.lat += p.lat;
+      s.lon += p.lon;
+      s.n += 1;
+    } else {
+      sums.set(p.label, { lat: p.lat, lon: p.lon, n: 1 });
+    }
+  }
+  for (const s of sums.values()) {
+    s.lat /= s.n;
+    s.lon /= s.n;
+  }
+  return sums;
 }

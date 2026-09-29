@@ -38,7 +38,9 @@ const ARROW_TIP = 34;
 export class WindControl {
   readonly element: HTMLElement;
   private value: WindSetting;
-  private readonly forecast: ForecastWind | null;
+  private forecast: ForecastWind | null;
+  /** Replaces the "gust" note under the speed while set (the forecast timeline's own words). */
+  private note: string | null = null;
   private readonly onChange: (wind: WindSetting) => void;
 
   private dial: HTMLElement;
@@ -48,7 +50,7 @@ export class WindControl {
   private nameText: HTMLElement;
   private speed: HTMLInputElement;
   private speedText: HTMLElement;
-  private reset: HTMLButtonElement | null = null;
+  private reset: HTMLButtonElement;
 
   constructor(opts: WindControlOptions) {
     this.value = { ...opts.value };
@@ -102,15 +104,31 @@ export class WindControl {
     speedRow.append(this.speedText);
     this.element.append(speedRow);
 
-    // -- back to the forecast ---------------------------------------------
-    if (this.forecast) {
-      const reset = el("button", "btn btn-quiet wind-reset");
-      reset.type = "button";
-      reset.addEventListener("click", () => this.set(this.forecast!, true));
-      this.reset = reset;
-      this.element.append(reset);
-    }
+    // -- back to the briefing's wind (only without a forecast timeline) ----
+    const reset = el("button", "btn btn-quiet wind-reset");
+    reset.type = "button";
+    reset.addEventListener("click", () => {
+      if (this.forecast) this.set(this.forecast, true);
+    });
+    this.reset = reset;
+    this.element.append(reset);
 
+    this.paint();
+  }
+
+  /**
+   * The briefing wind the reset button returns to; null hides the button. The Water section
+   * clears it once the forecast timeline takes over, whose own "Back to forecast" replaces it.
+   */
+  setReference(forecast: ForecastWind | null): void {
+    this.forecast = forecast ? { ...forecast } : null;
+    this.paint();
+  }
+
+  /** A word under the speed ("gust"), or null for the default. */
+  setNote(note: string | null): void {
+    if (note === this.note) return;
+    this.note = note;
     this.paint();
   }
 
@@ -203,11 +221,13 @@ export class WindControl {
     this.speedText.replaceChildren(el("span", "wind-kt-value", `${this.value.kt} kt`));
     // The briefing scores waves at the gust; say so while the control is still on it, so
     // the sheet and the ranked row are obviously the same number.
-    if (this.atForecastGust) {
-      this.speedText.append(el("span", "wind-kt-note", "gust"));
+    const note = this.note ?? (this.atForecastGust ? "gust" : null);
+    if (note) {
+      this.speedText.append(el("span", "wind-kt-note", note));
     }
 
-    if (this.reset && this.forecast) {
+    this.reset.hidden = this.forecast == null;
+    if (this.forecast) {
       const atForecast = sameWind(this.value, this.forecast);
       this.reset.disabled = atForecast;
       this.reset.textContent = atForecast

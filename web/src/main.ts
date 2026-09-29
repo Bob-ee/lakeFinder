@@ -8,10 +8,12 @@ import "./styles/briefing.css";
 import "./styles/waves.css";
 import "./styles/location.css";
 import "./styles/wind.css";
+import "./styles/timebar.css";
 
 import { BriefingController, readBriefingParam } from "./briefing";
 import { minRunFt, waveLimits } from "./briefing/home-water";
 import { WAVES } from "./config";
+import { ForecastWaves } from "./forecast";
 import { Tabs, detailPlaceholder } from "./lists";
 import { NearestList, mountNearestButton } from "./lists/nearest";
 import { LocationService } from "./location";
@@ -55,15 +57,26 @@ async function boot(): Promise<void> {
 
   // Map padding keeps the selected lake clear of the sheet on a phone and of the docked
   // panel on an iPad. Clamped so fitBounds never gets padding larger than the viewport.
+  /** Bottom pixels the forecast time bar takes (0 while it is hidden). */
+  let timeBarPx = (): number => 0;
   const padding = (): PaddingOptions => {
     const w = mapEl.clientWidth || window.innerWidth;
     const h = mapEl.clientHeight || window.innerHeight;
     const clampV = (v: number) => Math.max(16, Math.min(v, Math.floor(h / 2) - 24));
     const clampH = (v: number) => Math.max(16, Math.min(v, Math.floor(w / 2) - 24));
     if (sheet.isPanel) {
-      return { top: clampV(96), bottom: clampV(48), left: clampH(48), right: clampH(sheet.widthPx + 32) };
+      return {
+        top: clampV(96),
+        bottom: clampV(48 + timeBarPx()),
+        left: clampH(48),
+        right: clampH(sheet.widthPx + 32),
+      };
     }
-    return { top: clampV(96), bottom: clampV(sheet.heightPx + 32), left: clampH(32), right: clampH(32) };
+    // The bottom may take more than half the map (half sheet plus the time bar); it only has
+    // to leave the lake a usable band under the top padding.
+    const top = clampV(96);
+    const bottom = Math.max(16, Math.min(sheet.heightPx + 32 + timeBarPx(), h - top - 140));
+    return { top, bottom, left: clampH(32), right: clampH(32) };
   };
 
   const [map] = await Promise.all([
@@ -144,6 +157,22 @@ async function boot(): Promise<void> {
   briefing.mountChip(app);
   briefing.start();
 
+  // Waves over time: the map's time bar and the Water section's forecast mode.
+  const forecastWaves = new ForecastWaves(app, {
+    sheet,
+    timeline: () => briefing.store.briefing?.timeline,
+    // The bar came (or went) after the selection framed the water: move the view up (or
+    // down) by half its height so the frame's centre sits above it again. A pan, not the
+    // map's persistent padding, which cameraForBounds would add to every later selection.
+    // Never mid-flight: panning now would cancel the selection's own camera move.
+    onLayout: (deltaPx) => {
+      const shift = () => map.map.panBy([0, deltaPx / 2], { duration: 300 });
+      if (map.map.isMoving()) map.map.once("moveend", shift);
+      else shift();
+    },
+  });
+  timeBarPx = () => forecastWaves.reservedPx;
+
   const search = new SearchBox(app, {
     index: state.search,
     onSelect: (id) => {
@@ -184,13 +213,18 @@ async function boot(): Promise<void> {
   sheet.onSnapChange(() => {
     map.resize();
     compactLegend();
+    forecastWaves.place();
   });
-  window.addEventListener("resize", () => map.resize());
+  window.addEventListener("resize", () => {
+    map.resize();
+    forecastWaves.place();
+  });
 
   state.onSelection((selection) => {
     if (!selection) {
       map.clearSelection();
       legend.hide();
+      forecastWaves.detach();
       wind.select(null, null, null);
       waterToken++;
       // Clearing a lake that was picked from the briefing falls back to the briefing
@@ -239,6 +273,7 @@ async function boot(): Promise<void> {
     const token = ++waterToken;
     map.setWaveField(null);
     legend.hide();
+    forecastWaves.detach();
 
     const field = await waves.field(selection.lake.id);
     if (token !== waterToken || !field) return;
@@ -267,6 +302,7 @@ async function boot(): Promise<void> {
     });
     slot.replaceChildren(section.element);
     paint(section.current);
+    void forecastWaves.attach(section, field, () => token === waterToken);
   }
 
   if (state.search.size === 0) {
