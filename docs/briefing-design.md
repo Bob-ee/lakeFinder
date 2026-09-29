@@ -210,8 +210,9 @@ How to read it:
 
 - **Gust** is scored against the observed gust where the station reported one and against the observed speed when
   it did not (a calm METAR has no gust, and a model gust of 9 over a 5 kt wind is an error). Only 6 of the 216
-  hours reported a gust, so the gust bias is the number to read: every model's gust runs **4 to 6 kt high**, which is the known "3 kt G12" effect. Waves are computed at the gust, so the timeline's wave rows carry
-  that bias; it is a reason to prefer the model with the smallest gust bias, not a reason to change the rule.
+  hours reported a gust, so this "gust bias" (4 to 6 kt high) mostly measures model gust against observed
+  *speed* in light air. **It does not hold up over 45 days** (3.7): against real reported gusts the model reads
+  low, not high.
 - **HRRR, `best_match` and `gfs_seamless` are the same numbers** here because Open-Meteo builds all three from HRRR
   for CONUS in the near term. The hindcast therefore cannot tell them apart, and it says nothing about skill at 48
   to 72 h, where `best_match` falls back to global models and NBM (calibrated, ~3 km) may well be better. The window
@@ -223,6 +224,33 @@ gives today, but the timeline's `model` field then says which model an hour came
 change if Open-Meteo re-blends `best_match`), and `best_match` carries the rest. `["ncep_nbm_conus", "best_match"]`
 (the contract's example) stays a one-line settings change; re-run the comparison across a windy stretch before
 making it the default. Script: none is checked in; the method is the paragraph above.
+
+### 3.7 Which wind drives the waves: gust vs sustained (measured 2026-09-28)
+
+Question: tonight buoy 45147 read 1-4 in while the computed open water read 8-13 in. Is the SPM formula wrong, or the
+wind fed to it? 45147 keeps only ~25 h in `realtime2` (whole m/s, no gust, no spectra, no NDBC history), so the fit
+pools 7 other Great Lakes wave buoys (45165, 45200, 45201, 45209, 45168, 45029, 45026), 15 Aug-28 Sep 2026,
+each matched to its nearest wave point (0.4-1.3 km, fetch and depth from the pack); METAR history from IEM.
+
+- **The formula is fine given the right wind.** At 45147 over its 25 h, SPM at the buoy's observed sustained wind
+  matches observed Hs (10.7 vs 10.7 in mean, MAE 1.6 in). Pooled, observed-speed SPM under-predicts (ratio ~0.7),
+  most at the shallow sites; observed-gust SPM over-predicts at deep sites (ratio 1.4-1.6 at 45209, 45029) and is
+  ~1.0 at shallow ones.
+- **Model wind (HRRR) is not biased high.** Speed -0.8 to -1.4 kt at 5-15 kt on the buoys; gust -1.5 kt overall
+  and -2.6 / -3.8 kt at 10-15 / 15+ kt. METAR reported gusts (n=529): KMTC -3.6, KDET -4.0, KONZ +0.6, KPTK -4.9.
+  The model's gust/speed ratio (1.45) matches the observed one (1.48).
+- **End to end** (model wind, model direction picks the fetch bin, n=7,370), effective wind = speed + w(gust - speed):
+  w=0 ratio 0.64 MAE 8.05 in · w=0.5 0.82 / 6.81 · w=0.75 0.92 / 6.74 · **w=1 (gust) 1.01 / 7.06**. Minimum MAE at
+  w=0.65, but that under-predicts by ~10-15%, the unsafe direction for a pilot. Per buoy the best w runs 0 (deep,
+  45209) to 1 (shallow, 45165, 45200); Lake St. Clair (4-6 m) is on the shallow side.
+- Scatter is large whatever w: ~6.7 in MAE on ~17 in mean observed (~±25%).
+
+**Decision: keep waves at the gust** (the only setting that is unbiased pooled, and the best fit for shallow water
+like St. Clair). Tonight's gap was a light-wind night (residual sea and whole-m/s buoy wind make 0-5 kt the worst
+band either way), not a systematic overstatement. Next step when wanted: log buoy Hs next to the computed value at
+the buoy's wave point every run, and after 30+ days fit w (or a depth-dependent w) per buoy, shrunk toward 1 by sample
+count; this works at any water body with an NDBC/GLOS/ECCC wave buoy nearby. Scripts were one-off (not checked in).
+
 
 
 ## 4. Architecture
